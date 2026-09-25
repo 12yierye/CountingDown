@@ -1,0 +1,12 @@
+node_modules/
+out/
+release/
+dist/
+*.log
+*.tsbuildinfo
+.DS_Store
+.vite/
+.pnpm-store/
+.pnpm-cache/
+.probe-userdata/
+.verify/

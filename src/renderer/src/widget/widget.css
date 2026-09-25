@@ -1,0 +1,204 @@
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  font-family: 'Microsoft YaHei UI', 'Segoe UI', system-ui, sans-serif;
+  background: transparent;
+}
+
+.cd-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  box-sizing: border-box;
+  padding: 24px;
+  background: transparent;
+}
+
+.cd-stage[data-corner='top-left'],
+.cd-stage[data-corner='custom'] {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.cd-stage[data-corner='top-right'] {
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.cd-stage[data-corner='bottom-left'] {
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+
+.cd-stage[data-corner='bottom-right'] {
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+/* 不透明兜底模式：整个窗口就是卡片，不再缩进 24px，也不画边框/阴影 */
+.cd-stage.is-opaque {
+  padding: 0;
+}
+
+.cd-stage.is-opaque .cd-shrink {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.cd-stage.is-opaque .cd-card {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  border-width: 0;
+  box-shadow: none;
+  animation: none;
+}
+
+/* 卡片绝对定位在舞台的安全区内并按角落对齐；zoom 由渲染层按可用宽度动态计算 */
+.cd-shrink {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  bottom: 24px;
+  left: 24px;
+  display: flex;
+  min-width: 0;
+}
+
+.cd-stage[data-corner='top-left'] .cd-shrink {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.cd-stage[data-corner='top-right'] .cd-shrink {
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.cd-stage[data-corner='bottom-left'] .cd-shrink {
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+
+.cd-stage[data-corner='bottom-right'] .cd-shrink {
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.cd-stage[data-corner='custom'] .cd-shrink {
+  align-items: flex-start;
+  justify-content: flex-start;
+}
+
+.cd-card {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  width: var(--cd-card-width, fit-content);
+  max-width: 100%;
+  animation: cd-fade-in 0.28s ease;
+}
+
+/* 卡片内部的文字不参与命中测试，命中区域只由卡片本身决定 */
+.cd-card > * {
+  pointer-events: none;
+}
+
+.cd-card--empty {
+  min-width: 200px;
+  gap: 8px;
+}
+
+.cd-card--empty .cd-card__hint {
+  white-space: normal;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cd-card__title {
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cd-card__count {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.cd-card__number {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  white-space: nowrap;
+}
+
+.cd-card__unit {
+  white-space: nowrap;
+}
+
+.cd-card__precise {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  white-space: nowrap;
+}
+
+.cd-card__precision-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.cd-card__precision-part > small {
+  font-size: 0.42em;
+  opacity: 0.72;
+  font-weight: 400;
+}
+
+.cd-card__hint {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cd-card__status {
+  white-space: nowrap;
+}
+
+@keyframes cd-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

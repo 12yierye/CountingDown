@@ -1,0 +1,516 @@
+:root {
+  --cd-radius: 12px;
+}
+
+/* ---- 可读性修正 ----
+   Element Plus 的默认灰阶（#909399 / #a8abb2）以及彩色按钮上的白字、
+   tag / alert / checkbox 标签里硬编码的颜色，对比度都低于 WCAG AA，
+   在两种主题下统一替换为更可读的值。 */
+html:not(.dark) {
+  --el-text-color-primary: #1f2329;
+  --el-text-color-regular: #4a5160;
+  --el-text-color-secondary: #5b6474;
+  --el-text-color-placeholder: #7d8698;
+
+  /* 彩色底上的文字统一用深色，保证 ≥ 4.5:1 */
+  --el-color-primary: #1f6fd0;
+  --el-color-primary-light-3: #6ba7e8;
+  --el-color-primary-light-5: #a3c9f2;
+  --el-color-primary-light-7: #cfe2f9;
+  --el-color-primary-light-8: #e2edfc;
+  --el-color-primary-light-9: #eef5fe;
+  --el-color-primary-dark-2: #17569f;
+  --el-color-success: #23662f;
+  --el-color-success-light-9: #eef7f0;
+  --el-color-danger: #8e2424;
+  --el-color-danger-light-9: #fdeeee;
+  --el-color-error: #8e2424;
+  --el-color-warning: #7a4a06;
+  --el-color-warning-light-9: #fdf3e3;
+  --el-color-info: #4a5160;
+  --el-color-info-light-9: #f1f2f5;
+}
+
+html.dark {
+  --el-text-color-secondary: #a9b4c6;
+  --el-text-color-placeholder: #808b9d;
+
+  --el-color-primary: #6fb0ff;
+  --el-color-primary-light-3: #4a86d6;
+  --el-color-primary-light-5: #35619b;
+  --el-color-primary-light-7: #234067;
+  --el-color-primary-light-8: #1d3453;
+  --el-color-primary-light-9: #182a43;
+  --el-color-primary-dark-2: #8cc2ff;
+  --el-color-success: #7ed996;
+  --el-color-success-light-9: #17281c;
+  --el-color-danger: #ff9b9b;
+  --el-color-danger-light-9: #2c1a1a;
+  --el-color-error: #ff9b9b;
+  --el-color-warning: #ffc266;
+  --el-color-warning-light-9: #2b2114;
+  --el-color-info: #a9b4c6;
+  --el-color-info-light-9: #22252c;
+}
+
+/* 深色主题下彩色底仍用深色文字，白色在浅蓝/浅绿上不够 */
+.el-radio-button__inner,
+.el-button--primary,
+.el-button--success,
+.el-button--warning,
+.el-button--danger {
+  color: var(--el-color-white, #ffffff);
+}
+
+html.dark .el-radio-button__inner,
+html.dark .el-button--primary,
+html.dark .el-button--success,
+html.dark .el-button--warning,
+html.dark .el-button--danger {
+  color: #14161b;
+}
+
+/* 未选中的分段按钮文字（默认 #a8abb2 太浅） */
+html:not(.dark) .el-radio-button:not(.is-active) .el-radio-button__inner {
+  color: #4a5160;
+}
+
+html.dark .el-radio-button:not(.is-active) .el-radio-button__inner {
+  color: #a9b4c6;
+}
+
+/* alert / checkbox / tag 里的硬编码灰 */
+.el-alert__title {
+  color: var(--el-text-color-regular);
+}
+
+.el-checkbox__label,
+.el-radio__label {
+  color: var(--el-text-color-regular);
+}
+
+.el-checkbox.is-checked .el-checkbox__label,
+.el-radio.is-checked .el-radio__label {
+  color: var(--el-text-color-primary);
+}
+
+.el-input__count-inner {
+  color: var(--el-text-color-secondary);
+}
+
+/* 打勾的复选框：方块本身太浅，加深描边 */
+html:not(.dark) .el-checkbox__inner {
+  border-color: #8b93a3;
+}
+
+/* 字体族下拉：长字体栈至少给出省略号，而不是硬生生被切断 */
+.el-select__selected-item.el-select__placeholder,
+.el-select__selected-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* 复选框触达区域放大到 20px，避免只能点中很小的方块 */
+.el-checkbox__input {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 外观覆盖里左侧的复选框，稍大一点方便点 */
+.override-row .el-checkbox__input,
+.editor-style__head .el-checkbox__input {
+  width: 22px;
+  height: 22px;
+}
+
+/* ---- 标签式切换（el-radio-button）统一样式 ----
+   Element Plus 默认靠负 margin + box-shadow 把相邻标签的边框拼在一起：第一段的
+   左边框只由 box-shadow 提供，父容器一旦有 overflow:hidden 就会被裁掉（看起来
+   「边框被吞了」），换行时还会出现边框重叠。这里改成每个标签都是独立的圆角小按钮，
+   四边都是真实 1px 边框，换行也不叠边。 */
+.el-radio-group {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  column-gap: 0;
+}
+
+.el-radio-button__inner {
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+  margin-left: 6px;
+  box-shadow: none;
+  /* 统一标签尺寸：比 Element Plus 默认更紧凑一点，各页面观感一致 */
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  font-size: 12.5px;
+  line-height: 1;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+/* 需要比标签更紧凑的场景（尺寸小的控件旁） */
+.el-radio-group.is-compact .el-radio-button__inner {
+  height: 24px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.el-radio-group > .el-radio-button:first-child .el-radio-button__inner {
+  margin-left: 0;
+}
+
+/* Element Plus 默认给首/中/尾标签各设了不同圆角（首尾是单边圆角），
+   这里统一成完整圆角。选择器要压过它的 `.el-radio-button:first-child .el-radio-button__inner`。 */
+.el-radio-group .el-radio-button:first-child .el-radio-button__inner,
+.el-radio-group .el-radio-button:last-child .el-radio-button__inner,
+.el-radio-group .el-radio-button .el-radio-button__inner {
+  border-radius: 6px;
+}
+
+.el-radio-button:not(.is-active) .el-radio-button__inner:hover {
+  border-color: var(--el-color-primary-light-5);
+  color: var(--el-color-primary);
+}
+
+.el-radio-button.is-active .el-radio-button__inner {
+  border-color: var(--el-color-primary);
+  box-shadow: none;
+}
+
+/* 侧边栏 logo 是白色文字压在渐变上，加一层极淡的投影提升可读性 */
+.settings-brand__logo {
+  text-shadow: 0 1px 2px rgba(24, 40, 90, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: 'Microsoft YaHei UI', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--el-bg-color-page);
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  font-size: 14px;
+}
+
+.settings-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.settings-side {
+  width: 208px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  padding: 14px 10px;
+  gap: 4px;
+}
+
+.settings-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px 14px;
+}
+
+.settings-brand__logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: linear-gradient(140deg, #3a7aff, #5c42e0);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex: none;
+}
+
+.settings-brand__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.settings-brand__name {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.3;
+}
+
+.settings-brand__sub {
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* 分组小标题：与上方分组留出间距，避免贴在上一项下面 */
+.settings-nav__group {
+  margin: 14px 0 6px;
+  padding: 0 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--el-text-color-secondary);
+}
+
+.settings-nav__group:first-child {
+  margin-top: 0;
+}
+
+.settings-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--el-text-color-regular);
+  font-size: 13.5px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.settings-nav__item:hover {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+}
+
+.settings-nav__item.is-active {
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.settings-side__footer {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--el-border-color-extra-light);
+}
+
+.settings-side__footer .el-button {
+  margin-left: 0;
+  width: 100%;
+  justify-content: center;
+}
+
+/* 深色主题下文字按钮（图标）对比度偏低，单独提到可读亮度 */
+html.dark .el-button.is-text:not(.is-disabled) {
+  color: #c6cedd;
+}
+
+html.dark .el-button.is-text:not(.is-disabled):hover {
+  color: var(--el-color-primary);
+}
+
+html.dark .el-button.is-text.is-disabled {
+  color: #6b7482;
+}
+
+/* 图标按钮在深色主题下用更亮的默认色 */
+html.dark .el-button.is-circle:not(.is-disabled),
+html.dark .el-button.is-text:not(.is-disabled) .el-icon {
+  color: inherit;
+}
+
+.settings-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+}
+
+.settings-topbar__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  align-content: flex-start;
+}
+
+/* 面板在内容不足时贴顶，不要被 flex 拉伸/居中 */
+.settings-content > * {
+  flex: none;
+}
+
+.settings-content .panel-card:last-child {
+  margin-bottom: 0;
+}
+
+/* 实时预览与顶部标题栏之间留出间距 */
+.settings-preview {
+  padding: 16px 20px 14px;
+}
+
+.panel-card {
+  margin-bottom: 16px;
+  border-radius: var(--cd-radius);
+}
+
+.panel-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 14px;
+  gap: 12px;
+}
+
+/* 卡片标题右侧的「?」：把原本占一整行的补充说明收进 tooltip */
+.panel-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.panel-card__help {
+  flex: none;
+  color: var(--el-text-color-secondary);
+  display: inline-flex;
+  align-items: center;
+  cursor: help;
+  outline: none;
+  transition: color 0.15s ease;
+}
+
+.panel-card__help:hover,
+.panel-card__help:focus-visible {
+  color: var(--el-color-primary);
+}
+
+.panel-card .el-card__header {
+  padding: 12px 16px;
+}
+
+.panel-card .el-card__body {
+  padding: 8px 16px 14px;
+}
+
+.panel-section-title {
+  font-weight: 600;
+  font-size: 13.5px;
+  margin: 6px 0 10px;
+  color: var(--el-text-color-primary);
+}
+
+/* 两列布局：列间距必须留足，否则左列控件的数值会贴到右列标签上 */
+.panel-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 0 36px;
+}
+
+/* 宽屏时把成组的样式编辑器排成两列，避免单列过长、滑块过宽 */
+.panel-grid-text {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 0 32px;
+}
+
+.row__label {
+  width: 72px;
+  flex: none;
+  font-size: 13px;
+  opacity: 0.78;
+}
+
+.row__control {
+  flex: 1;
+  min-width: 0;
+  /* 注意：这里不能加 overflow: hidden —— 会把 el-radio-button 的 1px 外边框和
+     Element Plus 用 box-shadow 画的左边框一起裁掉。横向溢出交给内部滑块自己处理。 */
+}
+
+.hint-text {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.6;
+}
+
+.mono {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--el-border-color-darker);
+  background-clip: content-box;
+}
