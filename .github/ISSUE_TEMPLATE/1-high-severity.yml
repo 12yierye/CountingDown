@@ -1,0 +1,155 @@
+name: 问题反馈（高） / Bug Report (High)
+description: 无法启动、崩溃、数据丢失、核心功能完全不可用 / Won't start, crashes, data loss, or a core feature is fully broken
+title: "[高 High] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 高严重度 / High severity
+
+        **符合以下任一情况，请使用本模板 / Use this template when any of these is true:**
+
+        - 应用无法启动、启动即崩溃、界面卡死 / The app won't start, crashes on launch, or freezes.
+        - 倒数日列表或配置丢失、被重置 / Countdown items or settings are lost or reset.
+        - 核心功能完全失效：桌面卡片不显示、托盘菜单或全局快捷键无效、设置无法保存
+          / A core feature is fully broken: card not shown, tray menu or hotkey dead, settings not saved.
+
+        只是轻微异常或体验建议，请改用 **中** 或 **低** 模板。
+        For minor bugs or suggestions, please use the **Medium** or **Low** template instead.
+
+        > 用中文或 English 填写都可以，维护者会用你在下面选择的语言回复。
+        > Write in Chinese or English; we reply in the language you pick below.
+  - type: dropdown
+    id: language
+    attributes:
+      label: 回复语言 / Reply language
+      description: 只决定维护者回复所用的语言；描述用哪种语言都行 / Only sets the language of our reply; describe the issue in either language
+      options:
+        - 简体中文
+        - English
+        - 中英双语 Both
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: 应用版本 / App version
+      description: 全局设置 → 关于 中可以看到，或看安装包文件名 / Shown in Settings → About, or in the installer file name
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: os_version
+    attributes:
+      label: 操作系统 / OS version
+      description: Windows 版本与内部版本号，命令行运行 winver 可查 / Windows version and build number; run winver to check
+      placeholder: "Windows 11 23H2 (build 22631)"
+    validations:
+      required: true
+  - type: dropdown
+    id: run_mode
+    attributes:
+      label: 运行方式 / How it runs
+      options:
+        - 安装包安装（NSIS）/ Installed from the NSIS installer
+        - 开发模式 pnpm dev / Dev mode (pnpm dev)
+        - 自行构建 pnpm run dist / Self-built (pnpm run dist)
+        - 其他 Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题描述 / What happened
+      description: 一两句话讲清楚即可 / A one or two sentence summary is enough
+      placeholder: 例：切换倒数日之后，桌面卡片一直是空白 / e.g. After switching the active countdown the desktop card stays blank
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 越具体越好，能稳定复现最佳 / Be as specific as you can
+      placeholder: |-
+        1. 打开设置 → 倒数日列表
+        2. 选中另一项
+        3. 观察桌面卡片
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果 / Expected result
+      placeholder: 例：卡片立即显示新选中的倒数日 / e.g. The card immediately shows the newly selected countdown
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果 / Actual result
+      description: 有弹窗或控制台报错请一并贴上 / Paste any dialog or console error text here
+    validations:
+      required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: 受影响的功能 / Affected areas
+      description: 可多选 / Select all that apply
+      options:
+        - label: 无法启动，或启动即崩溃 / Won't start or crashes on launch
+        - label: 倒数日或配置数据丢失、被重置 / Countdown or settings data lost or reset
+        - label: 桌面卡片不显示或显示异常 / Desktop card missing or rendered wrong
+        - label: 托盘图标或右键菜单失效 / Tray icon or menu broken
+        - label: 全局快捷键失效 / Global hotkey broken
+        - label: 设置界面的修改无法保存 / Settings changes are not saved
+        - label: 其他（见上方问题描述）/ Other (see the description above)
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: 出现频率 / How often
+      options:
+        - 每次必现 / Always
+        - 经常出现 / Often
+        - 偶尔出现 / Sometimes
+        - 只出现一次 / Only once
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志与报错 / Logs and error output
+      description: 可选。pnpm dev 的终端输出、DevTools 控制台报错都可以 / Optional — dev terminal output or DevTools console errors
+      placeholder: 直接粘贴文本，或把 .txt / .log 文件拖进这个输入框 / Paste text, or drag a .txt / .log file into this box
+    validations:
+      required: false
+  - type: textarea
+    id: config_snippet
+    attributes:
+      label: 配置文件片段 / config.json snippet
+      description: 可选。文件位于 %APPDATA%\countingdown\config.json，请先删除不想公开的日期与文案 / Optional. Located at %APPDATA%\countingdown\config.json; remove any dates or text you do not want to share
+      placeholder: |-
+        {
+          "runtime": { "language": "zh-CN" }
+        }
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或录屏 / Screenshots or screen recording
+      description: 可选。把图片或视频直接拖进这个输入框 / Optional. Drag images or video into this box
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认 / Before submitting
+      options:
+        - label: 我已在最新版本（或最新 main 分支）上复现 / I reproduced this on the latest release or on main
+          required: true
+        - label: 我已搜索过现有 issue，确认没有重复 / I searched existing issues and found no duplicate
+          required: true
+        - label: 我已移除日志、截图、配置中的隐私信息 / I removed private information from logs, screenshots and config
+          required: true

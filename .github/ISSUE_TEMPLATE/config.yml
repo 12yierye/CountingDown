@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用说明与常见问题 / Documentation and FAQ
+    url: https://github.com/12yierye/CountingDown/blob/main/README.md
+    about: 提问前先看 README 的功能说明与常见问题 / Check the README feature list and FAQ before filing an issue
+  - name: 私有问题（安全、隐私、个人数据）/ Private report (security, privacy, personal data)
+    url: https://github.com/12yierye/CountingDown/security/advisories/new
+    about: 不要把敏感信息发在公开 issue 里 / Please do not post sensitive details in a public issue

@@ -2,7 +2,7 @@
   "name": "countingdown",
   "version": "1.0.0",
   "private": true,
-  "description": "桌面角落倒数日小组件 —— 支持托盘图标、全局快捷键、四角吸附与丰富的外观自定义",
+  "description": "倒数日 CountingDown",
   "main": "./out/main/index.js",
   "author": "CountingDown",
   "license": "MIT",
@@ -64,6 +64,7 @@
       "icon": "resources/icon.png"
     },
     "nsis": {
+      "artifactName": "CountingDown_Setup_${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

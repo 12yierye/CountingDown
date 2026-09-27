@@ -1,0 +1,145 @@
+name: 问题反馈（中） / Bug Report (Medium)
+description: 功能还能用但明显异常，结果与预期不符 / A feature still works but misbehaves or gives the wrong result
+title: "[中 Medium] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 中严重度 / Medium severity
+
+        **符合以下任一情况，请使用本模板 / Use this template when any of these is true:**
+
+        - 某个功能部分失效，但有办法绕过 / A feature partly fails but has a workaround.
+        - 天数、日期或文案计算结果不对 / The day count, date or text calculation is wrong.
+        - 设置项改了不生效，或重启后回到原样 / A setting does not apply, or reverts after restart.
+        - 界面错位、控件重叠、看不清，影响正常使用 / Layout is broken, controls overlap or text is unreadable enough to block usage.
+
+        应用完全无法使用请改用 **高** 模板；纯文案、样式细节请用 **低** 模板。
+        If the app is unusable, use the **High** template; for wording or styling nits, use **Low**.
+
+        > 用中文或 English 填写都可以，维护者会用你在下面选择的语言回复。
+        > Write in Chinese or English; we reply in the language you pick below.
+  - type: dropdown
+    id: language
+    attributes:
+      label: 回复语言 / Reply language
+      description: 只决定维护者回复所用的语言；描述用哪种语言都行 / Only sets the language of our reply; describe the issue in either language
+      options:
+        - 简体中文
+        - English
+        - 中英双语 Both
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: 应用版本 / App version
+      description: 全局设置 → 关于 中可以看到，或看安装包文件名 / Shown in Settings → About, or in the installer file name
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: os_version
+    attributes:
+      label: 操作系统 / OS version
+      description: Windows 版本与内部版本号，命令行运行 winver 可查 / Windows version and build number; run winver to check
+      placeholder: "Windows 11 23H2 (build 22631)"
+    validations:
+      required: true
+  - type: dropdown
+    id: run_mode
+    attributes:
+      label: 运行方式 / How it runs
+      options:
+        - 安装包安装（NSIS）/ Installed from the NSIS installer
+        - 开发模式 pnpm dev / Dev mode (pnpm dev)
+        - 自行构建 pnpm run dist / Self-built (pnpm run dist)
+        - 其他 Other
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及的功能 / Affected area
+      description: 选最接近的一项，也可以在描述里补充 / Pick the closest one and add details in the description
+      options:
+        - 倒数日列表 / 新增、编辑、复制、删除、启用停用 / Countdown list
+        - 日期与文案 / 每年重复、一次性日期、状态文案 / Date and text
+        - 外观与预设主题 / Appearance and presets
+        - 布局与位置 / 四角停靠、偏移、卡片宽度 / Layout and position
+        - 行为 / 显示模式、透明度、总在最前 / Behavior
+        - 系统集成 / 托盘、全局快捷键、开机自启 / System integration
+        - 配置文件 / 保存、迁移、恢复默认 / Config file
+        - 其他 Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题描述 / What happened
+      description: 一两句话讲清楚即可 / A one or two sentence summary is enough
+      placeholder: 例：把「每年重复」改成一次性日期并保存后，天数没有变化 / e.g. After switching from annual to a one-off date the day count does not change
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 越具体越好，能稳定复现最佳 / Be as specific as you can
+      placeholder: |-
+        1. 打开设置 → 倒数日列表
+        2. 编辑某一项的日期
+        3. 保存并回到列表
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果 / Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果 / Actual result
+      description: 有弹窗或控制台报错请一并贴上 / Paste any dialog or console error text here
+    validations:
+      required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: 出现频率 / How often
+      options:
+        - 每次必现 / Always
+        - 经常出现 / Often
+        - 偶尔出现 / Sometimes
+        - 只出现一次 / Only once
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或录屏 / Screenshots or screen recording
+      description: 可选，但界面类问题带上截图会快很多 / Optional, but screenshots speed up UI issues a lot
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志与报错 / Logs and error output
+      description: 可选。pnpm dev 的终端输出、DevTools 控制台报错都可以 / Optional — dev terminal output or DevTools console errors
+    validations:
+      required: false
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认 / Before submitting
+      options:
+        - label: 我已在最新版本（或最新 main 分支）上复现 / I reproduced this on the latest release or on main
+          required: true
+        - label: 我已搜索过现有 issue，确认没有重复 / I searched existing issues and found no duplicate
+          required: true
+        - label: 我已移除日志、截图、配置中的隐私信息 / I removed private information from logs, screenshots and config
+          required: true
