@@ -18,7 +18,7 @@
         </div>
 
         <div
-          v-if="config.behavior.displayMode === 'precise'"
+          v-if="precisionMode"
           class="cd-card__precise"
           :style="countStyle"
         >
@@ -61,9 +61,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AppConfig } from '@shared/types'
+import type { AppConfig, PrecisionMode } from '@shared/types'
 import {
   applyTemplate,
+  buildPrecisionParts,
   computeCountdown,
   findActiveItem,
   formatDateLabel,
@@ -92,9 +93,26 @@ const transparent = ref(true)
  * 内容比窗口还宽时（例如精确模式 + 超大字号）整体等比缩小，
  * 否则卡片会越过“安全区”被窗口裁掉。用 zoom 而不是 transform，
  * 因为 zoom 会真正缩小布局盒子。
+ *
+ * 测量要点：zoom 作用在 .cd-shrink 上，所以 `getBoundingClientRect()` 给的是**缩放后**的
+ * 视觉尺寸，而 `scrollWidth` / `offsetWidth` 给的是**布局尺寸**（不随 zoom 变化）。
+ * 这里一律用布局尺寸算「自然宽度」，一次就能得到正确的比例。
+ * 早先直接用视觉宽度与可用宽度比较，收敛点会偏大（约 √(可用 / 自然)），表现就是
+ * 显示到秒时文字比卡片还宽、卡片也顶出安全区 —— 也就是「超出或贴近容器边缘」。
  */
 const zoom = ref(1)
 const shrinkStyle = computed(() => (zoom.value < 1 ? { zoom: String(zoom.value) } : undefined))
+
+/**
+ * 卡片的布局宽度上限（布局 px；0 表示交给 CSS 的 max-width: 100%）。
+ * zoom ≠ 1 时 Chromium 下 .cd-shrink 的布局宽度与视觉宽度不再严格等比，
+ * 单靠 max-width: 100% 会允许卡片比安全区宽出几像素，所以这里按缩放比换算一个硬上限。
+ */
+const cardMaxWidth = ref(0)
+
+/** 舞台四边各留 24px 安全区，再扣掉 2px 余量，卡片不得越过 */
+const SAFE_AREA_INSET = 24
+const SAFE_AREA_SLACK = 2
 
 function measureShrink(): void {
   const host = shrink.value
@@ -102,21 +120,42 @@ function measureShrink(): void {
   // 不透明模式下卡片就是整窗，不需要缩放
   if (!host || !el || !transparent.value) {
     zoom.value = 1
+    cardMaxWidth.value = 0
     return
   }
   const stageEl = stage.value
-  const available = (stageEl ? stageEl.clientWidth - 48 : host.clientWidth) - 2
+  const available =
+    (stageEl ? stageEl.clientWidth - SAFE_AREA_INSET * 2 : host.clientWidth) - SAFE_AREA_SLACK
   if (available <= 0) return
-  // 直接用「当前渲染出来的宽度」比较：scrollWidth 已经反映了当前 zoom，
-  // 不要再除以 zoom，否则会形成不断缩小的反馈。
-  const natural = Math.max(el.getBoundingClientRect().width, el.scrollWidth)
-  if (!natural) return
-  const next = natural > available + 1 ? Math.max(0.5, available / natural) : 1
-  if (Math.abs(next - zoom.value) > 0.02) {
-    zoom.value = next
-  } else if (next === 1 && zoom.value !== 1) {
-    zoom.value = 1
-  }
+
+  const cardComputed = getComputedStyle(el)
+  const padX =
+    (Number.parseFloat(cardComputed.paddingLeft) || 0) +
+    (Number.parseFloat(cardComputed.paddingRight) || 0)
+  const borderX =
+    (Number.parseFloat(cardComputed.borderLeftWidth) || 0) +
+    (Number.parseFloat(cardComputed.borderRightWidth) || 0)
+
+  // 每行的自然（布局）宽度：nowrap 的行会溢出卡片，scrollWidth 正好给出真实内容宽度；
+  // 标题/副标题是故意省略号裁切的，量到的就是裁切后的宽度，不会误伤。
+  let content = 0
+  el.querySelectorAll<HTMLElement>(':scope > *').forEach((row) => {
+    content = Math.max(content, row.scrollWidth, row.offsetWidth)
+  })
+  if (content <= 0) content = Math.max(0, el.scrollWidth - padX)
+
+  // 自然宽度包含卡片自身的内边距与边框，否则缩到刚好放下文字时文字会压到（甚至压出）卡片边缘
+  const natural = content + padX + borderX
+  // 固定宽度：比内容窄时按内容放宽（宁可卡片变宽，也不让文字跑到背景外面），
+  // 比安全区还宽时不参与缩放（多余部分本来就由 max-width 兜住）
+  const fixedWidth = Number.parseFloat(cardComputed.getPropertyValue('--cd-card-width')) || 0
+  const target = Math.max(natural, fixedWidth > 0 ? Math.min(fixedWidth, available) : 0)
+  if (!Number.isFinite(target) || target <= 0) return
+
+  const next = target > available + 0.5 ? Math.max(0.5, available / target) : 1
+  // 缩小后卡片的布局上限 = 可用宽度 / 缩放比，视觉上正好落在安全区内
+  cardMaxWidth.value = next < 1 ? Math.max(1, Math.floor(available / next)) : 0
+  if (Math.abs(next - zoom.value) > 0.005) zoom.value = next
 }
 
 /** 当前显示在桌面上的倒数日（含单项覆盖合并结果） */
@@ -132,7 +171,8 @@ const result = computed(() =>
 
 const cardStyleObject = computed(() => ({
   ...cardStyle(props.config, resolved.value?.appearance),
-  opacity: String(resolved.value?.appearance.opacity ?? props.config.appearance.opacity ?? 1)
+  opacity: String(resolved.value?.appearance.opacity ?? props.config.appearance.opacity ?? 1),
+  ...(cardMaxWidth.value > 0 ? { maxWidth: `${cardMaxWidth.value}px` } : {})
 }))
 
 /** 空态卡片固定使用全局外观，避免单项覆盖干扰 */
@@ -199,21 +239,21 @@ interface PrecisePart {
   label: string
 }
 
-const preciseParts = computed<PrecisePart[]>(() => {
-  if (!resolved.value || !result.value) return []
-  const parts: PrecisePart[] = []
-  if (props.config.behavior.showDaysInPrecise) {
-    parts.push({ value: String(absDays.value), label: resolved.value.text.unit })
-  }
-  parts.push({ value: pad(result.value.hours), label: ':' })
-  parts.push({ value: pad(result.value.minutes), label: ':' })
-  parts.push({ value: pad(result.value.seconds), label: '' })
-  return parts
-})
+/** 显示模式：'days' 走大数字 + 单位，其余三种走「大数字 + 小标签」序列 */
+const precisionMode = computed<PrecisionMode | null>(() =>
+  props.config.behavior.displayMode === 'days' ? null : props.config.behavior.displayMode
+)
 
-function pad(value: number): string {
-  return value < 10 ? `0${value}` : String(value)
-}
+const preciseParts = computed<PrecisePart[]>(() => {
+  const mode = precisionMode.value
+  if (!mode || !resolved.value || !result.value) return []
+  return buildPrecisionParts(
+    mode,
+    props.config.behavior.showDaysInPrecise,
+    resolved.value.text.unit,
+    result.value
+  )
+})
 
 /** 透明窗口默认让点击穿透到桌面，只有指针落在卡片上才恢复命中 */
 function syncInteractive(): void {

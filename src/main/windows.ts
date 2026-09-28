@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { BrowserWindow, app, nativeTheme, screen, shell } from 'electron'
 import { getConfig, isDev, onConfigChange, updateConfig } from './config-store'
-import type { Corner } from '../shared/types'
+import type { Corner, WindowConfig } from '../shared/types'
 
 let widgetWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
@@ -530,14 +530,42 @@ export function broadcast(channel: string, payload: unknown): void {
   }
 }
 
+/** 位置相关的窗口字段：任一变化都要把窗口重新摆回「角落/基准 + 偏移量」 */
+const POSITION_KEYS: Array<keyof WindowConfig> = [
+  'corner',
+  'cornerPreset',
+  'anchorX',
+  'anchorY',
+  'offsetX',
+  'offsetY'
+]
+
+/** 位置字段是否发生了变化 */
+function positionChanged(next: WindowConfig, prev: WindowConfig | null): boolean {
+  if (!prev) return true
+  return POSITION_KEYS.some((key) => next[key] !== prev[key])
+}
+
 export function setupWindowSync(): void {
+  /**
+   * 上一次的窗口配置。
+   * 改了角落/参考基准/偏移量之后必须重新摆一次窗口，否则「偏移归零」这类操作只写了配置，
+   * 卡片还停在原地（拖动之后偏移量不为 0 时最明显）。这里统一兜住所有写入路径
+   * （设置面板、托盘、拖动落点、恢复默认），不必要求每个调用方自己记得调 applyPosition。
+   */
+  let lastWindow: WindowConfig = { ...getConfig().runtime.window }
+
   onConfigChange((config) => {
     const win = getWidgetWindow()
-    if (!win) return
-    win.setAlwaysOnTop(config.behavior.alwaysOnTop, 'screen-saver')
-    // 只处理「配置说显示但窗口还没显示」的情况，走统一显示路径（含强制重绘）
-    if (config.runtime.widgetVisible && !win.isVisible()) showWidgetWindow(win)
-    if (!config.runtime.widgetVisible && win.isVisible()) win.hide()
+    if (win) {
+      win.setAlwaysOnTop(config.behavior.alwaysOnTop, 'screen-saver')
+      // 只处理「配置说显示但窗口还没显示」的情况，走统一显示路径（含强制重绘）
+      if (config.runtime.widgetVisible && !win.isVisible()) showWidgetWindow(win)
+      if (!config.runtime.widgetVisible && win.isVisible()) win.hide()
+      // 拖动过程中主进程正在按光标移动窗口，这时不能插手
+      if (!dragState && positionChanged(config.runtime.window, lastWindow)) applyPosition()
+    }
+    lastWindow = { ...config.runtime.window }
   })
 
   const onDisplayChange = (): void => {

@@ -4,8 +4,16 @@
 
 /** 目标日期语义 */
 export type DateMode = 'annual' | 'once'
-/** 倒计时显示模式 */
-export type DisplayMode = 'days' | 'precise'
+/**
+ * 倒计时显示模式：
+ * - days               只显示天数
+ * - days-hours         天 + 时
+ * - days-hours-minutes 天 + 时:分
+ * - precise            天 + 时:分:秒（可用 showDaysInPrecise 去掉天数部分）
+ */
+export type DisplayMode = 'days' | 'days-hours' | 'days-hours-minutes' | 'precise'
+/** 带时分秒的三种显示模式（除「只显示天数」以外） */
+export type PrecisionMode = Exclude<DisplayMode, 'days'>
 /** 日期语义；空串表示跟随全局 */
 export type OptionalDateMode = DateMode | ''
 /** 角落；custom 表示使用自定义参考基准 */

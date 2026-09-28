@@ -526,143 +526,162 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
     </FieldRow>
 
     <template v-if="useAppearance">
-      <FieldRow :label="t('appearance.fontFamily')">
-        <div class="override-row">
-          <el-checkbox
-            :model-value="Boolean(appearance.fontFamily)"
-            @update:model-value="(v: string | number | boolean) => setOverride('fontFamily', Boolean(v))"
-          />
-          <el-select
-            v-if="appearance.fontFamily"
-            :model-value="appearance.fontFamily"
-            class="font-select"
-            popper-class="cd-font-select"
-            filterable
-            allow-create
-            default-first-option
-            style="flex: 1; min-width: 200px"
-            @update:model-value="(v: string) => (appearance.fontFamily = v)"
-          >
-            <el-option v-for="font in fontOptions" :key="font" :label="font" :value="font" />
-          </el-select>
-          <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
+      <div class="override-group">
+        <div class="override-group__title">{{ t('appearance.font') }}</div>
+        <FieldRow :label="t('appearance.fontFamily')">
+          <div class="override-row">
+            <el-checkbox
+              :model-value="Boolean(appearance.fontFamily)"
+              @update:model-value="(v: string | number | boolean) => setOverride('fontFamily', Boolean(v))"
+            />
+            <el-select
+              v-if="appearance.fontFamily"
+              :model-value="appearance.fontFamily"
+              class="font-select"
+              popper-class="cd-font-select"
+              filterable
+              allow-create
+              default-first-option
+              style="flex: 1; min-width: 200px"
+              @update:model-value="(v: string) => (appearance.fontFamily = v)"
+            >
+              <el-option v-for="font in fontOptions" :key="font" :label="font" :value="font" />
+            </el-select>
+            <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
+          </div>
+        </FieldRow>
+      </div>
+
+      <div class="override-group">
+        <div class="override-group__title">{{ t('appearance.background') }}</div>
+        <FieldRow :label="t('appearance.opacity')">
+          <div class="override-row">
+            <el-checkbox
+              :model-value="typeof appearance.opacity === 'number'"
+              @update:model-value="(v: string | number | boolean) => setOverride('opacity', Boolean(v))"
+            />
+            <SliderField
+              v-if="typeof appearance.opacity === 'number'"
+              :model-value="appearance.opacity"
+              :min="0.2"
+              :max="1"
+              :step="0.01"
+              @update:model-value="patchOpacity"
+            />
+            <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
+          </div>
+        </FieldRow>
+
+        <FieldRow :label="t('appearance.bgColor')">
+          <div class="override-row">
+            <el-checkbox
+              :model-value="Boolean(appearance.background)"
+              @update:model-value="(v: string | number | boolean) => setOverride('background', Boolean(v))"
+            />
+            <ColorField
+              v-if="appearance.background"
+              :model-value="backgroundFields.color ?? config.appearance.background.color"
+              :alpha="backgroundFields.alpha ?? config.appearance.background.alpha"
+              show-alpha
+              @update:model-value="(v: string) => patchBackground({ color: v })"
+              @update:alpha="(v: number) => patchBackground({ alpha: v })"
+            />
+            <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
+          </div>
+        </FieldRow>
+
+        <FieldRow v-if="appearance.background" :label="`${t('appearance.radius')} / ${t('appearance.padding')}`">
+          <div class="inline-group">
+            <SliderField
+              :model-value="backgroundFields.radius ?? config.appearance.background.radius"
+              :min="0"
+              :max="60"
+              unit="px"
+              @update:model-value="(v: number) => patchBackground({ radius: v })"
+            />
+            <SliderField
+              :model-value="backgroundFields.padding ?? config.appearance.background.padding"
+              :min="0"
+              :max="64"
+              unit="px"
+              @update:model-value="(v: number) => patchBackground({ padding: v })"
+            />
+          </div>
+        </FieldRow>
+      </div>
+
+      <div class="override-group">
+        <div class="override-group__title">
+          {{ t('appearance.border') }} / {{ t('appearance.shadow') }}
         </div>
-      </FieldRow>
+        <p v-if="!appearance.background" class="override-group__empty">
+          {{ t('appearance.overrideNeedBackground') }}
+        </p>
+        <template v-else>
+          <FieldRow :label="t('appearance.borderWidth')">
+            <SliderField
+              :model-value="backgroundFields.borderWidth ?? config.appearance.background.borderWidth"
+              :min="0"
+              :max="8"
+              :step="0.5"
+              unit="px"
+              @update:model-value="(v: number) => patchBackground({ borderWidth: v })"
+            />
+          </FieldRow>
 
-      <FieldRow :label="t('appearance.opacity')">
-        <div class="override-row">
-          <el-checkbox
-            :model-value="typeof appearance.opacity === 'number'"
-            @update:model-value="(v: string | number | boolean) => setOverride('opacity', Boolean(v))"
+          <FieldRow :label="t('appearance.borderColor')">
+            <ColorField
+              :model-value="backgroundFields.borderColor ?? config.appearance.background.borderColor"
+              @update:model-value="(v: string) => patchBackground({ borderColor: v })"
+            />
+          </FieldRow>
+
+          <FieldRow :label="t('appearance.shadowStrength')">
+            <SliderField
+              :model-value="backgroundFields.shadow ?? config.appearance.background.shadow"
+              :min="0"
+              :max="100"
+              @update:model-value="(v: number) => patchBackground({ shadow: v })"
+            />
+          </FieldRow>
+
+          <FieldRow :label="t('appearance.shadowColor')">
+            <ColorField
+              :model-value="backgroundFields.shadowColor ?? config.appearance.background.shadowColor"
+              @update:model-value="(v: string) => patchBackground({ shadowColor: v })"
+            />
+          </FieldRow>
+        </template>
+      </div>
+
+      <div class="override-group">
+        <div class="override-group__title">{{ t('appearance.textGroup') }}</div>
+        <div
+          v-for="entry in ([
+            { key: 'title', label: t('appearance.titleStyle'), sample: draft.name || '元旦' },
+            { key: 'count', label: t('appearance.countStyle'), sample: '128 天' },
+            { key: 'hint', label: t('appearance.hintStyle'), sample: '2026 年 1 月 1 日 · 周四' },
+            { key: 'status', label: t('appearance.statusStyle'), sample: '还有 128 天' }
+          ] as const)"
+          :key="entry.key"
+          class="editor-style"
+        >
+          <div class="editor-style__head">
+            <el-checkbox
+              :model-value="Boolean(appearance[entry.key])"
+              @update:model-value="(v: string | number | boolean) => setOverride(entry.key, Boolean(v))"
+            >
+              {{ entry.label }}
+            </el-checkbox>
+          </div>
+          <TextStyleEditor
+            v-if="appearance[entry.key]"
+            :title="entry.label"
+            :sample="entry.sample"
+            :model-value="appearance[entry.key] as TextStyle"
+            @update:model-value="(v: TextStyle) => patchStyle(entry.key, v)"
           />
-          <SliderField
-            v-if="typeof appearance.opacity === 'number'"
-            :model-value="appearance.opacity"
-            :min="0.2"
-            :max="1"
-            :step="0.01"
-            @update:model-value="patchOpacity"
-          />
-          <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
         </div>
-      </FieldRow>
-
-      <FieldRow :label="t('appearance.bgColor')">
-        <div class="override-row">
-          <el-checkbox
-            :model-value="Boolean(appearance.background)"
-            @update:model-value="(v: string | number | boolean) => setOverride('background', Boolean(v))"
-          />
-          <ColorField
-            v-if="appearance.background"
-            :model-value="backgroundFields.color ?? config.appearance.background.color"
-            :alpha="backgroundFields.alpha ?? config.appearance.background.alpha"
-            show-alpha
-            @update:model-value="(v: string) => patchBackground({ color: v })"
-            @update:alpha="(v: number) => patchBackground({ alpha: v })"
-          />
-          <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
-        </div>
-      </FieldRow>
-
-      <FieldRow v-if="appearance.background" :label="`${t('appearance.radius')} / ${t('appearance.padding')}`">
-        <div class="inline-group">
-          <SliderField
-            :model-value="backgroundFields.radius ?? config.appearance.background.radius"
-            :min="0"
-            :max="60"
-            unit="px"
-            @update:model-value="(v: number) => patchBackground({ radius: v })"
-          />
-          <SliderField
-            :model-value="backgroundFields.padding ?? config.appearance.background.padding"
-            :min="0"
-            :max="64"
-            unit="px"
-            @update:model-value="(v: number) => patchBackground({ padding: v })"
-          />
-        </div>
-      </FieldRow>
-
-      <FieldRow v-if="appearance.background" :label="t('appearance.borderWidth')">
-        <SliderField
-          :model-value="backgroundFields.borderWidth ?? config.appearance.background.borderWidth"
-          :min="0"
-          :max="8"
-          :step="0.5"
-          unit="px"
-          @update:model-value="(v: number) => patchBackground({ borderWidth: v })"
-        />
-      </FieldRow>
-
-      <FieldRow v-if="appearance.background" :label="t('appearance.borderColor')">
-        <ColorField
-          :model-value="backgroundFields.borderColor ?? config.appearance.background.borderColor"
-          @update:model-value="(v: string) => patchBackground({ borderColor: v })"
-        />
-      </FieldRow>
-
-      <FieldRow v-if="appearance.background" :label="t('appearance.shadowStrength')">
-        <SliderField
-          :model-value="backgroundFields.shadow ?? config.appearance.background.shadow"
-          :min="0"
-          :max="100"
-          @update:model-value="(v: number) => patchBackground({ shadow: v })"
-        />
-      </FieldRow>
-
-      <FieldRow v-if="appearance.background" :label="t('appearance.shadowColor')">
-        <ColorField
-          :model-value="backgroundFields.shadowColor ?? config.appearance.background.shadowColor"
-          @update:model-value="(v: string) => patchBackground({ shadowColor: v })"
-        />
-      </FieldRow>
-
-      <div
-        v-for="entry in ([
-          { key: 'title', label: t('appearance.titleStyle'), sample: draft.name || '元旦' },
-          { key: 'count', label: t('appearance.countStyle'), sample: '128 天' },
-          { key: 'hint', label: t('appearance.hintStyle'), sample: '2026 年 1 月 1 日 · 周四' },
-          { key: 'status', label: t('appearance.statusStyle'), sample: '还有 128 天' }
-        ] as const)"
-        :key="entry.key"
-        class="editor-style"
-      >
-        <div class="editor-style__head">
-          <el-checkbox
-            :model-value="Boolean(appearance[entry.key])"
-            @update:model-value="(v: string | number | boolean) => setOverride(entry.key, Boolean(v))"
-          >
-            {{ entry.label }}
-          </el-checkbox>
-        </div>
-        <TextStyleEditor
-          v-if="appearance[entry.key]"
-          :title="entry.label"
-          :sample="entry.sample"
-          :model-value="appearance[entry.key] as TextStyle"
-          @update:model-value="(v: TextStyle) => patchStyle(entry.key, v)"
-        />
       </div>
     </template>
   </el-card>

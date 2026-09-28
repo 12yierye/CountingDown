@@ -81,7 +81,7 @@ const fontOptions = FONT_STACKS
         />
       </FieldRow>
 
-      <FieldRow :label="t('appearance.width')">
+      <FieldRow :label="t('appearance.width')" :hint="t('appearance.widthHint')">
         <el-input-number
           :model-value="bg.width"
           :min="0"

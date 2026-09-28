@@ -23,6 +23,8 @@ const { t } = useI18n()
         @update:model-value="(v: string | number | boolean | undefined) => emit('patch', { behavior: { displayMode: v } })"
       >
         <el-radio-button value="days">{{ t('behavior.days') }}</el-radio-button>
+        <el-radio-button value="days-hours">{{ t('behavior.daysHours') }}</el-radio-button>
+        <el-radio-button value="days-hours-minutes">{{ t('behavior.daysHoursMinutes') }}</el-radio-button>
         <el-radio-button value="precise">{{ t('behavior.precise') }}</el-radio-button>
       </el-radio-group>
     </FieldRow>

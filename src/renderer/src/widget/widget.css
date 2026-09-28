@@ -64,6 +64,7 @@ body,
 .cd-stage.is-opaque .cd-card {
   width: 100%;
   height: 100%;
+  min-width: 0;
   max-width: none;
   border-width: 0;
   box-shadow: none;
@@ -117,6 +118,9 @@ body,
   gap: 6px;
   width: var(--cd-card-width, fit-content);
   max-width: 100%;
+  /* 卡片背景至少覆盖内容：用户把「卡片宽度」设得比内容还窄时，宁可卡片变宽，
+     也不要让文字溢出到背景外面（显示到秒时最容易出现） */
+  min-width: fit-content;
   animation: cd-fade-in 0.28s ease;
 }
 

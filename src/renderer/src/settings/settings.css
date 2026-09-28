@@ -481,6 +481,35 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
   color: var(--el-text-color-primary);
 }
 
+/*
+ * 外观设置的分组容器。
+ * 用的是全局外观页里 .text-style-editor 同款底色与描边，因此「编辑倒数日 → 外观覆盖」
+ * 的各个类别（字体 / 背景 / 边框·阴影 / 文字样式）看上去与全局外观页是同一套分区，
+ * 而不是平铺在卡片里的长列表。底部不留 padding，由最后一个 .field-row 的 padding 收尾。
+ */
+.override-group {
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  padding: 12px 14px 3px;
+  margin-bottom: 12px;
+  background: var(--el-fill-color-lighter);
+  min-width: 0;
+}
+
+.override-group__title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--el-text-color-primary);
+  margin-bottom: 6px;
+}
+
+.override-group__empty {
+  margin: 0 0 12px;
+  font-size: 12px;
+  opacity: 0.75;
+  color: var(--el-text-color-secondary);
+}
+
 /* 两列布局：列间距必须留足，否则左列控件的数值会贴到右列标签上 */
 .panel-grid-2 {
   display: grid;

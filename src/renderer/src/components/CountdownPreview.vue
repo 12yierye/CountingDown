@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { AppConfig } from '@shared/types'
+import type { AppConfig, PrecisionMode } from '@shared/types'
 import {
   applyTemplate,
+  buildPrecisionParts,
   computeCountdown,
   findActiveItem,
   formatDateLabel,
@@ -69,20 +70,20 @@ interface PrecisePart {
   label: string
 }
 
-function pad(value: number): string {
-  return value < 10 ? `0${value}` : String(value)
-}
+/** 显示模式：'days' 走大数字 + 单位，其余三种走「大数字 + 小标签」序列 */
+const precisionMode = computed<PrecisionMode | null>(() =>
+  props.config.behavior.displayMode === 'days' ? null : props.config.behavior.displayMode
+)
 
 const preciseParts = computed<PrecisePart[]>(() => {
-  if (!resolved.value || !result.value) return []
-  const parts: PrecisePart[] = []
-  if (props.config.behavior.showDaysInPrecise) {
-    parts.push({ value: String(absDays.value), label: resolved.value.text.unit })
-  }
-  parts.push({ value: pad(result.value.hours), label: ':' })
-  parts.push({ value: pad(result.value.minutes), label: ':' })
-  parts.push({ value: pad(result.value.seconds), label: '' })
-  return parts
+  const mode = precisionMode.value
+  if (!mode || !resolved.value || !result.value) return []
+  return buildPrecisionParts(
+    mode,
+    props.config.behavior.showDaysInPrecise,
+    resolved.value.text.unit,
+    result.value
+  )
 })
 
 /** 预览时按比例缩小，避免大字号撑爆面板 */
@@ -105,7 +106,7 @@ const titleText = computed(() => resolved.value?.text.title ?? '')
         </div>
 
         <div
-          v-if="config.behavior.displayMode === 'precise'"
+          v-if="precisionMode"
           class="cd-card__precise"
           :style="countStyle"
         >

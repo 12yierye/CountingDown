@@ -2,8 +2,11 @@ import type {
   AppConfig,
   AppearanceConfig,
   AppearanceOverride,
+  BehaviorConfig,
   CountdownItem,
+  DisplayMode,
   FieldResolution,
+  PrecisionMode,
   ResolvedCountdown,
   TargetConfig,
   TextConfig,
@@ -270,6 +273,21 @@ function normalizeItem(item: CountdownItem): CountdownItem {
   }
 }
 
+/** 全部合法的显示模式，用于兜底非法值（旧配置 / 手改配置） */
+const DISPLAY_MODES: DisplayMode[] = ['days', 'days-hours', 'days-hours-minutes', 'precise']
+
+/** 行为配置兜底：显示模式只认已知的四种，其余回落到「只显示天数」 */
+function normalizeBehavior(input: BehaviorConfig | undefined): BehaviorConfig {
+  const fallback = createDefaultConfig().behavior
+  const source = input ?? fallback
+  return {
+    displayMode: DISPLAY_MODES.includes(source.displayMode) ? source.displayMode : fallback.displayMode,
+    showDaysInPrecise: source.showDaysInPrecise !== false,
+    showPastDays: source.showPastDays === true,
+    alwaysOnTop: source.alwaysOnTop !== false
+  }
+}
+
 /** 保证列表、选中项、全局字段、窗口与自定义预设都合法 */
 export function normalizeConfig(config: AppConfig): AppConfig {
   const countdowns = (Array.isArray(config.countdowns) ? config.countdowns : []).map(normalizeItem)
@@ -284,6 +302,7 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     countdowns,
     activeId,
     appearance: normalizeAppearance(config.appearance),
+    behavior: normalizeBehavior(config.behavior),
     runtime: { ...config.runtime, window },
     customPresets: Array.isArray(config.customPresets) ? config.customPresets : []
   }
@@ -555,6 +574,41 @@ export function computeCountdown(target: TargetConfig, now: Date = new Date()): 
     minutes: Math.floor(abs / 60_000) % 60,
     seconds: Math.floor(abs / 1000) % 60
   }
+}
+
+/** 时分秒显示的一段：大数字 + 小标签（分隔符 ':' 也是标签） */
+export interface PrecisionPart {
+  value: string
+  label: string
+}
+
+/**
+ * 按显示模式组装「大数字 + 小标签」序列。桌面组件与设置里的预览共用这一份，
+ * 免得两边的模式判断各写一遍、改一处漏一处。
+ *
+ * - days-hours          天 + 时          → `95天 02`
+ * - days-hours-minutes  天 + 时:分        → `95天 02:46`
+ * - precise             天 + 时:分:秒     → `95天 02:46:11`（showDays=false 时省略天数）
+ *
+ * 除最后一段外，每段后面都跟一个 ':' 小标签，最后一段不带标签。
+ */
+export function buildPrecisionParts(
+  mode: PrecisionMode,
+  showDays: boolean,
+  unit: string,
+  result: CountdownResult
+): PrecisionPart[] {
+  const entries: Array<{ value: string; unit?: string }> = []
+  if (mode !== 'precise' || showDays) {
+    entries.push({ value: String(Math.abs(result.days)), unit })
+  }
+  entries.push({ value: pad2(result.hours) })
+  if (mode !== 'days-hours') entries.push({ value: pad2(result.minutes) })
+  if (mode === 'precise') entries.push({ value: pad2(result.seconds) })
+  return entries.map((entry, index) => ({
+    value: entry.value,
+    label: entry.unit ?? (index < entries.length - 1 ? ':' : '')
+  }))
 }
 
 export function applyTemplate(template: string, vars: Record<string, string | number>): string {
