@@ -17,9 +17,9 @@ body:
           / Improvements to existing features, such as finer settings or fewer clicks.
         - 性能、体积、资源占用方面的期待 / Performance, package size or resource usage expectations.
 
-        **已有功能坏了、没生效、不符合预期，请不要用本模板**，请改用「问题反馈（高 / 中 / 低）」。
+        **已有功能坏了、没生效、不符合预期，请不要用本模板**，请改用「问题反馈 / Bug Report」，并在其中选择严重等级。
         **If an existing feature is broken, missing in action, or behaves wrongly, do not use this template** —
-        please use Bug Report (High / Medium / Low) instead.
+        please use **Bug Report** and pick the severity level there.
 
         > 用中文或 English 填写都可以，维护者会用你在下面选择的语言回复。
         > Write in Chinese or English; we reply in the language you pick below.

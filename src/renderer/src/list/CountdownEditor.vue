@@ -17,7 +17,7 @@ import {
   resolveTarget,
   resolveText
 } from '@shared/defaults'
-import { fontLabel } from '@/utils/style'
+import { FONT_STACKS } from '@/utils/style'
 import FieldRow from '@/components/FieldRow.vue'
 import ColorField from '@/components/ColorField.vue'
 import TextStyleEditor from '@/components/TextStyleEditor.vue'
@@ -176,6 +176,9 @@ function cleanText(source: CountdownItem['text']): Partial<CountdownItem['text']
 function compact(source: AppearanceOverride): AppearanceOverride {
   const out: AppearanceOverride = {}
   if (source.fontFamily) out.fontFamily = source.fontFamily
+  if (typeof source.opacity === 'number' && Number.isFinite(source.opacity)) {
+    out.opacity = source.opacity
+  }
   if (source.background && Object.keys(source.background).length) {
     out.background = { ...source.background }
   }
@@ -243,12 +246,16 @@ function patchBackground(patch: Partial<BackgroundConfig>): void {
   }
 }
 
+function patchOpacity(value: number): void {
+  appearance.value = { ...appearance.value, opacity: value }
+}
+
 function patchStyle(key: 'title' | 'count' | 'hint' | 'status', value: TextStyle): void {
   appearance.value = { ...appearance.value, [key]: value }
 }
 
 type StyleKey = 'title' | 'count' | 'hint' | 'status'
-type OverrideKey = 'fontFamily' | 'background' | StyleKey
+type OverrideKey = 'fontFamily' | 'opacity' | 'background' | StyleKey
 
 /** 勾选/取消某个外观覆盖项：勾选时以当前全局值作为起点，取消时直接删掉 */
 function setOverride(key: OverrideKey, enabled: boolean): void {
@@ -257,6 +264,8 @@ function setOverride(key: OverrideKey, enabled: boolean): void {
     delete next[key]
   } else if (key === 'fontFamily') {
     next.fontFamily = props.config.appearance.fontFamily
+  } else if (key === 'opacity') {
+    next.opacity = props.config.appearance.opacity ?? 1
   } else if (key === 'background') {
     next.background = { ...props.config.appearance.background }
   } else {
@@ -315,15 +324,8 @@ const previewConfig = computed<AppConfig>(() => {
   }
 })
 
-const fontOptions = [
-  '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif',
-  '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif',
-  '"Segoe UI", system-ui, sans-serif',
-  '"Cascadia Mono", Consolas, monospace',
-  '"KaiTi", "STKaiti", serif',
-  '"SimSun", "Songti SC", serif',
-  'system-ui, sans-serif'
-]
+/** 与全局外观面板共用同一份字体栈预设 */
+const fontOptions = FONT_STACKS
 
 const backgroundFields = computed(() => appearance.value.background ?? {})
 
@@ -533,14 +535,34 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
           <el-select
             v-if="appearance.fontFamily"
             :model-value="appearance.fontFamily"
+            class="font-select"
+            popper-class="cd-font-select"
             filterable
             allow-create
             default-first-option
             style="flex: 1; min-width: 200px"
             @update:model-value="(v: string) => (appearance.fontFamily = v)"
           >
-            <el-option v-for="font in fontOptions" :key="font" :label="fontLabel(font)" :value="font" />
+            <el-option v-for="font in fontOptions" :key="font" :label="font" :value="font" />
           </el-select>
+          <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
+        </div>
+      </FieldRow>
+
+      <FieldRow :label="t('appearance.opacity')">
+        <div class="override-row">
+          <el-checkbox
+            :model-value="typeof appearance.opacity === 'number'"
+            @update:model-value="(v: string | number | boolean) => setOverride('opacity', Boolean(v))"
+          />
+          <SliderField
+            v-if="typeof appearance.opacity === 'number'"
+            :model-value="appearance.opacity"
+            :min="0.2"
+            :max="1"
+            :step="0.01"
+            @update:model-value="patchOpacity"
+          />
           <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
         </div>
       </FieldRow>

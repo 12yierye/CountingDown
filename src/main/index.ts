@@ -10,9 +10,11 @@ import {
 } from './config-store'
 import {
   applyPosition,
+  beginWidgetDrag,
   broadcast,
   createSettingsWindow,
   createWidgetWindow,
+  endWidgetDrag,
   getSettingsWindow,
   getWidgetWindow,
   recreateWidgetWindow,
@@ -29,6 +31,8 @@ import {
 import { applyHotkey, isHotkeyRegistered, registerHotkey, unregisterHotkey } from './hotkey'
 import { createTray, destroyTray, refreshTray } from './tray'
 import type { AppConfig, HostInfo } from '../shared/types'
+
+export { trayMenuSnapshot } from './tray'
 
 type Corner = AppConfig['runtime']['window']['corner']
 
@@ -87,6 +91,9 @@ function registerIpc(): void {
     setWidgetInteractive(Boolean(interactive))
     return true
   })
+  /** 拖动组件：渲染层按下时上报卡片位置，松手时由主进程换算偏移量 */
+  ipcMain.handle('widget:dragStart', (_event, card: unknown) => beginWidgetDrag(card))
+  ipcMain.handle('widget:dragEnd', () => endWidgetDrag())
   ipcMain.handle('widget:showSettings', () => {
     createSettingsWindow()
     return true

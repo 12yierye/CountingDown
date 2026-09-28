@@ -28,7 +28,10 @@ function presetName(nameZh: string, nameEn: string): string {
 }
 
 function previewStyle(appearance: AppConfig['appearance']): Record<string, string> {
-  return cardStyle({} as AppConfig, appearance)
+  return {
+    ...cardStyle({} as AppConfig, appearance),
+    opacity: String(appearance.opacity ?? 1)
+  }
 }
 
 function numberStyle(appearance: AppConfig['appearance']): Record<string, string> {

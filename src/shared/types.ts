@@ -55,6 +55,8 @@ export interface TextOverride {
 /** 外观覆盖：字段缺省表示跟随全局 */
 export interface AppearanceOverride {
   fontFamily?: string
+  /** 组件不透明度 0.2 - 1 */
+  opacity?: number
   background?: Partial<BackgroundConfig>
   title?: TextStyle
   count?: TextStyle
@@ -109,6 +111,8 @@ export interface BackgroundConfig {
 
 export interface AppearanceConfig {
   fontFamily: string
+  /** 整块组件的不透明度 0.2 - 1（与背景自身的 alpha 相乘） */
+  opacity: number
   background: BackgroundConfig
   title: TextStyle
   count: TextStyle
@@ -124,8 +128,6 @@ export interface BehaviorConfig {
   showPastDays: boolean
   /** 组件是否始终置顶 */
   alwaysOnTop: boolean
-  /** 组件不透明度 0.2 - 1 */
-  opacity: number
 }
 
 export interface WindowConfig {
@@ -139,6 +141,8 @@ export interface WindowConfig {
   /** 相对参考基准的偏移量 */
   offsetX: number
   offsetY: number
+  /** 是否允许直接用鼠标拖动组件（拖动结束后自动换算成偏移量） */
+  allowDrag: boolean
   /**
    * 是否使用透明窗口。
    * 某些机器上 Windows 会把透明窗口渲染成不透明白块（整窗浅色背板），

@@ -1,26 +1,40 @@
-name: 问题反馈（高） / Bug Report (High)
-description: 无法启动、崩溃、数据丢失、核心功能完全不可用 / Won't start, crashes, data loss, or a core feature is fully broken
-title: "[高 High] "
+name: 问题反馈 / Bug Report
+description: 报告崩溃、功能异常、结果不符或文案样式等各类问题 / Report a crash, misbehaving feature, wrong result, or a wording or styling problem
+title: "[Bug] "
 labels:
   - bug
 body:
   - type: markdown
     attributes:
       value: |
-        ## 高严重度 / High severity
+        ## 问题反馈 / Bug report
 
-        **符合以下任一情况，请使用本模板 / Use this template when any of these is true:**
+        请在下方第一个字段里选择**严重等级 / Severity**，三个等级的判定标准如下。
+        Pick the **severity** in the first field below. The three levels mean:
 
-        - 应用无法启动、启动即崩溃、界面卡死 / The app won't start, crashes on launch, or freezes.
-        - 倒数日列表或配置丢失、被重置 / Countdown items or settings are lost or reset.
-        - 核心功能完全失效：桌面卡片不显示、托盘菜单或全局快捷键无效、设置无法保存
-          / A core feature is fully broken: card not shown, tray menu or hotkey dead, settings not saved.
+        - **高 High** —— 应用无法启动、启动即崩溃、界面卡死；倒数日或配置丢失、被重置；核心功能完全失效（桌面卡片不显示、托盘菜单或全局快捷键无效、设置无法保存）
+          / The app won't start, crashes or freezes; countdown data or settings are lost or reset; a core feature is fully broken.
+        - **中 Medium** —— 功能还能用但明显异常：天数、日期或文案计算不对；设置改了不生效或重启后回到原样；界面错位、控件重叠到影响使用
+          / A feature still works but misbehaves: wrong day count, date or text; a setting does not apply or reverts; layout broken enough to block usage.
+        - **低 Low** —— 错别字、翻译不准确、颜色字号圆角间距等视觉细节、提示文案看不懂、README 与界面说明不符
+          / Typos, inaccurate translations, visual nits, confusing hints, or docs that no longer match the app.
 
-        只是轻微异常或体验建议，请改用 **中** 或 **低** 模板。
-        For minor bugs or suggestions, please use the **Medium** or **Low** template instead.
-
+        > **已有功能不够好用、希望新增或改进**，请改用「**功能建议 / Feature Request**」模板。
+        > **If you want a new capability or an improvement** rather than a fix, please use the **Feature Request** template.
+        >
         > 用中文或 English 填写都可以，维护者会用你在下面选择的语言回复。
         > Write in Chinese or English; we reply in the language you pick below.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: 严重等级 / Severity
+      description: 选最接近的一项；不确定时选「中 Medium」，维护者可能会调整 / Pick the closest one; if unsure, choose Medium — maintainers may re-label it
+      options:
+        - 高 High（无法启动、崩溃、数据丢失、核心功能失效 / unusable）
+        - 中 Medium（功能可用但明显异常或结果不对 / works but misbehaves）
+        - 低 Low（文案、翻译、样式与体验细节 / wording, styling, UX nits）
+    validations:
+      required: true
   - type: dropdown
     id: language
     attributes:
@@ -44,10 +58,10 @@ body:
     id: os_version
     attributes:
       label: 操作系统 / OS version
-      description: Windows 版本与内部版本号，命令行运行 winver 可查 / Windows version and build number; run winver to check
+      description: 可选。Windows 版本与内部版本号，命令行运行 winver 可查；视觉类问题建议填写 / Optional — run winver to check; helpful for visual issues
       placeholder: "Windows 11 23H2 (build 22631)"
     validations:
-      required: true
+      required: false
   - type: dropdown
     id: run_mode
     attributes:
@@ -56,6 +70,23 @@ body:
         - 安装包安装（NSIS）/ Installed from the NSIS installer
         - 开发模式 pnpm dev / Dev mode (pnpm dev)
         - 自行构建 pnpm run dist / Self-built (pnpm run dist)
+        - 其他 Other
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及的功能 / Affected area
+      description: 选最接近的一项，也可以在描述里补充 / Pick the closest one and add details in the description
+      options:
+        - 启动与运行 / 启动、崩溃、卡死 / Startup and runtime
+        - 倒数日列表 / 新增、编辑、复制、删除、启用停用 / Countdown list
+        - 日期与文案 / 每年重复、一次性日期、状态文案 / Date and text
+        - 外观与预设主题 / Appearance and presets
+        - 布局与位置 / 四角停靠、偏移、卡片宽度 / Layout and position
+        - 行为 / 显示模式、透明度、总在最前 / Behavior
+        - 系统集成 / 托盘、全局快捷键、开机自启 / System integration
+        - 配置文件 / 保存、迁移、恢复默认 / Config file
         - 其他 Other
     validations:
       required: true
@@ -71,7 +102,7 @@ body:
     id: steps
     attributes:
       label: 复现步骤 / Steps to reproduce
-      description: 越具体越好，能稳定复现最佳 / Be as specific as you can
+      description: 越具体越好，能稳定复现最佳；文案、样式类问题可改写成「在哪个页面看到」/ Be as specific as you can; for wording or styling nits, say where you saw it
       placeholder: |-
         1. 打开设置 → 倒数日列表
         2. 选中另一项
@@ -92,19 +123,6 @@ body:
       description: 有弹窗或控制台报错请一并贴上 / Paste any dialog or console error text here
     validations:
       required: true
-  - type: checkboxes
-    id: impact
-    attributes:
-      label: 受影响的功能 / Affected areas
-      description: 可多选 / Select all that apply
-      options:
-        - label: 无法启动，或启动即崩溃 / Won't start or crashes on launch
-        - label: 倒数日或配置数据丢失、被重置 / Countdown or settings data lost or reset
-        - label: 桌面卡片不显示或显示异常 / Desktop card missing or rendered wrong
-        - label: 托盘图标或右键菜单失效 / Tray icon or menu broken
-        - label: 全局快捷键失效 / Global hotkey broken
-        - label: 设置界面的修改无法保存 / Settings changes are not saved
-        - label: 其他（见上方问题描述）/ Other (see the description above)
   - type: dropdown
     id: frequency
     attributes:
@@ -116,6 +134,26 @@ body:
         - 只出现一次 / Only once
     validations:
       required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: 受影响的功能 / Affected areas
+      description: 可选，可多选。选了「高 High」的话请尽量勾上 / Optional, select all that apply; please fill this in when the severity is High
+      options:
+        - label: 无法启动，或启动即崩溃 / Won't start or crashes on launch
+        - label: 倒数日或配置数据丢失、被重置 / Countdown or settings data lost or reset
+        - label: 桌面卡片不显示或显示异常 / Desktop card missing or rendered wrong
+        - label: 托盘图标或右键菜单失效 / Tray icon or menu broken
+        - label: 全局快捷键失效 / Global hotkey broken
+        - label: 设置界面的修改无法保存 / Settings changes are not saved
+        - label: 其他（见上方问题描述）/ Other (see the description above)
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: 截图或录屏 / Screenshots or screen recording
+      description: 可选。把图片或视频直接拖进这个输入框；界面类问题带上会快很多 / Optional. Drag images or video into this box; it speeds up UI issues a lot
+    validations:
+      required: false
   - type: textarea
     id: logs
     attributes:
@@ -133,13 +171,6 @@ body:
         {
           "runtime": { "language": "zh-CN" }
         }
-    validations:
-      required: false
-  - type: textarea
-    id: screenshots
-    attributes:
-      label: 截图或录屏 / Screenshots or screen recording
-      description: 可选。把图片或视频直接拖进这个输入框 / Optional. Drag images or video into this box
     validations:
       required: false
   - type: checkboxes

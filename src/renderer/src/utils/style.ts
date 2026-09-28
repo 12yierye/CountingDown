@@ -93,16 +93,17 @@ export function normalizeWeight(value: number): number {
 }
 
 /**
- * 字体族下拉里不要把整串 CSS font-family 全显示出来（会被裁切），
- * 只显示第一个字体名，并标注它还有回退字体。
+ * 字体族下拉里不要把整串 CSS font-family 缩写掉：每个选项都完整显示字体栈，
+ * 否则「微软雅黑 + 不同回退」这类选项在列表里长得一模一样，根本分不出来。
+ * 下拉项允许换行（见 settings.css 的 .cd-font-select），窄窗口下也不会被裁切。
  */
-export function fontLabel(stack: string): string {
-  const raw = (stack ?? '').trim()
-  if (!raw) return 'system-ui'
-  const parts = raw
-    .split(',')
-    .map((part) => part.trim().replace(/^["']|["']$/g, ''))
-    .filter(Boolean)
-  const first = parts[0] ?? raw
-  return parts.length > 1 ? `${first} …` : first
-}
+export const FONT_STACKS: string[] = [
+  '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif',
+  '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif',
+  '"Segoe UI", system-ui, sans-serif',
+  '"Cascadia Mono", Consolas, monospace',
+  '"KaiTi", "STKaiti", serif',
+  '"SimSun", "Songti SC", serif',
+  '"HarmonyOS Sans SC", "Microsoft YaHei UI", sans-serif',
+  'system-ui, sans-serif'
+]

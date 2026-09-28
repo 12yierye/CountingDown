@@ -6,7 +6,7 @@ import FieldRow from '@/components/FieldRow.vue'
 import ColorField from '@/components/ColorField.vue'
 import TextStyleEditor from '@/components/TextStyleEditor.vue'
 import SliderField from '@/components/SliderField.vue'
-import { fontLabel } from '@/utils/style'
+import { FONT_STACKS } from '@/utils/style'
 
 const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{ (event: 'patch', patch: unknown): void }>()
@@ -27,16 +27,7 @@ function updateStyle(key: 'title' | 'count' | 'hint' | 'status', value: TextStyl
   emit('patch', { appearance: { [key]: value } })
 }
 
-const fontOptions = [
-  '"Microsoft YaHei UI", "Microsoft YaHei", sans-serif',
-  '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif',
-  '"Segoe UI", system-ui, sans-serif',
-  '"Cascadia Mono", Consolas, monospace',
-  '"KaiTi", "STKaiti", serif',
-  '"SimSun", "Songti SC", serif',
-  '"HarmonyOS Sans SC", "Microsoft YaHei UI", sans-serif',
-  'system-ui, sans-serif'
-]
+const fontOptions = FONT_STACKS
 </script>
 
 <template>
@@ -49,18 +40,15 @@ const fontOptions = [
     <FieldRow :label="t('appearance.fontFamily')" :hint="t('appearance.fontHint')">
       <el-select
         :model-value="config.appearance.fontFamily"
+        class="font-select"
+        popper-class="cd-font-select"
         filterable
         allow-create
         default-first-option
         style="width: 100%"
         @update:model-value="(v: string) => patchAppearance({ fontFamily: v })"
       >
-        <el-option
-          v-for="font in fontOptions"
-          :key="font"
-          :label="fontLabel(font)"
-          :value="font"
-        />
+        <el-option v-for="font in fontOptions" :key="font" :label="font" :value="font" />
       </el-select>
     </FieldRow>
   </el-card>
@@ -71,6 +59,16 @@ const fontOptions = [
         <span>{{ t('appearance.background') }}</span>
       </div>
     </template>
+
+    <FieldRow :label="t('appearance.opacity')" :hint="t('appearance.opacityHint')">
+      <SliderField
+        :model-value="config.appearance.opacity ?? 1"
+        :min="0.2"
+        :max="1"
+        :step="0.01"
+        @update:model-value="(v: number) => patchAppearance({ opacity: v })"
+      />
+    </FieldRow>
 
     <div class="panel-grid-2">
       <FieldRow :label="t('appearance.bgColor')">

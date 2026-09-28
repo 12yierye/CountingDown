@@ -9,6 +9,7 @@ import {
 } from './windows'
 
 let tray: Tray | null = null
+let builtMenu: Menu | null = null
 let currentLanguage = 'zh-CN'
 
 const copy = {
@@ -18,6 +19,7 @@ const copy = {
     hide: '隐藏倒数日',
     settings: '设置…',
     resetPosition: '吸附到右上角',
+    allowDrag: '允许拖动',
     alwaysOnTop: '总在最前',
     startup: '开机自动启动',
     quit: '退出',
@@ -29,6 +31,7 @@ const copy = {
     hide: 'Hide countdown',
     settings: 'Settings…',
     resetPosition: 'Snap to top-right',
+    allowDrag: 'Allow dragging',
     alwaysOnTop: 'Always on top',
     startup: 'Launch at login',
     quit: 'Quit',
@@ -76,9 +79,21 @@ function buildMenu(): Menu {
     {
       label: text.resetPosition,
       click: () => {
-        updateConfig({ runtime: { window: { corner: 'top-right' } } })
+        // 「吸附」= 回到右上角并清空偏移量（角落与参考基准一起改，否则位置不会真的回到右上角）
+        updateConfig({
+          runtime: { window: { corner: 'top-right', cornerPreset: 'top-right', offsetX: 0, offsetY: 0 } }
+        })
         applyPosition()
         setWidgetVisible(true)
+        refreshTray()
+      }
+    },
+    {
+      label: text.allowDrag,
+      type: 'checkbox',
+      checked: config.runtime.window.allowDrag !== false,
+      click: (item) => {
+        updateConfig({ runtime: { window: { allowDrag: item.checked } } })
         refreshTray()
       }
     },
@@ -115,7 +130,17 @@ export function refreshTray(): void {
   if (!tray) return
   currentLanguage = getConfig().runtime.language
   tray.setToolTip(`${dict().tooltip} · v${app.getVersion()}`)
-  tray.setContextMenu(buildMenu())
+  builtMenu = buildMenu()
+  tray.setContextMenu(builtMenu)
+}
+
+/** 供自动化验证与调试使用：当前托盘菜单的条目快照 */
+export function trayMenuSnapshot(): Array<{ label: string; type: string; checked: boolean }> {
+  return (builtMenu?.items ?? []).map((item) => ({
+    label: item.label,
+    type: item.type,
+    checked: item.checked
+  }))
 }
 
 export function createTray(): Tray {

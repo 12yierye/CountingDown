@@ -24,7 +24,11 @@ const result = computed(() =>
 
 const appearance = computed(() => resolved.value?.appearance ?? props.config.appearance)
 
-const cardStyleObject = computed(() => cardStyle(props.config, resolved.value?.appearance ?? undefined))
+const cardStyleObject = computed(() => ({
+  ...cardStyle(props.config, resolved.value?.appearance ?? undefined),
+  // 不透明度属于外观，这里跟桌面组件保持一致
+  opacity: String(appearance.value.opacity ?? 1)
+}))
 const titleStyle = computed(() => textStyle(appearance.value.title))
 const countStyle = computed(() => textStyle(appearance.value.count))
 const hintStyle = computed(() => textStyle(appearance.value.hint))

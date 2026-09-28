@@ -6,7 +6,13 @@
     :data-corner="config.runtime.window.corner"
   >
     <div v-if="resolved" ref="shrink" class="cd-shrink" :style="shrinkStyle">
-      <div ref="card" class="cd-card" :style="cardStyleObject">
+      <div
+        ref="card"
+        class="cd-card"
+        :style="cardStyleObject"
+        :class="{ 'is-draggable': allowDrag }"
+        @pointerdown="onPointerDown"
+      >
         <div v-if="resolved.text.title.trim()" class="cd-card__title" :style="titleStyle">
           {{ resolved.text.title }}
         </div>
@@ -38,7 +44,14 @@
     </div>
 
     <!-- 列表为空时不再是一片全透明的“隐身”窗口，给一个可读的提示 -->
-    <div v-else ref="emptyCard" class="cd-card cd-card--empty" :style="emptyCardStyle">
+    <div
+      v-else
+      ref="emptyCard"
+      class="cd-card cd-card--empty"
+      :style="emptyCardStyle"
+      :class="{ 'is-draggable': allowDrag }"
+      @pointerdown="onPointerDown"
+    >
       <div class="cd-card__title" :style="titleStyle">{{ t('list.noCountdown') }}</div>
       <div class="cd-card__hint" :style="hintStyle">{{ t('list.noCountdownHint') }}</div>
     </div>
@@ -119,13 +132,13 @@ const result = computed(() =>
 
 const cardStyleObject = computed(() => ({
   ...cardStyle(props.config, resolved.value?.appearance),
-  opacity: String(props.config.behavior.opacity)
+  opacity: String(resolved.value?.appearance.opacity ?? props.config.appearance.opacity ?? 1)
 }))
 
 /** 空态卡片固定使用全局外观，避免单项覆盖干扰 */
 const emptyCardStyle = computed(() => ({
   ...cardStyle(props.config, props.config.appearance),
-  opacity: String(props.config.behavior.opacity),
+  opacity: String(props.config.appearance.opacity ?? 1),
   maxWidth: '320px'
 }))
 const titleStyle = computed(() =>
@@ -151,6 +164,9 @@ const unitStyle = computed(() => {
 })
 
 const absDays = computed(() => (result.value ? Math.abs(result.value.days) : 0))
+
+/** 是否允许直接拖动组件（布局设置 / 托盘菜单里都能开关） */
+const allowDrag = computed(() => props.config.runtime.window.allowDrag !== false)
 
 const hintText = computed(() => {
   if (!resolved.value || !result.value) return ''
@@ -203,11 +219,44 @@ function pad(value: number): string {
 function syncInteractive(): void {
   const el = card.value ?? emptyCard.value
   if (!el) return
-  const next = hoverLocked.value
+  // 拖动期间必须一直保持命中，否则指针甩出卡片就会丢掉拖动
+  const next = hoverLocked.value || dragging.value
   if (next === interactive) return
   interactive = next
   window.cd.setInteractive(next)
   if (stage.value) stage.value.dataset.interactive = interactive ? 'true' : 'false'
+}
+
+/* ---- 拖动：按下卡片后由主进程轮询光标移动窗口，松手时写回偏移量 ---- */
+
+const dragging = ref(false)
+
+function endDrag(): void {
+  if (!dragging.value) return
+  dragging.value = false
+  void window.cd.endDrag()
+}
+
+function onPointerDown(event: PointerEvent): void {
+  if (event.button !== 0) return
+  if (props.config.runtime.window.allowDrag === false) return
+  const el = (event.currentTarget as HTMLElement | null) ?? card.value ?? emptyCard.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  if (rect.width < 2 || rect.height < 2) return
+  event.preventDefault()
+  dragging.value = true
+  syncInteractive()
+  try {
+    el.setPointerCapture(event.pointerId)
+  } catch {
+    /* 指针捕获失败时仍然按光标轮询移动窗口 */
+  }
+  void window.cd
+    .beginDrag({ left: rect.left, top: rect.top, width: rect.width, height: rect.height })
+    .then((ok) => {
+      if (!ok) endDrag()
+    })
 }
 
 function pointIn(el: HTMLElement | null, x: number, y: number, pad = 4): boolean {
@@ -234,11 +283,19 @@ let unhookCursor: (() => void) | null = null
 let unhookShown: (() => void) | null = null
 let resizeObserver: ResizeObserver | null = null
 
+/** 松手的位置可能已经跑到窗口外面，所以监听挂在 window 上而不是卡片上 */
+function onPointerUp(): void {
+  endDrag()
+}
+
 onMounted(async () => {
   timer = window.setInterval(() => {
     nowRef.value = new Date()
   }, 1000)
   if (stage.value) stage.value.dataset.interactive = 'false'
+  window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerUp)
+  window.addEventListener('blur', onPointerUp)
   unhookCursor = window.cd.onCursor(onGlobalCursor)
   // 主进程每次显示组件都会重置鼠标穿透状态，这里同步丢掉缓存，
   // 否则「显示前指针已经在卡片上」时会被误判成不需要恢复命中
@@ -271,11 +328,20 @@ watch(
   }
 )
 
+/** 拖动状态对外暴露，便于自动化验证与调试 */
+watch(dragging, (value) => {
+  if (stage.value) stage.value.dataset.dragging = value ? 'true' : 'false'
+})
+
 onBeforeUnmount(() => {
   if (timer) window.clearInterval(timer)
   resizeObserver?.disconnect()
+  window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('pointercancel', onPointerUp)
+  window.removeEventListener('blur', onPointerUp)
   unhookCursor?.()
   unhookShown?.()
+  if (dragging.value) void window.cd.endDrag()
   if (interactive) void window.cd.setInteractive(false)
 })
 </script>

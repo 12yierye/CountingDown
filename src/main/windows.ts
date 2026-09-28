@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { BrowserWindow, app, nativeTheme, screen, shell } from 'electron'
 import { getConfig, isDev, onConfigChange, updateConfig } from './config-store'
+import type { Corner } from '../shared/types'
 
 let widgetWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
@@ -203,6 +204,7 @@ export function createWidgetWindow(): BrowserWindow {
 
   widgetWindow.on('closed', () => {
     widgetWindow = null
+    cancelWidgetDrag()
     stopCursorWatch()
   })
 
@@ -231,6 +233,190 @@ export function applyPosition(): void {
   const win = getWidgetWindow()
   if (!win) return
   win.setBounds(widgetBoundsByConfig())
+}
+
+/* ------------------------------------------------------------------ *
+ * 拖动组件：渲染层按下卡片后由主进程轮询光标移动窗口，松手时把落点
+ * 换算成「最近角落 + 偏移量」写回配置，设置里的布局面板随即同步。
+ * ------------------------------------------------------------------ */
+
+/** 卡片相对窗口的位置（渲染层在按下时上报，用于换算落点） */
+export interface DragCardRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+interface DragState {
+  /** 按下时的屏幕光标位置 */
+  cursor: { x: number; y: number }
+  /** 按下时的窗口位置与尺寸 */
+  bounds: Electron.Rectangle
+  /** 卡片相对窗口的位置 */
+  card: DragCardRect
+  /** 按下时的角落对齐方式（拖动过程中不变） */
+  corner: Corner
+}
+
+let dragTimer: NodeJS.Timeout | null = null
+let dragState: DragState | null = null
+
+function stopDragTimer(): void {
+  if (dragTimer) {
+    clearInterval(dragTimer)
+    dragTimer = null
+  }
+}
+
+/**
+ * 把窗口位置限制在「卡片完整落在工作区内」的范围里。
+ *
+ * 窗口（624×600）比卡片大得多，如果按窗口整块留在工作区内来限制，卡片在纵向就
+ * 只能移动 480px 左右，根本拖不到屏幕另一半；反过来也不能让卡片跑出屏幕。
+ * 上限同时不越过 computeCornerPosition 的兜底范围，保证「配置 -> 位置」能精确还原。
+ */
+function clampWindowForCard(
+  x: number,
+  y: number,
+  bounds: Electron.Rectangle,
+  card: DragCardRect
+): { x: number; y: number } {
+  const area = screen.getPrimaryDisplay().workArea
+  const minX = Math.max(area.x - card.left, area.x - bounds.width + 80)
+  const maxX = Math.min(area.x + area.width - (card.left + card.width), area.x + area.width - 80)
+  const minY = Math.max(area.y - card.top, area.y)
+  const maxY = Math.min(area.y + area.height - (card.top + card.height), area.y + area.height - 40)
+  return {
+    x: Math.round(clamp(x, Math.min(minX, maxX), Math.max(minX, maxX))),
+    y: Math.round(clamp(y, Math.min(minY, maxY), Math.max(minY, maxY)))
+  }
+}
+
+function normalizeCardRect(input: unknown): DragCardRect | null {
+  const source = input as Partial<DragCardRect> | undefined
+  if (!source) return null
+  const left = Number(source.left)
+  const top = Number(source.top)
+  const width = Number(source.width)
+  const height = Number(source.height)
+  if (![left, top, width, height].every((value) => Number.isFinite(value))) return null
+  if (width <= 1 || height <= 1) return null
+  return { left, top, width, height }
+}
+
+/** 卡片在窗口内的位置：只有贴着的那条边会跟随角落变化 */
+function cardRectInWindow(
+  corner: Corner,
+  from: Corner,
+  card: DragCardRect,
+  bounds: Electron.Rectangle
+): DragCardRect {
+  const [fromVertical, fromHorizontal] = (from === 'custom' ? 'top-left' : from).split('-')
+  const [vertical, horizontal] = (corner === 'custom' ? 'top-left' : corner).split('-')
+  const gapX = fromHorizontal === 'left' ? card.left : bounds.width - card.width - card.left
+  const gapY = fromVertical === 'top' ? card.top : bounds.height - card.height - card.top
+  return {
+    left: horizontal === 'left' ? gapX : bounds.width - gapX - card.width,
+    top: vertical === 'top' ? gapY : bounds.height - gapY - card.height,
+    width: card.width,
+    height: card.height
+  }
+}
+
+/** 开始拖动；返回 false 表示当前不允许拖动（设置里关掉了 / 窗口不存在） */
+export function beginWidgetDrag(input: unknown): boolean {
+  const win = getWidgetWindow()
+  const card = normalizeCardRect(input)
+  if (!win || !card) return false
+  const config = getConfig()
+  if (config.runtime.window.allowDrag === false) return false
+  cancelWidgetDrag()
+  dragState = {
+    cursor: screen.getCursorScreenPoint(),
+    bounds: win.getBounds(),
+    card,
+    corner: config.runtime.window.corner
+  }
+  // 拖动期间必须保持可命中：光标一旦甩到卡片外，穿透会让拖动直接断掉
+  widgetInteractive = true
+  applyIgnoreMouse(win)
+  dragTimer = setInterval(() => tickWidgetDrag(), 16)
+  return true
+}
+
+function tickWidgetDrag(): void {
+  const win = getWidgetWindow()
+  if (!win || !dragState) {
+    cancelWidgetDrag()
+    return
+  }
+  const point = screen.getCursorScreenPoint()
+  const next = clampWindowForCard(
+    dragState.bounds.x + (point.x - dragState.cursor.x),
+    dragState.bounds.y + (point.y - dragState.cursor.y),
+    dragState.bounds,
+    dragState.card
+  )
+  const current = win.getBounds()
+  if (current.x !== next.x || current.y !== next.y) {
+    win.setBounds({ ...current, x: next.x, y: next.y })
+  }
+}
+
+/**
+ * 结束拖动：按卡片中心的落点选择最近的角落，并把窗口摆到「新角落 + 新偏移量」
+ * 能还原出同一落点的位置，这样松手时卡片不会跳。
+ */
+export function endWidgetDrag(): boolean {
+  stopDragTimer()
+  const win = getWidgetWindow()
+  const state = dragState
+  dragState = null
+  if (!win || !state) return false
+
+  const area = screen.getPrimaryDisplay().workArea
+  const bounds = win.getBounds()
+  const card = state.card
+
+  // 拖动过程中角落没变，所以卡片相对窗口的位置仍是按下时上报的那个
+  const cardLeft = bounds.x + card.left
+  const cardTop = bounds.y + card.top
+
+  const horizontal = cardLeft + card.width / 2 <= area.x + area.width / 2 ? 'left' : 'right'
+  const vertical = cardTop + card.height / 2 <= area.y + area.height / 2 ? 'top' : 'bottom'
+  const corner = `${vertical}-${horizontal}` as Corner
+  const next = cardRectInWindow(corner, state.corner, card, bounds)
+
+  const pos = clampWindowForCard(cardLeft - next.left, cardTop - next.top, bounds, next)
+  win.setBounds({ ...bounds, x: pos.x, y: pos.y })
+
+  const offsetX =
+    horizontal === 'left'
+      ? pos.x - area.x - EDGE_INSET
+      : area.x + area.width - (pos.x + bounds.width) - EDGE_INSET
+  const offsetY =
+    vertical === 'top'
+      ? pos.y - area.y - EDGE_INSET
+      : area.y + area.height - (pos.y + bounds.height) - EDGE_INSET
+
+  updateConfig({
+    runtime: {
+      window: {
+        corner,
+        cornerPreset: corner,
+        offsetX: Math.round(offsetX),
+        offsetY: Math.round(offsetY)
+      }
+    }
+  })
+  return true
+}
+
+/** 放弃拖动（窗口被隐藏/销毁时调用）：保留窗口当前位置，不写配置 */
+export function cancelWidgetDrag(): void {
+  stopDragTimer()
+  dragState = null
 }
 
 /** 透明区域点击穿透开关：指针在卡片上时恢复鼠标事件 */
@@ -277,6 +463,7 @@ export function setWidgetVisible(visible: boolean): boolean {
   if (visible) {
     showWidgetWindow(win)
   } else {
+    cancelWidgetDrag()
     win.hide()
     setWidgetInteractive(false)
   }

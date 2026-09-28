@@ -201,13 +201,10 @@ const offsetYLabel = computed(() =>
       </FieldRow>
     </div>
 
-    <FieldRow :label="t('layout.opacity')">
-      <SliderField
-        :model-value="config.behavior.opacity"
-        :min="0.2"
-        :max="1"
-        :step="0.01"
-        @update:model-value="(v: number) => emit('patch', { behavior: { opacity: v } })"
+    <FieldRow :label="t('layout.allowDrag')" :hint="t('layout.allowDragHint')">
+      <el-switch
+        :model-value="config.runtime.window.allowDrag !== false"
+        @update:model-value="(v: string | number | boolean) => patchWindow({ allowDrag: Boolean(v) })"
       />
     </FieldRow>
   </el-card>

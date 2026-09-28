@@ -53,20 +53,23 @@ html.dark {
   --el-color-info-light-9: #22252c;
 }
 
-/* 深色主题下彩色底仍用深色文字，白色在浅蓝/浅绿上不够 */
+/* 深色主题下彩色底仍用深色文字，白色在浅蓝/浅绿上不够。
+   注意：只能改「实心」按钮——plain / text / link 按钮的底色是深色的浅色调
+   （primary-light-9 之类），再压深色文字就成了黑字压黑底（历史 bug：预设主题的
+   「套用」、系统集成里的「退出程序」几乎看不见）。 */
 .el-radio-button__inner,
-.el-button--primary,
-.el-button--success,
-.el-button--warning,
-.el-button--danger {
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link),
+.el-button--success:not(.is-plain):not(.is-text):not(.is-link),
+.el-button--warning:not(.is-plain):not(.is-text):not(.is-link),
+.el-button--danger:not(.is-plain):not(.is-text):not(.is-link) {
   color: var(--el-color-white, #ffffff);
 }
 
 html.dark .el-radio-button__inner,
-html.dark .el-button--primary,
-html.dark .el-button--success,
-html.dark .el-button--warning,
-html.dark .el-button--danger {
+html.dark .el-button--primary:not(.is-plain):not(.is-text):not(.is-link),
+html.dark .el-button--success:not(.is-plain):not(.is-text):not(.is-link),
+html.dark .el-button--warning:not(.is-plain):not(.is-text):not(.is-link),
+html.dark .el-button--danger:not(.is-plain):not(.is-text):not(.is-link) {
   color: #14161b;
 }
 
@@ -103,13 +106,31 @@ html:not(.dark) .el-checkbox__inner {
   border-color: #8b93a3;
 }
 
-/* 字体族下拉：长字体栈至少给出省略号，而不是硬生生被切断 */
-.el-select__selected-item.el-select__placeholder,
+/* 字体族下拉：长字体栈至少给出省略号，而不是硬生生被切断。
+   只作用在真正承载文字的那个 span 上——给整个 selected-item 盒子加 overflow:hidden
+   会把里面的输入框一起算成「被裁切」，而且外层 wrapper 本来就会裁。 */
 .el-select__selected-item > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+
+/* 字体族下拉的候选项：整条字体栈要能完整看到（窄窗口下换行，绝不裁切）。
+   下拉是 teleport 到 body 的，所以用 popper-class 上的 .cd-font-select 限定作用域。 */
+.cd-font-select .el-select-dropdown__item {
+  height: auto;
+  min-height: 34px;
+  line-height: 1.4;
+  padding: 7px 20px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 字体族下拉的选中值：单行输入框装不下整串字体栈，给省略号而不是硬切一刀；
+   完整内容在展开下拉后可以看到 */
+.font-select .el-select__input {
+  text-overflow: ellipsis;
 }
 
 /* 复选框触达区域放大到 20px，避免只能点中很小的方块 */

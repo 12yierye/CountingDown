@@ -25,6 +25,11 @@ const api = {
   showSettings: (): Promise<boolean> => ipcRenderer.invoke('widget:showSettings'),
   setInteractive: (interactive: boolean): Promise<boolean> =>
     ipcRenderer.invoke('widget:setInteractive', interactive),
+  /** 开始拖动：传入卡片相对窗口的位置，主进程据此换算落点 */
+  beginDrag: (card: { left: number; top: number; width: number; height: number }): Promise<boolean> =>
+    ipcRenderer.invoke('widget:dragStart', card),
+  /** 结束拖动：主进程写入新的角落与偏移量 */
+  endDrag: (): Promise<boolean> => ipcRenderer.invoke('widget:dragEnd'),
   onCursor: (handler: (point: { x: number; y: number }) => void): Unsubscribe => {
     const listener = (_event: unknown, point: { x: number; y: number }): void => handler(point)
     ipcRenderer.on('widget:cursor', listener)

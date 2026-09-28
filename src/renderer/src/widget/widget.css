@@ -125,6 +125,15 @@ body,
   pointer-events: none;
 }
 
+/* 开启「允许拖动」后，卡片本身就是拖动把手 */
+.cd-card.is-draggable {
+  cursor: grab;
+}
+
+.cd-card.is-draggable:active {
+  cursor: grabbing;
+}
+
 .cd-card--empty {
   min-width: 200px;
   gap: 8px;

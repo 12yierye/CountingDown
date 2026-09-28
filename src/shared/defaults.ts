@@ -18,6 +18,17 @@ type TextFieldKey = 'hint' | 'futureText' | 'todayText' | 'pastText' | 'unit'
 
 export const DAY_MS = 86_400_000
 
+/** 组件不透明度的合法区间 */
+export const OPACITY_MIN = 0.2
+export const OPACITY_MAX = 1
+
+/** 把任意输入收敛到合法的组件不透明度 */
+export function clampOpacity(value: unknown, fallback = 1): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(OPACITY_MAX, Math.max(OPACITY_MIN, Number(n.toFixed(2))))
+}
+
 export function createItemId(): string {
   return `cd_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`
 }
@@ -144,6 +155,7 @@ export function createDefaultConfig(): AppConfig {
     appearance: {
       fontFamily:
         '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif',
+      opacity: 1,
       background: {
         color: '#1e2230',
         alpha: 0.78,
@@ -164,8 +176,7 @@ export function createDefaultConfig(): AppConfig {
       displayMode: 'days',
       showDaysInPrecise: true,
       showPastDays: false,
-      alwaysOnTop: true,
-      opacity: 1
+      alwaysOnTop: true
     },
     runtime: {
       widgetVisible: true,
@@ -180,6 +191,7 @@ export function createDefaultConfig(): AppConfig {
         anchorY: 0,
         offsetX: 0,
         offsetY: 0,
+        allowDrag: true,
         transparent: true,
         x: 0,
         y: 0
@@ -224,7 +236,27 @@ export function mergeConfig(base: AppConfig, patch: unknown): AppConfig {
       normalizeItem(item)
     )
   }
+  migrateOpacity(merged, patch as Record<string, unknown> | undefined)
   return normalizeConfig(merged)
+}
+
+/**
+ * 旧结构把组件不透明度放在 behavior.opacity 下，现在它属于外观：
+ * 只要来源里写了 behavior.opacity 而没写 appearance.opacity，就搬过去。
+ */
+function migrateOpacity(merged: AppConfig, patch: Record<string, unknown> | undefined): void {
+  const source = (patch ?? {}) as {
+    appearance?: { opacity?: unknown }
+    behavior?: { opacity?: unknown }
+  }
+  const alreadyMoved = Number.isFinite(Number(source.appearance?.opacity))
+  const legacy = Number(source.behavior?.opacity)
+  if (!alreadyMoved && Number.isFinite(legacy)) {
+    merged.appearance = { ...merged.appearance, opacity: clampOpacity(legacy) }
+  }
+  if (merged.behavior && 'opacity' in (merged.behavior as unknown as Record<string, unknown>)) {
+    delete (merged.behavior as unknown as Record<string, unknown>).opacity
+  }
 }
 
 function normalizeItem(item: CountdownItem): CountdownItem {
@@ -251,9 +283,17 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     ...config,
     countdowns,
     activeId,
+    appearance: normalizeAppearance(config.appearance),
     runtime: { ...config.runtime, window },
     customPresets: Array.isArray(config.customPresets) ? config.customPresets : []
   }
+}
+
+/** 外观只做不透明度兜底：缺失或越界都收敛回合法值 */
+function normalizeAppearance(input: AppearanceConfig | undefined): AppearanceConfig {
+  const fallback = createDefaultConfig().appearance
+  const source = input ?? fallback
+  return { ...source, opacity: clampOpacity(source.opacity, fallback.opacity) }
 }
 
 function normalizeWindow(input: Partial<AppConfig['runtime']['window']> | undefined): AppConfig['runtime']['window'] {
@@ -275,6 +315,7 @@ function normalizeWindow(input: Partial<AppConfig['runtime']['window']> | undefi
     anchorY: Number.isFinite(source.anchorY) ? Number(source.anchorY) : 0,
     offsetX: Number.isFinite(source.offsetX) ? Number(source.offsetX) : 0,
     offsetY: Number.isFinite(source.offsetY) ? Number(source.offsetY) : 0,
+    allowDrag: source.allowDrag !== false,
     transparent: source.transparent !== false,
     x: Number.isFinite(source.x) ? Number(source.x) : 0,
     y: Number.isFinite(source.y) ? Number(source.y) : 0
@@ -347,6 +388,10 @@ export function mergeAppearance(
   }
   return {
     fontFamily: override.fontFamily || base.fontFamily,
+    opacity:
+      override.opacity === undefined || override.opacity === null
+        ? base.opacity ?? 1
+        : clampOpacity(override.opacity, base.opacity ?? 1),
     background: mergeStyle(base.background, override.background),
     title: mergeStyle(base.title, override.title),
     count: mergeStyle(base.count, override.count),
@@ -530,6 +575,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     appearance: {
       fontFamily:
         '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif',
+      opacity: 1,
       background: {
         color: '#1e2230',
         alpha: 0.78,
@@ -553,6 +599,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Frost',
     appearance: {
       fontFamily: '"Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif',
+      opacity: 1,
       background: {
         color: '#ffffff',
         alpha: 0.82,
@@ -576,6 +623,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Sakura',
     appearance: {
       fontFamily: '"Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif',
+      opacity: 1,
       background: {
         color: '#ffe3ec',
         alpha: 0.9,
@@ -599,6 +647,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Terminal',
     appearance: {
       fontFamily: '"Cascadia Mono", "Consolas", "JetBrains Mono", monospace',
+      opacity: 1,
       background: {
         color: '#0b1a10',
         alpha: 0.85,
@@ -622,6 +671,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Paper Note',
     appearance: {
       fontFamily: '"KaiTi", "STKaiti", "Microsoft YaHei UI", serif',
+      opacity: 1,
       background: {
         color: '#fdf6d8',
         alpha: 0.96,
