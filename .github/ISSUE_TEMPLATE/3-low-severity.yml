@@ -15,10 +15,10 @@ body:
         - 颜色、字号、圆角、间距等视觉细节不舒服 / Slightly off colors, font sizes, radii or spacing.
         - 提示文案看不懂，或缺少必要的说明 / Confusing hints, or missing explanations.
         - README、界面说明与实际情况不符 / README or in-app text that no longer matches the app.
-        - 功能建议与改进想法 / Feature suggestions and ideas.
 
-        影响正常使用的问题请改用 **中** 或 **高** 模板。
-        If the problem blocks normal use, please use the **Medium** or **High** template.
+        影响正常使用的问题请改用 **中** 或 **高** 模板；想要新功能或功能改进请用 **功能建议 / Feature Request** 模板。
+        If the problem blocks normal use, use the **Medium** or **High** template; for new capabilities or improvements,
+        use the **Feature Request** template instead.
 
         > 用中文或 English 填写都可以，维护者会用你在下面选择的语言回复。
         > Write in Chinese or English; we reply in the language you pick below.
@@ -42,7 +42,6 @@ body:
         - 视觉样式（颜色、字号、圆角、间距）/ Visual styling
         - 交互与体验 / Interaction and UX
         - 文档与说明 / Documentation
-        - 功能建议 / Feature suggestion
         - 其他 Other
     validations:
       required: true
