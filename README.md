@@ -96,7 +96,7 @@ A：`pnpm dev` 跑的是 `node_modules` 里的 `electron.exe`，名称来自可�
 （图标已经是倒数日的）。跑打包版就会显示「倒数日」：`pnpm run dist:dir` 后运行
 `release\win-unpacked\CountingDown.exe`。
 
-**Q：`pnpm run icon` 失败？**<bri>
+**Q：`pnpm run icon` 失败？**<br>
 A：该脚本依赖 Windows PowerShell 的 `System.Drawing`。失败时托盘会显示空白图标但不影响功能，
 也可以手动放一张 16×16 的 PNG 到 `resources/tray.png`。
 
