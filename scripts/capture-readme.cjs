@@ -4,6 +4,10 @@
 // 因此截图里不会出现任何真实的倒数日内容。产物写入 assets/screenshots/。
 //
 // 用法：node_modules\electron\dist\electron.exe scripts\capture-readme.cjs
+//
+// ⚠️ 跑之前先确认**没有别的窗口盖住组件区域**（本机是最大化运行的「设置」应用）。
+//    桌面组件那张图是把真实桌面截下来再裁剪的，别的窗口压在组件上就会被一起截进去——
+//    实测踩过：卡片右上角叠进了另一个应用的界面元素。脚本不会替你去动别人的窗口。
 const { app, BrowserWindow, desktopCapturer, screen } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -155,7 +159,9 @@ async function captureWidgetOnDesktop() {
     return
   }
 
-  const margin = 40 // 卡片四周保留一点桌面，说明它是浮在桌面上的
+  // 卡片四周保留一点桌面，说明它是浮在桌面上的。
+  // 别放太大：桌子上的小图标/白点会在卡片下方露出来（实测 40px 时右下角多出 3 个像素的白点）。
+  const margin = 32
   const left = bounds.x + card.left
   const top = bounds.y + card.top
   const x = Math.max(0, Math.round((left - margin) * ratio))
