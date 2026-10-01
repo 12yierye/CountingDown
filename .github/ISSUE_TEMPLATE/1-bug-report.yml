@@ -186,9 +186,12 @@ body:
     attributes:
       label: 提交前确认 / Before submitting
       options:
-        - label: 我已在最新版本（或最新 main 分支）上复现 / I reproduced this on the latest release or on main
+        - label: 我已在最新版本（或最新 main 分支）上复现 / 
+            I reproduced this on the latest release or on main
           required: true
-        - label: 我已搜索过现有 issue，确认没有重复 / I searched existing issues and found no duplicate
+        - label: -| 我已搜索过现有 issue，确认没有重复 /
+            I searched existing issues and found no duplicate
           required: true
-        - label: 我已移除日志、截图、配置中的隐私信息 / I removed private information from logs, screenshots and config
+        - label: 我已移除日志、截图、配置中的隐私信息 / 
+            I removed private information from logs, screenshots and config
           required: true
