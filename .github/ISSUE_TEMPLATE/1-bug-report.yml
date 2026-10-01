@@ -22,13 +22,13 @@ body:
         > **已有功能不够好用、希望新增或改进**，请改用「**功能建议 / Feature Request**」模板。
         > **If you want a new capability or an improvement** rather than a fix, please use the **Feature Request** template.
         >
-        > 用中文或 English 填写都可以，维护者会用你在下面选择的语言回复。
+        > 用中文或 English 填写都可以，我们会用你在下面选择的语言回复。
         > Write in Chinese or English; we reply in the language you pick below.
   - type: dropdown
     id: severity
     attributes:
       label: 严重等级 / Severity
-      description: 选最接近的一项；不确定时选「中 Medium」，维护者可能会调整 / Pick the closest one; if unsure, choose Medium — maintainers may re-label it
+      description: 选最接近的一项；不确定时选「中 Medium」，我们可能会调整 / Pick the closest one; if unsure, choose Medium — maintainers may re-label it
       options:
         - 高 High（无法启动、崩溃、数据丢失、核心功能失效 / unusable）
         - 中 Medium（功能可用但明显异常或结果不对 / works but misbehaves）
@@ -59,7 +59,7 @@ body:
     attributes:
       label: 操作系统 / OS version
       description: 可选。Windows 版本与内部版本号，命令行运行 winver 可查；视觉类问题建议填写 / Optional — run winver to check; helpful for visual issues
-      placeholder: "Windows 11 23H2 (build 22631)"
+      placeholder: "Windows 11 26H2 (build 26300.9457)"
     validations:
       required: false
   - type: dropdown
@@ -171,6 +171,14 @@ body:
         {
           "runtime": { "language": "zh-CN" }
         }
+    validations:
+      required: false
+  - type: textarea
+    id: supplement
+    attributes:
+      label: 补充信息 / Additional information
+      description: 可选。这里可以写你想说的其他信息 / Optional. Anything else you want to add
+      placeholder: 例：我想说... / e.g. I want to say...
     validations:
       required: false
   - type: checkboxes

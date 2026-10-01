@@ -10,3 +10,4 @@ dist/
 .pnpm-cache/
 .probe-userdata/
 .verify/
+docs/

@@ -84,7 +84,7 @@ body:
     id: importance
     attributes:
       label: 对你的重要程度 / How much it matters to you
-      description: 帮助维护者排优先级，不会影响是否被采纳 / Helps us prioritise; it does not decide whether the idea is accepted
+      description: 帮助我们排优先级，不会影响是否被采纳 / Helps us prioritise; it does not decide whether the idea is accepted
       options:
         - 影响日常使用，很需要 / Blocks my daily use
         - 明显提升体验 / Noticeably better experience
@@ -104,6 +104,14 @@ body:
     attributes:
       label: 示意图或参考 / Mockups or references
       description: 可选。手绘草图、其他软件的截图、链接都可以，直接拖进输入框 / Optional. Sketches, screenshots of other apps, or links — drag files into this box
+    validations:
+      required: false
+  - type: textarea
+    id: supplement
+    attributes:
+      label: 补充信息 / Additional information
+      description: 可选。这里可以写你想说的其他信息 / Optional. Anything else you want to add
+      placeholder: 例：我想说... / e.g. I want to say...
     validations:
       required: false
   - type: checkboxes
