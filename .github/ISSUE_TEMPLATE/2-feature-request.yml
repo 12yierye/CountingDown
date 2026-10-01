@@ -120,9 +120,12 @@ body:
     attributes:
       label: 提交前确认 / Before submitting
       options:
-        - label: 我已在 README 的「功能一览」与现有 issue 中搜索过，确认这个功能还没有 / I checked the README feature list and existing issues and this does not exist yet
+        - label: 我已在 README 的「功能一览」与现有 issue 中搜索过，确认这个功能还没有<br>
+            I checked the README feature list and existing issues and this does not exist yet
           required: true
-        - label: 我确认这不是「已有功能失效或不符合预期」（那属于问题反馈）/ I confirm this is not an existing feature that is broken or misbehaving
+        - label: 我确认这不是「已有功能失效或不符合预期」（那属于问题反馈）<br>
+            I confirm this is not an existing feature that is broken or misbehaving (that belongs in Bug Report)
           required: true
-        - label: 我愿意自己提 PR 实现这个功能 / I am willing to open a pull request for this
+        - label: 我愿意自己提 PR 实现这个功能<br>
+            I am willing to open a pull request for this
           required: false
