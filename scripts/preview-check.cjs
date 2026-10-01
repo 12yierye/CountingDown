@@ -11,10 +11,35 @@ const path = require('node:path')
 
 const appRoot = path.resolve(__dirname, '..')
 const outDir = path.join(appRoot, '.verify')
-const userData = path.join(appRoot, '.probe-userdata')
+const probeRoot = path.join(appRoot, '.probe-userdata')
 fs.mkdirSync(outDir, { recursive: true })
-fs.rmSync(userData, { recursive: true, force: true })
+
+/**
+ * 每次运行用一份**独立**的 userData。
+ *
+ * 应用的单实例锁是按 userData 目录加的：如果固定复用同一个目录，上一次运行留下的
+ * 残留进程（例如调试时被强制中断的那次）会一直握着锁，下一次运行就会在
+ * `requestSingleInstanceLock()` 失败后直接 `app.quit()` —— 表现为「跑完了但一条结果都没有」。
+ * 顺带也避免了上一次的 GPU 缓存文件还被占用、rmSync 抛 EPERM 的问题。
+ */
+const userData = path.join(probeRoot, `preview-${Date.now().toString(36)}`)
 fs.mkdirSync(userData, { recursive: true })
+
+// 顺手清掉历史运行留下的目录；被占用就跳过，绝不影响本次验证
+try {
+  for (const entry of fs.readdirSync(probeRoot)) {
+    if (!entry.startsWith('preview-')) continue
+    const full = path.join(probeRoot, entry)
+    if (full === userData) continue
+    try {
+      fs.rmSync(full, { recursive: true, force: true, maxRetries: 1, retryDelay: 50 })
+    } catch (error) {
+      /* 上一个实例可能还占着，留着即可 */
+    }
+  }
+} catch (error) {
+  /* probeRoot 不可读就算了 */
+}
 
 const ITEM_A = {
   id: 'probe_item_a',
@@ -51,17 +76,34 @@ fs.writeFileSync(
 const logFile = path.join(outDir, 'preview.log')
 fs.writeFileSync(logFile, 'start ' + new Date().toISOString() + '\n')
 
-const write = (line) => {
-  const text = typeof line === 'string' ? line : JSON.stringify(line)
+/** 只写日志文件。异常处理走这条，避免「报告异常时又踩一次同样的坑」。 */
+function appendLog(text) {
   try {
     fs.appendFileSync(logFile, text + '\n')
   } catch (error) {
     /* ignore */
   }
+}
+
+/**
+ * 下游管道一旦提前关闭（例如 `... | Select-Object -First 5`），stdout 会发出
+ * **异步**的 EPIPE 错误事件：`process.stdout.write()` 本身不抛，错误走 'error' 事件，
+ * 于是变成 uncaughtException；如果异常处理里再往 stdout 写一次，就再触发一次 EPIPE，
+ * 无限递归刷屏并把进程拖死（实测刷出过 59 万字节）。所以这里一次性掐断。
+ */
+let stdoutBroken = false
+process.stdout.on('error', (error) => {
+  if (error && error.code === 'EPIPE') stdoutBroken = true
+})
+
+const write = (line) => {
+  const text = typeof line === 'string' ? line : JSON.stringify(line)
+  appendLog(text)
+  if (stdoutBroken) return
   try {
     process.stdout.write(text + '\n')
   } catch (error) {
-    /* ignore */
+    if (error && error.code === 'EPIPE') stdoutBroken = true
   }
 }
 
@@ -71,10 +113,25 @@ function check(name, ok, detail) {
   write(`${ok ? 'PASS' : 'FAIL'} ${name} :: ${detail}`)
 }
 
-process.on('uncaughtException', (error) => write('MAIN_UNCAUGHT ' + (error && error.stack)))
+process.on('uncaughtException', (error) => {
+  // 管道提前关闭不是被测程序的问题，静默忽略，更不要回写 stdout
+  if (error && error.code === 'EPIPE') {
+    stdoutBroken = true
+    return
+  }
+  appendLog('MAIN_UNCAUGHT ' + (error && error.stack))
+})
 app.setPath('userData', userData)
 
 const main = require(path.join(appRoot, 'out/main/index.js'))
+
+write('harness started pid=' + process.pid + ' userData=' + userData)
+/**
+ * 没抢到单实例锁时主进程会立刻 app.quit()，此时下面的 whenReady 根本不会跑，
+ * 表现是「命令跑完了但一条 PASS/FAIL 都没有」。留一条痕迹方便一眼看出原因。
+ * （正常收尾走 app.exit()，不会触发 will-quit。）
+ */
+app.on('will-quit', () => write('EARLY_QUIT pid=' + process.pid + ' (single-instance lock held?)'))
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -112,6 +169,37 @@ const WIDGET_STATE =
   ' radius:(document.querySelector(".cd-card")?getComputedStyle(document.querySelector(".cd-card")).borderRadius:"")})'
 
 const widgetState = (win) => jsonIn(win, WIDGET_STATE)
+
+/**
+ * 轮询等待组件窗口达到期望状态，而不是固定 sleep。
+ * 固定等待在机器忙的时候（例如同时跑了两份实例）会假失败 —— 实测并发跑时
+ * 1.1s 的等待不够，刷出 5 条本不该有的 FAIL。
+ */
+async function waitForWidget(win, predicate, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs
+  let state = null
+  for (;;) {
+    state = await widgetState(win)
+    if (predicate(state)) return { ok: true, state }
+    if (Date.now() >= deadline) return { ok: false, state }
+    await wait(120)
+  }
+}
+
+/** 编辑页里那块紧凑预览的标题，用来确认草稿确实已经生效 */
+async function waitForEditorPreview(win, expected, timeoutMs = 8000) {
+  const deadline = Date.now() + timeoutMs
+  let seen = null
+  for (;;) {
+    seen = await evalIn(
+      win,
+      '(function(){var el=document.querySelector(".editor-preview .cd-card__title");return el?el.textContent.trim():"";})()'
+    )
+    if (seen === expected) return seen
+    if (Date.now() >= deadline) return seen
+    await wait(120)
+  }
+}
 
 /** 读回磁盘上的配置（probe 自己的 userData，不影响真实用户配置） */
 function persisted() {
@@ -200,11 +288,10 @@ app.whenReady().then(async () => {
   // ------------------------------------------------- 1) 实时跟随 + 未写盘
   const TYPED = '实时预览中的新名称'
   await jsonIn(s, TYPE_INTO('.panel-card input.el-input__inner[maxlength="30"]', TYPED))
-  await wait(1100)
 
-  const live = await widgetState(win)
-  write('after typing widget = ' + JSON.stringify(live))
-  check('widget-follows-draft-name', live.title === TYPED, JSON.stringify(live.title))
+  const live = await waitForWidget(win, (state) => state.title === TYPED)
+  write('after typing widget = ' + JSON.stringify(live.state))
+  check('widget-follows-draft-name', live.ok, JSON.stringify(live.state.title))
   check(
     'draft-not-persisted',
     (persistedItem(ITEM_A.id) || {}).name === ITEM_A.name,
@@ -217,10 +304,9 @@ app.whenReady().then(async () => {
     s,
     TYPE_INTO('.panel-card input.el-input__inner[maxlength="60"]', '实时预览副标题')
   )
-  await wait(1100)
-  const live2 = await widgetState(win)
-  write('after hint typing widget = ' + JSON.stringify(live2))
-  check('widget-follows-draft-hint', live2.hint === '实时预览副标题', JSON.stringify(live2.hint))
+  const live2 = await waitForWidget(win, (state) => state.hint === '实时预览副标题')
+  write('after hint typing widget = ' + JSON.stringify(live2.state))
+  check('widget-follows-draft-hint', live2.ok, JSON.stringify(live2.state.hint))
 
   // ------------------------------------------------------------ 4) 吸顶预览
   const sticky = await jsonIn(
@@ -263,20 +349,33 @@ app.whenReady().then(async () => {
       `discard.click();return {found:true,clicked:true};})()`
   )
   write('back=' + JSON.stringify(back) + ' discardDialog=' + JSON.stringify(dialog))
-  await wait(1200)
 
-  const reverted = await widgetState(win)
-  write('after discard widget = ' + JSON.stringify(reverted))
-  check('widget-reverted-after-discard', reverted.title === ITEM_A.name, JSON.stringify(reverted.title))
+  const reverted = await waitForWidget(win, (state) => state.title === ITEM_A.name)
+  write('after discard widget = ' + JSON.stringify(reverted.state))
+  check('widget-reverted-after-discard', reverted.ok, JSON.stringify(reverted.state.title))
   check('editor-closed', (await evalIn(s, 'document.querySelectorAll(".editor-head").length')) === 0, 'closed')
 
   // --------------------------------------- 3) 编辑非当前显示项 -> 卡片不变
   const openedB = await jsonIn(s, OPEN_ROW(1))
   await wait(1200)
   await jsonIn(s, TYPE_INTO('.panel-card input.el-input__inner[maxlength="30"]', '第二项改名了'))
-  await wait(1100)
+  // 「卡片不变」这个断言没法靠轮询等出来，所以先证明草稿**确实发出并生效了**：
+  // 等编辑页自己的预览显示新名字，再去看桌面卡片有没有跟着动。
+  const editorPreview = await waitForEditorPreview(s, '第二项改名了')
   const afterB = await widgetState(win)
-  write('edit non-active row = ' + JSON.stringify(openedB) + ' widget=' + JSON.stringify(afterB))
+  write(
+    'edit non-active row = ' +
+      JSON.stringify(openedB) +
+      ' editorPreview=' +
+      JSON.stringify(editorPreview) +
+      ' widget=' +
+      JSON.stringify(afterB)
+  )
+  check(
+    'non-active-draft-reached-editor-preview',
+    editorPreview === '第二项改名了',
+    JSON.stringify(editorPreview)
+  )
   check(
     'non-active-edit-keeps-widget',
     afterB.title === ITEM_A.name,
@@ -378,25 +477,23 @@ app.whenReady().then(async () => {
     s,
     `window.cd.setPreviewItem(${JSON.stringify(draftWithAppearance)}).then(function(){return "ok"})`
   )
-  await wait(1000)
-  const styled = await widgetState(win)
-  write('appearance draft widget = ' + JSON.stringify(styled))
-  check('draft-appearance-applied', styled.title === '外观实时预览', JSON.stringify(styled.title))
+  const styled = await waitForWidget(win, (state) => state.title === '外观实时预览')
+  write('appearance draft widget = ' + JSON.stringify(styled.state))
+  check('draft-appearance-applied', styled.ok, JSON.stringify(styled.state.title))
   check(
     'draft-background-applied',
-    /255,\s*0,\s*85/.test(styled.bg) && styled.radius.startsWith('30px'),
-    `bg=${styled.bg} radius=${styled.radius}`
+    /255,\s*0,\s*85/.test(styled.state.bg) && styled.state.radius.startsWith('30px'),
+    `bg=${styled.state.bg} radius=${styled.state.radius}`
   )
 
   await evalIn(s, 'window.cd.setPreviewItem(null).then(function(){return "ok"})')
-  await wait(1000)
-  const cleared = await widgetState(win)
-  write('after clearing overlay = ' + JSON.stringify(cleared))
-  check('overlay-cleared-reverts', cleared.title === ITEM_A.name, JSON.stringify(cleared.title))
+  const cleared = await waitForWidget(win, (state) => state.title === ITEM_A.name)
+  write('after clearing overlay = ' + JSON.stringify(cleared.state))
+  check('overlay-cleared-reverts', cleared.ok, JSON.stringify(cleared.state.title))
   check(
     'overlay-cleared-restores-global-style',
-    !/255,\s*0,\s*85/.test(cleared.bg),
-    JSON.stringify(cleared.bg)
+    !/255,\s*0,\s*85/.test(cleared.state.bg),
+    JSON.stringify(cleared.state.bg)
   )
 
   // 设置窗口隐藏时主进程也要丢掉覆盖层
@@ -404,12 +501,11 @@ app.whenReady().then(async () => {
     s,
     `window.cd.setPreviewItem(${JSON.stringify(draftWithAppearance)}).then(function(){return "ok"})`
   )
-  await wait(800)
+  await waitForWidget(win, (state) => state.title === '外观实时预览')
   s.hide()
-  await wait(1000)
-  const afterHide = await widgetState(win)
-  write('after hiding settings = ' + JSON.stringify(afterHide))
-  check('hide-settings-clears-overlay', afterHide.title === ITEM_A.name, JSON.stringify(afterHide.title))
+  const afterHide = await waitForWidget(win, (state) => state.title === ITEM_A.name)
+  write('after hiding settings = ' + JSON.stringify(afterHide.state))
+  check('hide-settings-clears-overlay', afterHide.ok, JSON.stringify(afterHide.state.title))
 
   write(`SUMMARY failures=${failures}`)
   write('done')
