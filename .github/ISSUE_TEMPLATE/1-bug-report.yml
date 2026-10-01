@@ -191,7 +191,8 @@ body:
       label: 补充信息 / Additional information
       description: 可选。这里可以写你想说的其他信息<br>
         Optional. Anything else you want to add
-      placeholder: 例：我想说... / e.g. I want to say...
+      placeholder: 例：我想说...<br>
+        e.g. I want to say...
     validations:
       required: false
   - type: checkboxes
