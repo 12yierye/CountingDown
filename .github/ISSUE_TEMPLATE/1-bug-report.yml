@@ -9,16 +9,6 @@ body:
       value: |
         ## 问题反馈 / Bug report
 
-        请在下方第一个字段里选择**严重等级 / Severity**，三个等级的判定标准如下。
-        Pick the **severity** in the first field below. The three levels mean:
-
-        - **高 High** —— 应用无法启动、启动即崩溃、界面卡死；倒数日或配置丢失、被重置；核心功能完全失效（桌面卡片不显示、托盘菜单或全局快捷键无效、设置无法保存）
-          The app won't start, crashes or freezes; countdown data or settings are lost or reset; a core feature is fully broken.
-        - **中 Medium** —— 功能还能用但明显异常：天数、日期或文案计算不对；设置改了不生效或重启后回到原样；界面错位、控件重叠到影响使用
-          A feature still works but misbehaves: wrong day count, date or text; a setting does not apply or reverts; layout broken enough to block usage.
-        - **低 Low** —— 错别字、翻译不准确、颜色字号圆角间距等视觉细节、提示文案看不懂、README 与界面说明不符
-          Typos, inaccurate translations, visual nits, confusing hints, or docs that no longer match the app.
-
         > **已有功能不够好用、希望新增或改进**，请改用「**功能建议 / Feature Request**」模板。
         > **If you want a new capability or an improvement** rather than a fix, please use the **Feature Request** template.
         >
@@ -170,7 +160,9 @@ body:
       label: 日志与报错 / Logs and error output
       description: 可选。pnpm dev 的终端输出、DevTools 控制台报错都可以<br>
         Optional — dev terminal output or DevTools console errors
-      placeholder: 直接粘贴文本，或把 .txt / .log 文件拖进这个输入框 / Paste text, or drag a .txt / .log file into this box
+      placeholder: |-
+        直接粘贴文本，或把 .txt / .log 文件拖进这个输入框
+        Paste text, or drag a .txt / .log file into this box
     validations:
       required: false
   - type: textarea

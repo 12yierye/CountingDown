@@ -9,15 +9,6 @@ body:
       value: |
         ## 功能建议 / Feature request
 
-        **这里适合提交 / Good fits for this template:**
-
-        - 希望新增的能力，例如新的显示项、新的外观选项、新的交互方式
-          New capabilities: extra display elements, appearance options, or interactions.
-        - 现有功能希望做得更好，例如更细的设置、更顺手的操作路径
-          Improvements to existing features, such as finer settings or fewer clicks.
-        - 性能、体积、资源占用方面的期待
-          Performance, package size or resource usage expectations.
-
         **已有功能坏了、没生效、不符合预期，请不要用本模板**，请改用「问题反馈 / Bug Report」，并在其中选择严重等级。
         **If an existing feature is broken, missing in action, or behaves wrongly, do not use this template** —
         please use **Bug Report** and pick the severity level there.
@@ -121,7 +112,9 @@ body:
       label: 补充信息 / Additional information
       description: 可选。这里可以写你想说的其他信息<br>
         Optional. Anything else you want to add
-      placeholder: 例：我想说... / e.g. I want to say...
+      placeholder: |-
+        例：我想说...
+        e.g. I want to say...
     validations:
       required: false
   - type: checkboxes
