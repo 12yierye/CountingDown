@@ -21,12 +21,20 @@ let lastCursor: { x: number; y: number } | null = null
  */
 let widgetInteractive = false
 
-/** 把命中状态落到原生窗口；窗口没显示过就只记状态，等显示后再应用 */
+/**
+ * 把命中状态落到原生窗口。
+ * 开启「鼠标点击穿透」后组件永远不接收鼠标事件，点击直接落到它后面的窗口上。
+ */
 function applyIgnoreMouse(win: BrowserWindow): void {
-  // 不透明兜底模式下整窗就是卡片，必须始终可点，不需要穿透
-  if (!useTransparentWindow()) return
+  // 不透明兜底模式下整窗就是卡片：除非开了点击穿透，否则必须始终可点
+  if (!useTransparentWindow() && !isClickThrough()) return
   if (!win.isVisible()) return
   win.setIgnoreMouseEvents(!widgetInteractive, { forward: true })
+}
+
+/** 「鼠标点击穿透」开关 */
+function isClickThrough(): boolean {
+  return getConfig().runtime.window.clickThrough === true
 }
 
 function stopCursorWatch(): void {
@@ -50,6 +58,21 @@ function startCursorWatch(): void {
     lastCursor = point
     win.webContents.send('widget:cursor', point)
   }, 80)
+}
+
+/**
+ * 立刻做一次光标命中判定，不等下一个轮询周期。
+ *
+ * 关掉「鼠标点击穿透」时必须走这一步：那一刻命中状态已被重置成「不接收」，
+ * 如果只是等定时器，而指针正好停在卡片上一动不动，渲染层就不会重新上报命中，
+ * 组件会一直不可点（表现为「关了穿透还是点不到」）。
+ */
+function primeCursorHit(): void {
+  const win = getWidgetWindow()
+  if (!win || !win.isVisible() || win.webContents.isDestroyed()) return
+  const point = screen.getCursorScreenPoint()
+  lastCursor = point
+  win.webContents.send('widget:cursor', point)
 }
 
 // 组件窗口：比卡片本身留出 24px 内边距，保证卡片到屏幕边缘的距离与四个方向一致
@@ -121,8 +144,13 @@ export { detectTransparency }
 
 /**
  * 依据「参考基准 + 偏移量」计算窗口左上角坐标。
- * - 基准为某个角落：先按 EDGE_INSET 贴角，再叠加偏移量（距该角两条边的距离）
- * - 基准为自定义坐标：偏移量相对该坐标点，坐标与偏移都会限制在屏幕范围内
+ *
+ * 偏移量的方向对所有基准都是同一套语义：**正值表示离开所贴的那条边、朝屏幕内侧移动**。
+ * 于是贴右/下边时正值是「向左/向上」，贴左/上边时是「向右/向下」，负值一律表示反方向。
+ * 设置面板的标签（向左偏移 / 向上偏移 / 向右偏移 / 向下偏移）就是按这条规则生成的。
+ *
+ * - 基准为某个角落：先按 EDGE_INSET 贴角，再叠加偏移量
+ * - 基准为自定义坐标：偏移量相对该坐标点，同样正值向左/向上
  */
 export function computeCornerPosition(width: number, height: number): { x: number; y: number } {
   const display = screen.getPrimaryDisplay()
@@ -131,9 +159,6 @@ export function computeCornerPosition(width: number, height: number): { x: numbe
   const preset = win.cornerPreset === 'custom' ? 'custom' : win.cornerPreset
   const offsetX = clamp(Math.round(win.offsetX || 0), -area.width, area.width)
   const offsetY = clamp(Math.round(win.offsetY || 0), -area.height, area.height)
-  const inset = EDGE_INSET
-  const shiftX = inset + offsetX
-  const shiftY = inset + offsetY
 
   let x: number
   let y: number
@@ -141,12 +166,17 @@ export function computeCornerPosition(width: number, height: number): { x: numbe
   if (preset === 'custom') {
     const anchorX = clamp(Math.round(win.anchorX || 0), area.x, area.x + area.width)
     const anchorY = clamp(Math.round(win.anchorY || 0), area.y, area.y + area.height)
-    x = anchorX + offsetX
-    y = anchorY + offsetY
+    x = anchorX - offsetX
+    y = anchorY - offsetY
   } else {
     const [vertical, horizontal] = preset.split('-')
-    x = horizontal === 'left' ? area.x + shiftX : area.x + area.width - width - shiftX
-    y = vertical === 'top' ? area.y + shiftY : area.y + area.height - height - shiftY
+    // 贴左边时按偏移向右走，贴右边时按偏移向左走 —— 两者都是「朝屏幕内侧」
+    const baseX = horizontal === 'left' ? area.x : area.x + area.width - width
+    const baseY = vertical === 'top' ? area.y : area.y + area.height - height
+    const dirX = horizontal === 'left' ? 1 : -1
+    const dirY = vertical === 'top' ? 1 : -1
+    x = baseX + EDGE_INSET * dirX + offsetX * dirX
+    y = baseY + EDGE_INSET * dirY + offsetY * dirY
   }
 
   // 保证窗口至少有一部分留在工作区内，避免出现“点了找不到”的恶性情况
@@ -202,6 +232,7 @@ export function createWidgetWindow(): BrowserWindow {
   widgetWindow.setAlwaysOnTop(getConfig().behavior.alwaysOnTop, 'screen-saver')
   widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
   widgetWindow.setSkipTaskbar(true)
+  if (isClickThrough()) widgetWindow.setFocusable(false)
   // 注意：这里不能设置鼠标穿透。窗口显示之前调用 setIgnoreMouseEvents 会让整窗变成
   // 不透光的浅色背板，必须等 showWidgetWindow 显示之后再应用（见 applyIgnoreMouse）。
 
@@ -367,6 +398,8 @@ export function beginWidgetDrag(input: unknown): boolean {
   if (!win || !card) return false
   const config = getConfig()
   if (config.runtime.window.allowDrag === false) return false
+  // 点击穿透时组件不接收鼠标事件，拖动无从谈起
+  if (config.runtime.window.clickThrough === true) return false
   cancelWidgetDrag()
   dragState = {
     cursor: screen.getCursorScreenPoint(),
@@ -427,14 +460,13 @@ export function endWidgetDrag(): boolean {
   const pos = clampWindowForCard(cardLeft - next.left, cardTop - next.top, bounds, next)
   win.setBounds({ ...bounds, x: pos.x, y: pos.y })
 
-  const offsetX =
-    horizontal === 'left'
-      ? pos.x - area.x - EDGE_INSET
-      : area.x + area.width - (pos.x + bounds.width) - EDGE_INSET
-  const offsetY =
-    vertical === 'top'
-      ? pos.y - area.y - EDGE_INSET
-      : area.y + area.height - (pos.y + bounds.height) - EDGE_INSET
+  // 与 computeCornerPosition 使用同一套方向语义：正值表示离开所贴的那条边、朝屏幕内侧
+  const baseX =
+    horizontal === 'left' ? area.x + EDGE_INSET : area.x + area.width - bounds.width - EDGE_INSET
+  const baseY =
+    vertical === 'top' ? area.y + EDGE_INSET : area.y + area.height - bounds.height - EDGE_INSET
+  const offsetX = horizontal === 'left' ? pos.x - baseX : baseX - pos.x
+  const offsetY = vertical === 'top' ? pos.y - baseY : baseY - pos.y
 
   updateConfig({
     runtime: {
@@ -457,7 +489,8 @@ export function cancelWidgetDrag(): void {
 
 /** 透明区域点击穿透开关：指针在卡片上时恢复鼠标事件 */
 export function setWidgetInteractive(interactive: boolean): void {
-  widgetInteractive = interactive
+  // 开启「鼠标点击穿透」期间永远不恢复命中
+  widgetInteractive = interactive && getConfig().runtime.window.clickThrough !== true
   const win = getWidgetWindow()
   if (!win) return
   applyIgnoreMouse(win)
@@ -482,6 +515,8 @@ function nudgeRepaint(win: BrowserWindow): void {
 
 export function showWidgetWindow(win: BrowserWindow): void {
   applyPosition()
+  // 每次显示都把命中状态重置成「不接收」，避免沿用上一次隐藏前的残留判定
+  widgetInteractive = false
   win.showInactive()
   // 鼠标穿透必须等窗口显示之后再设置，否则会触发整窗浅色背板（见 widgetInteractive 注释）
   applyIgnoreMouse(win)
@@ -610,6 +645,7 @@ export function setupWindowSync(): void {
    * （设置面板、托盘、拖动落点、恢复默认），不必要求每个调用方自己记得调 applyPosition。
    */
   let lastWindow: WindowConfig = { ...getConfig().runtime.window }
+  let lastClickThrough = lastWindow.clickThrough === true
 
   onConfigChange((config) => {
     const win = getWidgetWindow()
@@ -620,6 +656,19 @@ export function setupWindowSync(): void {
       if (!config.runtime.widgetVisible && win.isVisible()) win.hide()
       // 拖动过程中主进程正在按光标移动窗口，这时不能插手
       if (!dragState && positionChanged(config.runtime.window, lastWindow)) applyPosition()
+      // 「鼠标点击穿透」改了要立刻重新应用命中策略，否则要等下次显示才生效
+      const clickThrough = config.runtime.window.clickThrough === true
+      if (clickThrough !== lastClickThrough) {
+        lastClickThrough = clickThrough
+        // 穿透期间不能残留拖动状态，否则松手都收不到
+        if (clickThrough) cancelWidgetDrag()
+        // 命中状态先归零，再让渲染层按真实指针位置重新上报（关掉穿透时立刻补一次判定）
+        widgetInteractive = false
+        // 穿透时组件不该抢焦点，否则点它后面的窗口还会被它挡在最前面
+        win.setFocusable(!clickThrough)
+        applyIgnoreMouse(win)
+        if (!clickThrough) primeCursorHit()
+      }
     }
     lastWindow = { ...config.runtime.window }
   })

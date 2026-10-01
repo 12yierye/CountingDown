@@ -91,7 +91,9 @@ body:
       label: 问题描述 / What happened
       description: 一两句话讲清楚即可<br>
         A one or two sentence summary is enough
-      placeholder: 例：切换倒数日之后，桌面卡片一直是空白 / e.g. After switching the active countdown the desktop card stays blank
+      placeholder: |-
+        例：切换倒数日之后，桌面卡片一直是空白
+        e.g. After switching the active countdown the desktop card stays blank
     validations:
       required: true
   - type: textarea
@@ -110,7 +112,9 @@ body:
     id: expected
     attributes:
       label: 期望结果 / Expected result
-      placeholder: 例：卡片立即显示新选中的倒数日 / e.g. The card immediately shows the newly selected countdown
+      placeholder: |-
+        例：卡片立即显示新选中的倒数日
+        e.g. The card immediately shows the newly selected countdown
     validations:
       required: true
   - type: textarea

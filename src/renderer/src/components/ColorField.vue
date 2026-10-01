@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { toHexColor } from '@/utils/style'
 
 const props = withDefaults(
@@ -8,12 +9,15 @@ const props = withDefaults(
     label?: string
     alpha?: number
     showAlpha?: boolean
+    /** 透明度滑块的标签；缺省用「透明度 / Alpha」 */
+    alphaLabel?: string
     presetColors?: string[]
   }>(),
   {
     label: '',
     alpha: 1,
     showAlpha: false,
+    alphaLabel: '',
     presetColors: () => [
       '#ffffff',
       '#000000',
@@ -28,6 +32,11 @@ const props = withDefaults(
     ]
   }
 )
+
+const { t } = useI18n()
+
+/** 以前这里写的是希腊字母 α，中文界面下没人看得懂；改成「透明度」/「Alpha」 */
+const alphaText = computed(() => props.alphaLabel || t('common.alpha'))
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string): void
@@ -55,8 +64,9 @@ const localAlpha = computed({
         size="small"
       />
       <span class="color-field__hex">{{ localColor.toUpperCase() }}</span>
-    </div>    <div v-if="showAlpha" class="color-field__alpha-row">
-      <span class="color-field__alpha-label">α</span>
+    </div>
+    <div v-if="showAlpha" class="color-field__alpha-row">
+      <span class="color-field__alpha-label">{{ alphaText }}</span>
       <el-slider
         v-model="localAlpha"
         class="color-field__alpha"

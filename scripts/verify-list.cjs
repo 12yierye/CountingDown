@@ -191,10 +191,15 @@ app.whenReady().then(async () => {
     )
 
     // 编辑草稿稳定性：连续输入应全部保留，且不被主进程回传的配置覆盖
+    // 名称输入框用 maxlength=30 定位（名称 30 / 副标题 60 / 三段状态文案 40 / 单位 6）；
+    // 不能再从 .editor-head 往上找 .el-card —— 操作栏已经移到卡片外面吸顶了。
+    const NAME_INPUT = '.settings-content input.el-input__inner[maxlength="30"]'
     for (const text of ['元旦快乐', '元旦快乐2027']) {
       await evalIn(
         s,
-        'JSON.stringify((function(){var el=document.querySelector(".editor-head").closest(".el-card").querySelector("input.el-input__inner");var setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;setter.call(el,' +
+        'JSON.stringify((function(){var el=document.querySelector(' +
+          JSON.stringify(NAME_INPUT) +
+          ');if(!el)return {found:false};var setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,"value").set;setter.call(el,' +
           JSON.stringify(text) +
           ');el.dispatchEvent(new Event("input",{bubbles:true}));return el.value;})())'
       )
@@ -202,15 +207,17 @@ app.whenReady().then(async () => {
     }
     const typed = await evalIn(
       s,
-      'JSON.stringify({input: document.querySelector(".editor-head").closest(".el-card").querySelector("input.el-input__inner").value})'
+      'JSON.stringify({input: (document.querySelector(' +
+        JSON.stringify(NAME_INPUT) +
+        ')||{}).value})'
     )
     write('typed state=' + typed)
     await wait(600)
 
-    // 显式保存：点右上角保存按钮后才写盘并返回列表
+    // 显式保存：点右上角保存按钮后才写盘并返回列表（按钮在吸顶操作栏里）
     const saved = await evalIn(
       s,
-      'JSON.stringify((function(){var b=[].slice.call(document.querySelectorAll(".panel-card__header button")).filter(function(x){return /保存|Save/.test(x.textContent||"")})[0];if(!b)return {found:false};b.click();return {found:true};})())'
+      'JSON.stringify((function(){var b=[].slice.call(document.querySelectorAll(".editor-head button, .panel-card__header button")).filter(function(x){return /保存|Save/.test(x.textContent||"")})[0];if(!b)return {found:false};b.click();return {found:true};})())'
     )
     write('save-button ' + saved)
     await wait(1600)

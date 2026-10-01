@@ -60,16 +60,6 @@ const fontOptions = FONT_STACKS
       </div>
     </template>
 
-    <FieldRow :label="t('appearance.opacity')" :hint="t('appearance.opacityHint')">
-      <SliderField
-        :model-value="config.appearance.opacity ?? 1"
-        :min="0.2"
-        :max="1"
-        :step="0.01"
-        @update:model-value="(v: number) => patchAppearance({ opacity: v })"
-      />
-    </FieldRow>
-
     <div class="panel-grid-2">
       <FieldRow :label="t('appearance.bgColor')">
         <ColorField
@@ -162,9 +152,30 @@ const fontOptions = FONT_STACKS
   <el-card shadow="never" class="panel-card">
     <template #header>
       <div class="panel-card__header">
-        <span>{{ t('appearance.titleStyle') }} / {{ t('appearance.countStyle') }}</span>
+        <span class="panel-card__title">
+          {{ t('appearance.textGroup') }}
+          <el-tooltip :content="t('appearance.textAlphaHint')" placement="top" :show-after="150">
+            <span class="panel-card__help" tabindex="0">
+              <el-icon :size="13"><QuestionFilled /></el-icon>
+            </span>
+          </el-tooltip>
+        </span>
       </div>
     </template>
+
+    <!--
+      文字透明度总开关单独放在最上面：它只影响文字，与上面的背景透明度无关；
+      下面每个文字样式还能再调各自的透明度，两者相乘。
+    -->
+    <FieldRow :label="t('appearance.textAlpha')" :hint="t('appearance.textAlphaHint')">
+      <SliderField
+        :model-value="config.appearance.textAlpha ?? 1"
+        :min="0"
+        :max="1"
+        :step="0.01"
+        @update:model-value="(v: number) => patchAppearance({ textAlpha: v })"
+      />
+    </FieldRow>
 
     <div class="panel-grid-text">
       <TextStyleEditor

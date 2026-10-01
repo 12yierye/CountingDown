@@ -1,6 +1,6 @@
 {
   "name": "countingdown",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "private": true,
   "description": "倒数日 CountingDown",
   "main": "./out/main/index.js",

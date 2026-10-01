@@ -8,8 +8,11 @@ export type DateMode = 'annual' | 'once'
  * 倒计时显示模式：
  * - days               只显示天数
  * - days-hours         天 + 时
- * - days-hours-minutes 天 + 时:分
- * - precise            天 + 时:分:秒（可用 showDaysInPrecise 去掉天数部分）
+ * - days-hours-minutes 天 + 时 + 分
+ * - precise            天 + 时 + 分 + 秒（可用 showDaysInPrecise 去掉天数部分）
+ *
+ * 非 days 的三种模式一律以「数字 + 单位/分隔符」序列渲染，分隔符由
+ * BehaviorConfig.separatorHM / separatorMS 决定，默认为中文单位而不是冒号。
  */
 export type DisplayMode = 'days' | 'days-hours' | 'days-hours-minutes' | 'precise'
 /** 带时分秒的三种显示模式（除「只显示天数」以外） */
@@ -43,8 +46,28 @@ export interface CountdownItem {
   target: TargetConfig
   /** 单项文案覆盖；空字符串表示跟随全局 */
   text: TextOverride
+  /** 单项时分隔符覆盖；enabled 为 false 时全部跟随全局 */
+  separator: SeparatorOverride
   /** 单项外观覆盖；字段未设置表示跟随全局 */
   appearance: AppearanceOverride
+}
+
+/**
+ * 时分秒之间的分隔符。默认用中文单位（天/时/分/秒）而不是冒号，
+ * 用户可以把任意一段换成「:」「时」或自己写的符号。
+ */
+export interface SeparatorConfig {
+  /** 天与小时之间显示的字；留空表示不加任何字符 */
+  hm: string
+  /** 小时与分钟（或分钟与秒）之间显示的字；留空表示不加任何字符 */
+  ms: string
+}
+
+/** 单项分隔符覆盖：要么整组跟随全局，要么整组自定义 */
+export interface SeparatorOverride {
+  enabled: boolean
+  hm: string
+  ms: string
 }
 
 /** 文案覆盖：空字符串表示跟随全局 */
@@ -58,13 +81,15 @@ export interface TextOverride {
   showHint: VisibilityOverride
   /** 状态文案是否显示；inherit = 跟随全局 */
   showStatus: VisibilityOverride
+  /** days 模式下是否显示天数单位（「天」）；inherit = 跟随全局 */
+  showUnit: VisibilityOverride
 }
 
 /** 外观覆盖：字段缺省表示跟随全局 */
 export interface AppearanceOverride {
   fontFamily?: string
-  /** 组件不透明度 0.2 - 1 */
-  opacity?: number
+  /** 文字透明度 0 - 1；只影响文字，与背景透明度无关 */
+  textAlpha?: number
   background?: Partial<BackgroundConfig>
   title?: TextStyle
   count?: TextStyle
@@ -87,6 +112,8 @@ export interface TextConfig {
   showHint: boolean
   /** 是否显示状态文案（全局默认） */
   showStatus: boolean
+  /** days 模式下是否显示天数单位（全局默认） */
+  showUnit: boolean
 }
 
 /** 三态覆盖：'inherit' 跟随全局，其余强制显示/隐藏 */
@@ -98,11 +125,13 @@ export interface TextStyle {
   weight: number
   /** 仅用于大数字 */
   letterSpacing: number
+  /** 文字透明度 0 - 1；与颜色解耦，和背景透明度互不影响 */
+  opacity: number
 }
 
 export interface BackgroundConfig {
   color: string
-  /** 0 - 1 */
+  /** 背景透明度 0 - 1（只影响卡片背景，与文字透明度无关） */
   alpha: number
   /** 圆角 px */
   radius: number
@@ -119,8 +148,8 @@ export interface BackgroundConfig {
 
 export interface AppearanceConfig {
   fontFamily: string
-  /** 整块组件的不透明度 0.2 - 1（与背景自身的 alpha 相乘） */
-  opacity: number
+  /** 文字透明度总开关 0 - 1；与每个文字样式自身的透明度相乘 */
+  textAlpha: number
   background: BackgroundConfig
   title: TextStyle
   count: TextStyle
@@ -132,7 +161,11 @@ export interface BehaviorConfig {
   displayMode: DisplayMode
   /** precise 模式是否显示天数部分 */
   showDaysInPrecise: boolean
-  /** 过期后显示「已过去 N 天」而不是纯文案 */
+  /** 天与时之间的分隔符（days-hours 及以上都生效） */
+  separatorHM: string
+  /** 时与分/分与秒之间显示的文字或符号；按模式取用，留空表示不加分隔 */
+  separatorMS: string
+  /** 过期后显示「过去 N 天」而不是纯文案 */
   showPastDays: boolean
   /** 组件是否始终置顶 */
   alwaysOnTop: boolean
@@ -146,20 +179,44 @@ export interface WindowConfig {
   /** 自定义参考基准的屏幕坐标（cornerPreset === 'custom' 时生效） */
   anchorX: number
   anchorY: number
-  /** 相对参考基准的偏移量 */
+  /**
+   * 相对参考基准的偏移量。
+   * 正值一律表示「离开所贴的那条边、朝屏幕内侧移动」：贴左/右时正值为向左，
+   * 贴上/下时正值为向上；负值则朝反方向。自定义基准下正值同样为向左/向上。
+   */
   offsetX: number
   offsetY: number
   /** 是否允许直接用鼠标拖动组件（拖动结束后自动换算成偏移量） */
   allowDrag: boolean
+  /**
+   * 鼠标点击穿透：开启后组件完全不接收鼠标事件，点在组件上的点击会落到
+   * 它后面的窗口上（拖动随之失效）。用于「组件挡住了后面按钮」的场景。
+   */
+  clickThrough: boolean
   /**
    * 是否使用透明窗口。
    * 某些机器上 Windows 会把透明窗口渲染成不透明白块（整窗浅色背板），
    * 此时关掉它改为「整窗即卡片」的不透明渲染。
    */
   transparent: boolean
-  /** 兼容旧结构：自由拖动留下的绝对坐标 */
-  x: number
-  y: number
+  /** 偏移量语义版本：1 = 旧版（正值朝屏幕外侧），2 = 现行语义 */
+  layoutVersion: number
+}
+
+/** 托盘右键菜单里可开关的条目（「设置」与「退出」始终保留，因此不在这里） */
+export interface TrayMenuConfig {
+  /** 显示 / 隐藏倒数日 */
+  toggleVisible: boolean
+  /** 吸附到右上角 */
+  resetPosition: boolean
+  /** 允许拖动 */
+  allowDrag: boolean
+  /** 总在最前 */
+  alwaysOnTop: boolean
+  /** 开机自动启动 */
+  startAtLogin: boolean
+  /** 当前快捷键提示（只读那一行） */
+  hotkey: boolean
 }
 
 /** 用户自己保存的外观预设 */
@@ -180,6 +237,8 @@ export interface RuntimeConfig {
   /** 主题模式：影响托盘与设置界面的明暗 */
   theme: 'light' | 'dark'
   window: WindowConfig
+  /** 托盘右键菜单显示哪些条目 */
+  trayMenu: TrayMenuConfig
 }
 
 export interface AppConfig {
@@ -248,6 +307,10 @@ export interface ResolvedCountdown {
   showHint: boolean
   /** 状态文案最终是否显示 */
   showStatus: boolean
+  /** days 模式下的天数单位最终是否显示 */
+  showUnit: boolean
+  /** 最终生效的分隔符（单项覆盖优先于全局） */
+  separator: SeparatorConfig
   appearance: AppearanceConfig
 }
 

@@ -82,6 +82,8 @@ const api = {
     ipcRenderer.invoke('runtime:setStartAtLogin', enabled),
   setTransparency: (enabled: boolean): Promise<boolean> =>
     ipcRenderer.invoke('runtime:setTransparency', enabled),
+  /** 托盘菜单内容变化后重建菜单，让新的开关立刻生效 */
+  refreshTray: (): Promise<boolean> => ipcRenderer.invoke('runtime:refreshTray'),
   quitApp: (): Promise<void> => ipcRenderer.invoke('runtime:quit'),
   hideAll: (): Promise<boolean> => ipcRenderer.invoke('runtime:hideAll'),
 

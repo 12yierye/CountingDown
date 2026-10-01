@@ -154,6 +154,16 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
         <el-radio-button :value="false">{{ t('target.hide') }}</el-radio-button>
       </el-radio-group>
     </FieldRow>
+
+    <FieldRow :label="t('target.showUnit')" :hint="t('target.showUnitHint')">
+      <el-radio-group
+        :model-value="config.text.showUnit !== false"
+        @update:model-value="(v: string | number | boolean | undefined) => patchText({ showUnit: v === true || v === 'true' })"
+      >
+        <el-radio-button :value="true">{{ t('target.show') }}</el-radio-button>
+        <el-radio-button :value="false">{{ t('target.hide') }}</el-radio-button>
+      </el-radio-group>
+    </FieldRow>
   </el-card>
 
   <el-card shadow="never" class="panel-card">
@@ -214,7 +224,7 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
       />
     </FieldRow>
 
-    <FieldRow :label="t('target.showPastDays')">
+    <FieldRow :label="t('target.showPastDays')" :hint="t('target.showPastDaysHint')">
       <el-switch
         :model-value="config.behavior.showPastDays"
         @update:model-value="(v: string | number | boolean) => emit('patch', { behavior: { showPastDays: Boolean(v) } })"

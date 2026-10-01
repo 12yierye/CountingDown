@@ -23,6 +23,12 @@ export function getPreviewItem(): CountdownItem | null {
   return previewItem
 }
 
+/** 供自动化验证使用：当前草稿的只读快照（内存里那一份，绝不落盘） */
+export function previewOverlay(): { id: string; name: string } | null {
+  if (!previewItem) return null
+  return { id: previewItem.id, name: previewItem.name }
+}
+
 /** 组件窗口应当渲染的配置：持久化配置（必要时）叠加草稿覆盖 */
 export function widgetConfig(): AppConfig {
   const base = getConfig()

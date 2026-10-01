@@ -186,16 +186,21 @@ async function waitForWidget(win, predicate, timeoutMs = 8000) {
   }
 }
 
-/** 编辑页里那块紧凑预览的标题，用来确认草稿确实已经生效 */
-async function waitForEditorPreview(win, expected, timeoutMs = 8000) {
+/**
+ * 编辑页现在不再自带预览（全局设置页那份统一预览样板取而代之），
+ * 因此「草稿确实发出去了」改为读主进程里的草稿覆盖层：
+ * 它是纯内存的，只有编辑页真的发布了草稿才会存在，读它不写盘、也不影响断言。
+ */
+async function waitForDraftOverlay(expectedName, timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs
   let seen = null
   for (;;) {
-    seen = await evalIn(
-      win,
-      '(function(){var el=document.querySelector(".editor-preview .cd-card__title");return el?el.textContent.trim():"";})()'
-    )
-    if (seen === expected) return seen
+    try {
+      seen = main.previewOverlay()?.name ?? null
+    } catch (error) {
+      seen = null
+    }
+    if (seen === expectedName) return seen
     if (Date.now() >= deadline) return seen
     await wait(120)
   }
@@ -308,20 +313,23 @@ app.whenReady().then(async () => {
   write('after hint typing widget = ' + JSON.stringify(live2.state))
   check('widget-follows-draft-hint', live2.ok, JSON.stringify(live2.state.hint))
 
-  // ------------------------------------------------------------ 4) 吸顶预览
+  // ------------------------------------------------------------ 4) 吸顶操作栏
+  // 编辑页已不再自带吸顶预览（全局设置页有统一的预览样板），
+  // 但返回 / 保存这条操作栏必须仍然吸顶，且滚到底部时保存按钮依然可见。
   const sticky = await jsonIn(
     s,
     `(function(){var sc=document.querySelector(".settings-content");` +
       `var pv=document.querySelector(".editor-preview");` +
-      `if(!sc||!pv)return {found:false};` +
+      `var bar=document.querySelector(".editor-sticky");` +
+      `if(!sc||!bar)return {found:false};` +
       `sc.scrollTop=sc.scrollHeight;` +
-      `return {found:true,scrollTop:sc.scrollTop,scrollHeight:sc.scrollHeight};})()`
+      `return {found:true,hasOldPreview:!!pv,scrollTop:sc.scrollTop,scrollHeight:sc.scrollHeight};})()`
   )
   await wait(500)
   const stickyRect = await jsonIn(
     s,
-    `(function(){var pv=document.querySelector(".editor-preview");if(!pv)return {found:false};` +
-      `var r=pv.getBoundingClientRect();var sc=document.querySelector(".settings-content").getBoundingClientRect();` +
+    `(function(){var bar=document.querySelector(".editor-sticky");if(!bar)return {found:false};` +
+      `var r=bar.getBoundingClientRect();var sc=document.querySelector(".settings-content").getBoundingClientRect();` +
       `return {top:Math.round(r.top),bottom:Math.round(r.bottom),viewportBottom:Math.round(window.innerHeight),` +
       `scrollerTop:Math.round(sc.top),saveVisible:(function(){var b=[].slice.call(document.querySelectorAll(".editor-head button"));` +
       `var save=b.filter(function(x){return /保存|Save/.test(x.textContent||"")})[0];if(!save)return false;` +
@@ -329,11 +337,16 @@ app.whenReady().then(async () => {
   )
   write('sticky scroll = ' + JSON.stringify(sticky) + ' rect=' + JSON.stringify(stickyRect))
   check(
-    'sticky-preview-pinned',
+    'editor-sticky-bar-pinned',
     stickyRect.found !== false &&
       stickyRect.top >= -2 &&
       stickyRect.bottom <= stickyRect.viewportBottom + 2,
     JSON.stringify(stickyRect)
+  )
+  check(
+    'editor-has-no-sticky-preview',
+    sticky.hasOldPreview === false,
+    '编辑页不应再有 .editor-preview 容器'
   )
   check('sticky-save-button-visible', stickyRect.saveVisible === true, JSON.stringify(stickyRect.saveVisible))
 
@@ -359,22 +372,22 @@ app.whenReady().then(async () => {
   const openedB = await jsonIn(s, OPEN_ROW(1))
   await wait(1200)
   await jsonIn(s, TYPE_INTO('.panel-card input.el-input__inner[maxlength="30"]', '第二项改名了'))
-  // 「卡片不变」这个断言没法靠轮询等出来，所以先证明草稿**确实发出并生效了**：
-  // 等编辑页自己的预览显示新名字，再去看桌面卡片有没有跟着动。
-  const editorPreview = await waitForEditorPreview(s, '第二项改名了')
+  // 「卡片不变」这个断言没法靠轮询等出来，所以先证明草稿**确实发出去了**
+  // （读主进程里的草稿覆盖层，纯内存），再去看桌面卡片有没有跟着动。
+  const draftOverlay = await waitForDraftOverlay('第二项改名了')
   const afterB = await widgetState(win)
   write(
     'edit non-active row = ' +
       JSON.stringify(openedB) +
-      ' editorPreview=' +
-      JSON.stringify(editorPreview) +
+      ' draftOverlay=' +
+      JSON.stringify(draftOverlay) +
       ' widget=' +
       JSON.stringify(afterB)
   )
   check(
-    'non-active-draft-reached-editor-preview',
-    editorPreview === '第二项改名了',
-    JSON.stringify(editorPreview)
+    'non-active-draft-published',
+    draftOverlay === '第二项改名了',
+    JSON.stringify(draftOverlay)
   )
   check(
     'non-active-edit-keeps-widget',

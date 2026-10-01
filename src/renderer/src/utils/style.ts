@@ -42,18 +42,32 @@ export function toHexColor(value: string, fallback = '#000000'): string {
   return fallback
 }
 
-export function textStyle(style: TextStyle): Record<string, string> {
+/**
+ * 文字样式：透明度单独抽成 alpha 而不是用 CSS `opacity`，
+ * 这样它只影响这一行文字，和卡片背景的透明度完全无关。
+ */
+export function textStyle(style: TextStyle, textAlpha = 1): Record<string, string> {
+  const alpha = clampAlpha((style?.opacity ?? 1) * (textAlpha ?? 1))
   return {
     fontSize: `${style.fontSize}px`,
-    color: style.color,
+    color: hexToRgba(style.color, alpha),
     fontWeight: String(style.weight),
     letterSpacing: `${style.letterSpacing}px`,
     lineHeight: '1.2'
   }
 }
 
+function clampAlpha(value: number): number {
+  if (!Number.isFinite(value)) return 1
+  return Math.min(1, Math.max(0, Number(value.toFixed(3))))
+}
+
 export function cardStyle(cfg: AppConfig, appearance?: AppearanceConfig): Record<string, string> {
-  const look = appearance ?? cfg.appearance
+  return cardStyleFor(appearance ?? cfg.appearance)
+}
+
+/** 只依赖外观对象本身：预设画廊这类没有完整配置的场景直接用它 */
+export function cardStyleFor(look: AppearanceConfig): Record<string, string> {
   const bg = look.background
   const blur = bg.alpha < 1 ? 'blur(14px)' : 'none'
   const shadowAlpha = (Math.min(100, Math.max(0, bg.shadow)) / 100) * 0.6

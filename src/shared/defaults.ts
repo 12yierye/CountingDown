@@ -8,28 +8,51 @@ import type {
   FieldResolution,
   PrecisionMode,
   ResolvedCountdown,
+  SeparatorConfig,
+  SeparatorOverride,
   TargetConfig,
   TextConfig,
   TextOverride,
+  TextStyle,
   ThemePreset,
+  TrayMenuConfig,
   VisibilityOverride,
   VisibilityResolution
 } from './types'
 
-/** 可覆盖的文案字段（不含两个显示开关） */
+/** 可覆盖的文案字段（不含三个显示开关） */
 type TextFieldKey = 'hint' | 'futureText' | 'todayText' | 'pastText' | 'unit'
 
 export const DAY_MS = 86_400_000
 
-/** 组件不透明度的合法区间 */
-export const OPACITY_MIN = 0.2
-export const OPACITY_MAX = 1
+/** 文字透明度的合法区间 */
+export const TEXT_ALPHA_MIN = 0
+export const TEXT_ALPHA_MAX = 1
 
-/** 把任意输入收敛到合法的组件不透明度 */
-export function clampOpacity(value: unknown, fallback = 1): number {
+/** 把任意输入收敛到合法的文字透明度 */
+export function clampTextAlpha(value: unknown, fallback = 1): number {
   const n = Number(value)
   if (!Number.isFinite(n)) return fallback
-  return Math.min(OPACITY_MAX, Math.max(OPACITY_MIN, Number(n.toFixed(2))))
+  return Math.min(TEXT_ALPHA_MAX, Math.max(TEXT_ALPHA_MIN, Number(n.toFixed(2))))
+}
+
+/** 单个文字样式的透明度合法区间 */
+export const STYLE_OPACITY_MIN = 0.05
+export const STYLE_OPACITY_MAX = 1
+
+/** 把任意输入收敛到合法的单项文字透明度；0 会让文字彻底消失，所以下限不取 0 */
+export function clampStyleOpacity(value: unknown, fallback = 1): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(
+    STYLE_OPACITY_MAX,
+    Math.max(STYLE_OPACITY_MIN, Number(n.toFixed(2)))
+  )
+}
+
+/** 补齐文字样式里可能缺失的透明度（旧配置 / 旧预设没有这个字段） */
+export function normalizeTextStyle(style: TextStyle): TextStyle {
+  return { ...style, opacity: clampStyleOpacity(style?.opacity, 1) }
 }
 
 export function createItemId(): string {
@@ -44,8 +67,13 @@ function emptyTextOverride(): TextOverride {
     pastText: '',
     unit: '',
     showHint: 'inherit',
-    showStatus: 'inherit'
+    showStatus: 'inherit',
+    showUnit: 'inherit'
   }
+}
+
+function emptySeparatorOverride(): SeparatorOverride {
+  return { enabled: false, hm: '', ms: '' }
 }
 
 function emptyTarget(): TargetConfig {
@@ -58,7 +86,8 @@ export function createCountdownItem(partial: Partial<CountdownItem> = {}): Count
     name: partial.name ?? '',
     enabled: partial.enabled ?? true,
     target: partial.target ?? emptyTarget(),
-    text: partial.text ?? emptyTextOverride(),
+    text: { ...emptyTextOverride(), ...(partial.text ?? {}) },
+    separator: { ...emptySeparatorOverride(), ...(partial.separator ?? {}) },
     appearance: partial.appearance ?? {}
   }
 }
@@ -74,7 +103,28 @@ export const BUILTIN_TEXT: TextConfig = {
   pastText: '已远去',
   unit: '天',
   showHint: true,
-  showStatus: true
+  showStatus: true,
+  showUnit: true
+}
+
+/** 内置兜底的分隔符：天/时/分 都用中文单位，最后一段不带分隔 */
+export const BUILTIN_SEPARATOR: SeparatorConfig = { hm: '时', ms: '分' }
+
+/** 分隔符下拉里的常见选项（仍可自由输入） */
+export const SEPARATOR_PRESETS = [':', '时', '分', '秒', '·', ' ', '天'] as const
+
+/** 单项分隔符 -> 全局分隔符 -> 内置默认 */
+export function resolveSeparator(
+  override: SeparatorOverride | undefined,
+  global: SeparatorConfig | undefined
+): SeparatorConfig {
+  if (override?.enabled) {
+    return { hm: override.hm ?? '', ms: override.ms ?? '' }
+  }
+  return {
+    hm: global?.hm ?? BUILTIN_SEPARATOR.hm,
+    ms: global?.ms ?? BUILTIN_SEPARATOR.ms
+  }
 }
 
 /** 副标题/状态文案的显示与否：单项三态优先，其次全局 */
@@ -153,12 +203,13 @@ export function createDefaultConfig(): AppConfig {
       pastText: '已远去',
       unit: '天',
       showHint: true,
-      showStatus: true
+      showStatus: true,
+      showUnit: true
     },
     appearance: {
       fontFamily:
         '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif',
-      opacity: 1,
+      textAlpha: 1,
       background: {
         color: '#1e2230',
         alpha: 0.78,
@@ -170,14 +221,16 @@ export function createDefaultConfig(): AppConfig {
         borderColor: '#ffffff2e',
         width: 0
       },
-      title: { fontSize: 16, color: '#b9c4dc', weight: 500, letterSpacing: 0 },
-      count: { fontSize: 64, color: '#ffffff', weight: 700, letterSpacing: -1 },
-      hint: { fontSize: 14, color: '#a7b3cc', weight: 400, letterSpacing: 0 },
-      status: { fontSize: 15, color: '#7ec8ff', weight: 500, letterSpacing: 0 }
+      title: { fontSize: 16, color: '#b9c4dc', weight: 500, letterSpacing: 0, opacity: 0.9 },
+      count: { fontSize: 64, color: '#ffffff', weight: 700, letterSpacing: -1, opacity: 1 },
+      hint: { fontSize: 14, color: '#a7b3cc', weight: 400, letterSpacing: 0, opacity: 0.9 },
+      status: { fontSize: 15, color: '#7ec8ff', weight: 500, letterSpacing: 0, opacity: 1 }
     },
     behavior: {
       displayMode: 'days',
       showDaysInPrecise: true,
+      separatorHM: BUILTIN_SEPARATOR.hm,
+      separatorMS: BUILTIN_SEPARATOR.ms,
       showPastDays: false,
       alwaysOnTop: true
     },
@@ -195,9 +248,17 @@ export function createDefaultConfig(): AppConfig {
         offsetX: 0,
         offsetY: 0,
         allowDrag: true,
+        clickThrough: false,
         transparent: true,
-        x: 0,
-        y: 0
+        layoutVersion: 2
+      },
+      trayMenu: {
+        toggleVisible: true,
+        resetPosition: true,
+        allowDrag: true,
+        alwaysOnTop: true,
+        startAtLogin: true,
+        hotkey: true
       }
     },
     customPresets: []
@@ -239,27 +300,7 @@ export function mergeConfig(base: AppConfig, patch: unknown): AppConfig {
       normalizeItem(item)
     )
   }
-  migrateOpacity(merged, patch as Record<string, unknown> | undefined)
   return normalizeConfig(merged)
-}
-
-/**
- * 旧结构把组件不透明度放在 behavior.opacity 下，现在它属于外观：
- * 只要来源里写了 behavior.opacity 而没写 appearance.opacity，就搬过去。
- */
-function migrateOpacity(merged: AppConfig, patch: Record<string, unknown> | undefined): void {
-  const source = (patch ?? {}) as {
-    appearance?: { opacity?: unknown }
-    behavior?: { opacity?: unknown }
-  }
-  const alreadyMoved = Number.isFinite(Number(source.appearance?.opacity))
-  const legacy = Number(source.behavior?.opacity)
-  if (!alreadyMoved && Number.isFinite(legacy)) {
-    merged.appearance = { ...merged.appearance, opacity: clampOpacity(legacy) }
-  }
-  if (merged.behavior && 'opacity' in (merged.behavior as unknown as Record<string, unknown>)) {
-    delete (merged.behavior as unknown as Record<string, unknown>).opacity
-  }
 }
 
 function normalizeItem(item: CountdownItem): CountdownItem {
@@ -269,12 +310,38 @@ function normalizeItem(item: CountdownItem): CountdownItem {
     enabled: item.enabled !== false,
     target: item.target ?? emptyTarget(),
     text: { ...emptyTextOverride(), ...(item.text ?? {}) },
-    appearance: item.appearance ?? {}
+    separator: { ...emptySeparatorOverride(), ...(item.separator ?? {}) },
+    appearance: normalizeOverride(item.appearance)
   }
+}
+
+/**
+ * 外观覆盖清理：旧版本存过 `opacity`（整块组件的不透明度），现在已由
+ * 「背景透明度 + 文字透明度」取代，读到就丢掉，免得它继续以未知字段躺在配置里。
+ */
+function normalizeOverride(input: AppearanceOverride | undefined): AppearanceOverride {
+  if (!input) return {}
+  const out: AppearanceOverride = {}
+  if (typeof input.fontFamily === 'string' && input.fontFamily) out.fontFamily = input.fontFamily
+  if (input.textAlpha !== undefined) out.textAlpha = clampTextAlpha(input.textAlpha, 1)
+  if (input.background && Object.keys(input.background).length) {
+    out.background = { ...input.background }
+  }
+  for (const key of ['title', 'count', 'hint', 'status'] as const) {
+    const style = input[key]
+    if (style && Object.keys(style).length) out[key] = normalizeTextStyle(style)
+  }
+  return out
 }
 
 /** 全部合法的显示模式，用于兜底非法值（旧配置 / 手改配置） */
 const DISPLAY_MODES: DisplayMode[] = ['days', 'days-hours', 'days-hours-minutes', 'precise']
+
+/** 分隔符兜底：非字符串一律回落到内置默认，长度也收一收 */
+function normalizeSeparator(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback
+  return value.slice(0, 6)
+}
 
 /** 行为配置兜底：显示模式只认已知的四种，其余回落到「只显示天数」 */
 function normalizeBehavior(input: BehaviorConfig | undefined): BehaviorConfig {
@@ -283,9 +350,22 @@ function normalizeBehavior(input: BehaviorConfig | undefined): BehaviorConfig {
   return {
     displayMode: DISPLAY_MODES.includes(source.displayMode) ? source.displayMode : fallback.displayMode,
     showDaysInPrecise: source.showDaysInPrecise !== false,
+    separatorHM: normalizeSeparator(source.separatorHM, fallback.separatorHM),
+    separatorMS: normalizeSeparator(source.separatorMS, fallback.separatorMS),
     showPastDays: source.showPastDays === true,
     alwaysOnTop: source.alwaysOnTop !== false
   }
+}
+
+/** 托盘菜单开关兜底：只有显式 false 才隐藏，缺省一律显示 */
+function normalizeTrayMenu(input: TrayMenuConfig | undefined): TrayMenuConfig {
+  const fallback = createDefaultConfig().runtime.trayMenu
+  const source = input ?? fallback
+  const out = { ...fallback }
+  for (const key of Object.keys(fallback) as Array<keyof TrayMenuConfig>) {
+    out[key] = source[key] !== false
+  }
+  return out
 }
 
 /** 保证列表、选中项、全局字段、窗口与自定义预设都合法 */
@@ -303,16 +383,27 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     activeId,
     appearance: normalizeAppearance(config.appearance),
     behavior: normalizeBehavior(config.behavior),
-    runtime: { ...config.runtime, window },
+    runtime: {
+      ...config.runtime,
+      window,
+      trayMenu: normalizeTrayMenu(config.runtime?.trayMenu)
+    },
     customPresets: Array.isArray(config.customPresets) ? config.customPresets : []
   }
 }
 
-/** 外观只做不透明度兜底：缺失或越界都收敛回合法值 */
+/** 外观兜底：文字透明度与四个文字样式都可能缺字段，逐一补齐 */
 function normalizeAppearance(input: AppearanceConfig | undefined): AppearanceConfig {
   const fallback = createDefaultConfig().appearance
   const source = input ?? fallback
-  return { ...source, opacity: clampOpacity(source.opacity, fallback.opacity) }
+  return {
+    ...source,
+    textAlpha: clampTextAlpha(source.textAlpha, fallback.textAlpha),
+    title: normalizeTextStyle(source.title ?? fallback.title),
+    count: normalizeTextStyle(source.count ?? fallback.count),
+    hint: normalizeTextStyle(source.hint ?? fallback.hint),
+    status: normalizeTextStyle(source.status ?? fallback.status)
+  }
 }
 
 function normalizeWindow(input: Partial<AppConfig['runtime']['window']> | undefined): AppConfig['runtime']['window'] {
@@ -327,17 +418,27 @@ function normalizeWindow(input: Partial<AppConfig['runtime']['window']> | undefi
     'custom'
   ]
   const preset = valid.includes(cornerPreset) ? cornerPreset : 'top-right'
+  const corner = valid.includes(source.corner as never) ? (source.corner as never) : preset
+
+  // 旧版（layoutVersion < 2）的偏移量在贴右/下边时方向是反的：那时正值把卡片推向
+  // 屏幕外侧，现在正值统一表示朝屏幕内侧。这里翻一次符号，升级后位置保持不变。
+  const legacy = Number(source.layoutVersion ?? 1) < LAYOUT_VERSION
+  const flipX = legacy && (preset === 'top-right' || preset === 'bottom-right')
+  const flipY = legacy && (preset === 'bottom-left' || preset === 'bottom-right')
+  const rawOffsetX = Number.isFinite(source.offsetX) ? Number(source.offsetX) : 0
+  const rawOffsetY = Number.isFinite(source.offsetY) ? Number(source.offsetY) : 0
+
   return {
-    corner: valid.includes(source.corner as never) ? (source.corner as never) : preset,
+    corner,
     cornerPreset: preset,
     anchorX: Number.isFinite(source.anchorX) ? Number(source.anchorX) : 0,
     anchorY: Number.isFinite(source.anchorY) ? Number(source.anchorY) : 0,
-    offsetX: Number.isFinite(source.offsetX) ? Number(source.offsetX) : 0,
-    offsetY: Number.isFinite(source.offsetY) ? Number(source.offsetY) : 0,
+    offsetX: flipX ? -rawOffsetX : rawOffsetX,
+    offsetY: flipY ? -rawOffsetY : rawOffsetY,
     allowDrag: source.allowDrag !== false,
+    clickThrough: source.clickThrough === true,
     transparent: source.transparent !== false,
-    x: Number.isFinite(source.x) ? Number(source.x) : 0,
-    y: Number.isFinite(source.y) ? Number(source.y) : 0
+    layoutVersion: LAYOUT_VERSION
   }
 }
 
@@ -386,37 +487,54 @@ export function migrateLegacy(raw: unknown): unknown {
       pastText: legacyText?.pastText || '已远去',
       unit: legacyText?.unit || '天',
       showHint: true,
-      showStatus: true
+      showStatus: true,
+      showUnit: true
     }
   }
 }
 
-/** 递归合并外观覆盖：只有显式给出的字段才覆盖全局 */
+/**
+ * 递归合并外观覆盖：只有显式给出的字段才覆盖全局。
+ * 文字透明度（textAlpha 与四个样式各自的 opacity）与背景 alpha 完全独立，
+ * 因此这里不需要也不应该做任何相乘。
+ */
 export function mergeAppearance(
   base: AppearanceConfig,
   override?: AppearanceOverride
 ): AppearanceConfig {
   if (!override) return base
-  const mergeStyle = <T extends object>(global: T, local?: Partial<T>): T => {
+  const mergeStyle = (global: TextStyle, local?: Partial<TextStyle>): TextStyle => {
     if (!local) return global
-    const out = { ...global } as Record<string, unknown>
+    const out: Record<string, unknown> = { ...global }
     for (const [key, value] of Object.entries(local)) {
       if (value !== undefined && value !== null) out[key] = value
     }
-    return out as T
+    return normalizeTextStyle(out as unknown as TextStyle)
   }
   return {
     fontFamily: override.fontFamily || base.fontFamily,
-    opacity:
-      override.opacity === undefined || override.opacity === null
-        ? base.opacity ?? 1
-        : clampOpacity(override.opacity, base.opacity ?? 1),
-    background: mergeStyle(base.background, override.background),
+    textAlpha:
+      override.textAlpha === undefined || override.textAlpha === null
+        ? base.textAlpha ?? 1
+        : clampTextAlpha(override.textAlpha, base.textAlpha ?? 1),
+    background: mergeBackground(base.background, override.background),
     title: mergeStyle(base.title, override.title),
     count: mergeStyle(base.count, override.count),
     hint: mergeStyle(base.hint, override.hint),
     status: mergeStyle(base.status, override.status)
   }
+}
+
+function mergeBackground(
+  base: AppearanceConfig['background'],
+  local?: Partial<AppearanceConfig['background']>
+): AppearanceConfig['background'] {
+  if (!local) return base
+  const out: Record<string, unknown> = { ...base }
+  for (const [key, value] of Object.entries(local)) {
+    if (value !== undefined && value !== null) out[key] = value
+  }
+  return out as unknown as AppearanceConfig['background']
 }
 
 /** 文案覆盖：空字符串表示跟随全局 */
@@ -452,6 +570,11 @@ export function resolveCountdown(config: AppConfig, item: CountdownItem): Resolv
     text: { title: item.name, ...mergeText(config.text, item.text) },
     showHint: resolveVisibility(item.text?.showHint, config.text.showHint).show,
     showStatus: resolveVisibility(item.text?.showStatus, config.text.showStatus).show,
+    showUnit: resolveVisibility(item.text?.showUnit, config.text.showUnit !== false).show,
+    separator: resolveSeparator(item.separator, {
+      hm: config.behavior.separatorHM,
+      ms: config.behavior.separatorMS
+    }),
     appearance: mergeAppearance(config.appearance, item.appearance)
   }
 }
@@ -478,6 +601,9 @@ export function parseTargetDate(target: TargetConfig): Date {
   const [hh, mm] = timePart.split(':').map(Number)
   return new Date(y, m - 1, d, hh || 0, mm || 0, 0, 0)
 }
+
+/** 当前偏移量语义版本；旧配置读入时会据此换算方向 */
+export const LAYOUT_VERSION = 2
 
 export function clampInt(value: number, min: number, max: number): number {
   const n = Math.round(Number(value))
@@ -576,39 +702,55 @@ export function computeCountdown(target: TargetConfig, now: Date = new Date()): 
   }
 }
 
-/** 时分秒显示的一段：大数字 + 小标签（分隔符 ':' 也是标签） */
+/** 时分秒显示的一段：数字 + 跟在它后面的单位或分隔符小标签 */
 export interface PrecisionPart {
   value: string
   label: string
 }
 
 /**
- * 按显示模式组装「大数字 + 小标签」序列。桌面组件与设置里的预览共用这一份，
+ * 按显示模式组装「数字 + 单位/分隔符」序列。桌面组件与设置里的预览共用这一份，
  * 免得两边的模式判断各写一遍、改一处漏一处。
  *
- * - days-hours          天 + 时          → `95天 02`
- * - days-hours-minutes  天 + 时:分        → `95天 02:46`
- * - precise             天 + 时:分:秒     → `95天 02:46:11`（showDays=false 时省略天数）
+ * 分隔符不写死成冒号，而是由 SeparatorConfig 决定，用户可以选「:」「时」或自己写的符号。
+ * 规则：每一段带的是**它自己的单位**（天/时/分），秒不带动词也不需要分隔符，
+ * 因此末尾永远不会出现 `46分 11:` 这种多余尾巴；单位本身取对应那一档的分隔符，
+ * 所以换掉分隔符就等于换掉那个单位字：
  *
- * 除最后一段外，每段后面都跟一个 ':' 小标签，最后一段不带标签。
+ * - days-hours          天 + 时                → `95天 02时`
+ * - days-hours-minutes  天 + 时 + 分           → `95天 02时 46分`
+ * - precise             天 + 时 + 分 + 秒      → `95天 02时 46分 11`
+ * - precise + 不含天数                         → `02时 46分 11`
+ * - 分隔符改成 `:`                             → `95天 02: 46: 11`
+ *
+ * 「时与分之间」这一档在两个模式下是同一个设置：
+ * `天+时+分` 里它出现在 46 后面，`天+时+分+秒` 里同时出现在 46 和 11 前面，
+ * 所以两个显示模式选项展示出来的那一档必须一模一样。
  */
 export function buildPrecisionParts(
   mode: PrecisionMode,
   showDays: boolean,
   unit: string,
+  separator: SeparatorConfig,
   result: CountdownResult
 ): PrecisionPart[] {
-  const entries: Array<{ value: string; unit?: string }> = []
-  if (mode !== 'precise' || showDays) {
-    entries.push({ value: String(Math.abs(result.days)), unit })
+  const withDays = mode !== 'precise' || showDays
+  // 每一段记下它所属的单位；单位是后面挑分隔符的依据，与「是不是最后一段」无关
+  const entries: Array<{ value: string; kind: 'day' | 'hour' | 'minute' | 'second' }> = []
+  if (withDays) entries.push({ value: String(Math.abs(result.days)), kind: 'day' })
+  entries.push({ value: pad2(result.hours), kind: 'hour' })
+  if (mode !== 'days-hours') entries.push({ value: pad2(result.minutes), kind: 'minute' })
+  if (mode === 'precise') entries.push({ value: pad2(result.seconds), kind: 'second' })
+
+  const labelOf = (kind: 'day' | 'hour' | 'minute' | 'second'): string => {
+    if (kind === 'day') return unit
+    if (kind === 'hour') return separator.hm
+    if (kind === 'minute') return separator.ms
+    // 秒之后没有东西需要分隔，所以永远不带标签
+    return ''
   }
-  entries.push({ value: pad2(result.hours) })
-  if (mode !== 'days-hours') entries.push({ value: pad2(result.minutes) })
-  if (mode === 'precise') entries.push({ value: pad2(result.seconds) })
-  return entries.map((entry, index) => ({
-    value: entry.value,
-    label: entry.unit ?? (index < entries.length - 1 ? ':' : '')
-  }))
+
+  return entries.map((entry) => ({ value: entry.value, label: labelOf(entry.kind) }))
 }
 
 export function applyTemplate(template: string, vars: Record<string, string | number>): string {
@@ -629,7 +771,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     appearance: {
       fontFamily:
         '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif',
-      opacity: 1,
+      textAlpha: 1,
       background: {
         color: '#1e2230',
         alpha: 0.78,
@@ -641,10 +783,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#ffffff2e',
         width: 0
       },
-      title: { fontSize: 16, color: '#b9c4dc', weight: 500, letterSpacing: 0 },
-      count: { fontSize: 64, color: '#ffffff', weight: 700, letterSpacing: -1 },
-      hint: { fontSize: 14, color: '#a7b3cc', weight: 400, letterSpacing: 0 },
-      status: { fontSize: 15, color: '#7ec8ff', weight: 500, letterSpacing: 0 }
+      title: { fontSize: 16, color: '#b9c4dc', weight: 500, letterSpacing: 0, opacity: 0.9 },
+      count: { fontSize: 64, color: '#ffffff', weight: 700, letterSpacing: -1, opacity: 1 },
+      hint: { fontSize: 14, color: '#a7b3cc', weight: 400, letterSpacing: 0, opacity: 0.85 },
+      status: { fontSize: 15, color: '#7ec8ff', weight: 500, letterSpacing: 0, opacity: 1 }
     }
   },
   {
@@ -653,7 +795,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Frost',
     appearance: {
       fontFamily: '"Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif',
-      opacity: 1,
+      textAlpha: 1,
       background: {
         color: '#ffffff',
         alpha: 0.82,
@@ -665,10 +807,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#00000014',
         width: 0
       },
-      title: { fontSize: 16, color: '#4b5563', weight: 500, letterSpacing: 0 },
-      count: { fontSize: 64, color: '#111827', weight: 700, letterSpacing: -1 },
-      hint: { fontSize: 14, color: '#5f6672', weight: 400, letterSpacing: 0 },
-      status: { fontSize: 15, color: '#2563eb', weight: 500, letterSpacing: 0 }
+      title: { fontSize: 16, color: '#4b5563', weight: 500, letterSpacing: 0, opacity: 0.9 },
+      count: { fontSize: 64, color: '#111827', weight: 700, letterSpacing: -1, opacity: 1 },
+      hint: { fontSize: 14, color: '#5f6672', weight: 400, letterSpacing: 0, opacity: 0.85 },
+      status: { fontSize: 15, color: '#2563eb', weight: 500, letterSpacing: 0, opacity: 1 }
     }
   },
   {
@@ -677,7 +819,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Sakura',
     appearance: {
       fontFamily: '"Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif',
-      opacity: 1,
+      textAlpha: 1,
       background: {
         color: '#ffe3ec',
         alpha: 0.9,
@@ -689,10 +831,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#ffffffaa',
         width: 0
       },
-      title: { fontSize: 16, color: '#a33a63', weight: 500, letterSpacing: 0 },
-      count: { fontSize: 68, color: '#a32652', weight: 800, letterSpacing: -1 },
-      hint: { fontSize: 14, color: '#96486a', weight: 400, letterSpacing: 0 },
-      status: { fontSize: 15, color: '#8f2f56', weight: 600, letterSpacing: 0 }
+      title: { fontSize: 16, color: '#a33a63', weight: 500, letterSpacing: 0, opacity: 0.9 },
+      count: { fontSize: 68, color: '#a32652', weight: 800, letterSpacing: -1, opacity: 1 },
+      hint: { fontSize: 14, color: '#96486a', weight: 400, letterSpacing: 0, opacity: 0.85 },
+      status: { fontSize: 15, color: '#8f2f56', weight: 600, letterSpacing: 0, opacity: 1 }
     }
   },
   {
@@ -701,7 +843,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Terminal',
     appearance: {
       fontFamily: '"Cascadia Mono", "Consolas", "JetBrains Mono", monospace',
-      opacity: 1,
+      textAlpha: 1,
       background: {
         color: '#0b1a10',
         alpha: 0.85,
@@ -713,10 +855,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#39ff8855',
         width: 0
       },
-      title: { fontSize: 15, color: '#5fbf87', weight: 500, letterSpacing: 2 },
-      count: { fontSize: 62, color: '#39ff88', weight: 700, letterSpacing: 0 },
-      hint: { fontSize: 13, color: '#4e9c72', weight: 400, letterSpacing: 1 },
-      status: { fontSize: 14, color: '#9dffc4', weight: 500, letterSpacing: 1 }
+      title: { fontSize: 15, color: '#5fbf87', weight: 500, letterSpacing: 2, opacity: 0.9 },
+      count: { fontSize: 62, color: '#39ff88', weight: 700, letterSpacing: 0, opacity: 1 },
+      hint: { fontSize: 13, color: '#4e9c72', weight: 400, letterSpacing: 1, opacity: 0.85 },
+      status: { fontSize: 14, color: '#9dffc4', weight: 500, letterSpacing: 1, opacity: 1 }
     }
   },
   {
@@ -725,7 +867,7 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Paper Note',
     appearance: {
       fontFamily: '"KaiTi", "STKaiti", "Microsoft YaHei UI", serif',
-      opacity: 1,
+      textAlpha: 1,
       background: {
         color: '#fdf6d8',
         alpha: 0.96,
@@ -737,10 +879,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#00000000',
         width: 0
       },
-      title: { fontSize: 16, color: '#7a6435', weight: 500, letterSpacing: 1 },
-      count: { fontSize: 66, color: '#5b4a1f', weight: 700, letterSpacing: 0 },
-      hint: { fontSize: 14, color: '#7b6a3d', weight: 400, letterSpacing: 0 },
-      status: { fontSize: 15, color: '#a0481a', weight: 600, letterSpacing: 0 }
+      title: { fontSize: 16, color: '#7a6435', weight: 500, letterSpacing: 1, opacity: 0.9 },
+      count: { fontSize: 66, color: '#5b4a1f', weight: 700, letterSpacing: 0, opacity: 1 },
+      hint: { fontSize: 14, color: '#7b6a3d', weight: 400, letterSpacing: 0, opacity: 0.85 },
+      status: { fontSize: 15, color: '#a0481a', weight: 600, letterSpacing: 0, opacity: 1 }
     }
   }
 ]

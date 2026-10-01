@@ -4,11 +4,19 @@ import type { TextStyle } from '@shared/types'
 import { normalizeWeight, weightLabelKey } from '@/utils/style'
 import SliderField from '@/components/SliderField.vue'
 
-const props = defineProps<{
-  title: string
-  modelValue: TextStyle
-  sample?: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    title: string
+    modelValue: TextStyle
+    sample?: string
+    /**
+     * 是否显示标题行。外观覆盖的每个容器标题已经说明了这是哪一项，
+     * 里面再重复一次只会白占高度，所以那边会把它关掉。
+     */
+    showTitle?: boolean
+  }>(),
+  { sample: '', showTitle: true }
+)
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: TextStyle): void
@@ -26,15 +34,16 @@ function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
 
 <template>
   <div class="text-style-editor">
-    <div class="text-style-editor__head">
-      <span class="text-style-editor__title">{{ title }}</span>
+    <div v-if="showTitle || sample" class="text-style-editor__head">
+      <span v-if="showTitle" class="text-style-editor__title">{{ title }}</span>
       <span
         class="text-style-editor__sample"
         :style="{
           fontSize: `${Math.min(modelValue.fontSize, 30)}px`,
           color: modelValue.color,
           fontWeight: String(modelValue.weight),
-          letterSpacing: `${modelValue.letterSpacing}px`
+          letterSpacing: `${modelValue.letterSpacing}px`,
+          opacity: String(modelValue.opacity ?? 1)
         }"
       >
         {{ sample || '128 天' }}
@@ -90,6 +99,20 @@ function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
           :step="0.5"
           unit="px"
           @update:model-value="(v: number) => update('letterSpacing', v)"
+        />
+      </div>
+    </div>
+
+    <!-- 透明度按「颜色 + 透明度」拆开：它只影响这一行文字，和背景透明度无关 -->
+    <div class="row">
+      <span class="row__label">{{ t('appearance.styleOpacity') }}</span>
+      <div class="row__control">
+        <SliderField
+          :model-value="modelValue.opacity ?? 1"
+          :min="0.05"
+          :max="1"
+          :step="0.05"
+          @update:model-value="(v: number) => update('opacity', v)"
         />
       </div>
     </div>

@@ -13,9 +13,9 @@ import type {
 import {
   createCountdownItem,
   isTargetBlank,
-  mergeAppearance,
   resolveTarget,
-  resolveText
+  resolveText,
+  SEPARATOR_PRESETS
 } from '@shared/defaults'
 import { toPlain } from '@/composables/useConfig'
 import { FONT_STACKS } from '@/utils/style'
@@ -23,7 +23,6 @@ import FieldRow from '@/components/FieldRow.vue'
 import ColorField from '@/components/ColorField.vue'
 import TextStyleEditor from '@/components/TextStyleEditor.vue'
 import SliderField from '@/components/SliderField.vue'
-import CountdownPreview from '@/components/CountdownPreview.vue'
 
 const props = defineProps<{ config: AppConfig; item: CountdownItem }>()
 const emit = defineEmits<{
@@ -55,6 +54,9 @@ interface Draft {
   dateTouched: boolean
   useText: boolean
   text: CountdownItem['text']
+  /** 是否单独覆盖时分秒之间的分隔符 */
+  separatorCustom: boolean
+  separator: CountdownItem['separator']
 }
 
 const draft = reactive<Draft>({
@@ -67,7 +69,9 @@ const draft = reactive<Draft>({
   targetCustom: false,
   dateTouched: false,
   useText: false,
-  text: createCountdownItem().text
+  text: createCountdownItem().text,
+  separatorCustom: false,
+  separator: createCountdownItem().separator
 })
 
 const appearance = ref<AppearanceOverride>({})
@@ -94,6 +98,10 @@ function syncFromItem(item: CountdownItem): void {
   draft.useText = (
     ['hint', 'futureText', 'todayText', 'pastText', 'unit'] as const
   ).some((key) => String(draft.text[key] ?? '').trim().length > 0)
+
+  const separator = { ...createCountdownItem().separator, ...(item.separator ?? {}) }
+  draft.separatorCustom = separator.enabled === true
+  draft.separator = separator
 
   appearance.value = JSON.parse(JSON.stringify(item.appearance ?? {})) as AppearanceOverride
   useAppearance.value = Object.keys(appearance.value).length > 0
@@ -122,6 +130,7 @@ function snapshotOf(item: CountdownItem): string {
     targetBlank: isTargetBlank(item.target),
     target: item.target,
     text: item.text,
+    separator: item.separator,
     appearance: item.appearance
   })
 }
@@ -140,13 +149,23 @@ function computeItem(): CountdownItem {
       ? { mode: draft.mode, date: draft.date, month: draft.month, day: draft.day }
       : props.item.target,
     text: { ...createCountdownItem().text, ...cleanText(draft.text), ...visibilityPatch() },
+    separator: draft.separatorCustom
+      ? { enabled: true, hm: draft.separator.hm, ms: draft.separator.ms }
+      : { enabled: false, hm: '', ms: '' },
     appearance: useAppearance.value ? compact(appearance.value) : {}
   }
 }
 
-/** 空白字段不写进配置，保持「留空即跟随全局」 */
-function visibilityPatch(): Pick<CountdownItem['text'], 'showHint' | 'showStatus'> {
-  return { showHint: draft.text.showHint, showStatus: draft.text.showStatus }
+/** 显示开关（三个三态覆盖）单独取，避免被 cleanText 当普通字段过滤掉 */
+function visibilityPatch(): Pick<
+  CountdownItem['text'],
+  'showHint' | 'showStatus' | 'showUnit'
+> {
+  return {
+    showHint: draft.text.showHint,
+    showStatus: draft.text.showStatus,
+    showUnit: draft.text.showUnit
+  }
 }
 
 function currentSnapshot(): string {
@@ -209,10 +228,13 @@ watch(
   }
 )
 
+/** 只保留真正有内容的文案字段，空白字段继续跟随全局 */
 function cleanText(source: CountdownItem['text']): Partial<CountdownItem['text']> {
   const out: Partial<CountdownItem['text']> = {}
-  for (const [key, value] of Object.entries(source)) {
-    if (String(value ?? '').trim()) (out as Record<string, string>)[key] = String(value)
+  const keys = ['hint', 'futureText', 'todayText', 'pastText', 'unit'] as const
+  for (const key of keys) {
+    const value = String(source[key] ?? '').trim()
+    if (value) out[key] = value
   }
   return out
 }
@@ -221,8 +243,8 @@ function cleanText(source: CountdownItem['text']): Partial<CountdownItem['text']
 function compact(source: AppearanceOverride): AppearanceOverride {
   const out: AppearanceOverride = {}
   if (source.fontFamily) out.fontFamily = source.fontFamily
-  if (typeof source.opacity === 'number' && Number.isFinite(source.opacity)) {
-    out.opacity = source.opacity
+  if (typeof source.textAlpha === 'number' && Number.isFinite(source.textAlpha)) {
+    out.textAlpha = source.textAlpha
   }
   if (source.background && Object.keys(source.background).length) {
     out.background = { ...source.background }
@@ -291,8 +313,8 @@ function patchBackground(patch: Partial<BackgroundConfig>): void {
   }
 }
 
-function patchOpacity(value: number): void {
-  appearance.value = { ...appearance.value, opacity: value }
+function patchTextAlpha(value: number): void {
+  appearance.value = { ...appearance.value, textAlpha: value }
 }
 
 function patchStyle(key: 'title' | 'count' | 'hint' | 'status', value: TextStyle): void {
@@ -300,7 +322,7 @@ function patchStyle(key: 'title' | 'count' | 'hint' | 'status', value: TextStyle
 }
 
 type StyleKey = 'title' | 'count' | 'hint' | 'status'
-type OverrideKey = 'fontFamily' | 'opacity' | 'background' | StyleKey
+type OverrideKey = 'fontFamily' | 'textAlpha' | 'background' | StyleKey
 
 /** 勾选/取消某个外观覆盖项：勾选时以当前全局值作为起点，取消时直接删掉 */
 function setOverride(key: OverrideKey, enabled: boolean): void {
@@ -309,8 +331,8 @@ function setOverride(key: OverrideKey, enabled: boolean): void {
     delete next[key]
   } else if (key === 'fontFamily') {
     next.fontFamily = props.config.appearance.fontFamily
-  } else if (key === 'opacity') {
-    next.opacity = props.config.appearance.opacity ?? 1
+  } else if (key === 'textAlpha') {
+    next.textAlpha = props.config.appearance.textAlpha ?? 1
   } else if (key === 'background') {
     next.background = { ...props.config.appearance.background }
   } else {
@@ -358,17 +380,6 @@ function onDateTypeChange(next: 'date' | 'datetime'): void {
 
 const maxDay = computed(() => new Date(new Date().getFullYear(), draft.month, 0).getDate())
 
-/** 预览用配置：把当前草稿当作唯一列表项 */
-const previewConfig = computed<AppConfig>(() => {
-  const built = computeItem()
-  return {
-    ...props.config,
-    countdowns: [built],
-    activeId: built.id,
-    appearance: mergeAppearance(props.config.appearance, built.appearance)
-  }
-})
-
 /** 与全局外观面板共用同一份字体栈预设 */
 const fontOptions = FONT_STACKS
 
@@ -392,13 +403,41 @@ const targetFollowNote = computed(() => {
 })
 
 const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {}).length > 0)
+
+/** 全局当前生效的分隔符，用作「跟随全局」时的占位提示 */
+const globalSeparator = computed(() => ({
+  hm: props.config.behavior.separatorHM,
+  ms: props.config.behavior.separatorMS
+}))
+
+function setSeparator(key: 'hm' | 'ms', value: string): void {
+  draft.separator = { ...draft.separator, [key]: value.slice(0, 6) }
+}
+
+/**
+ * 打开「单独覆盖分隔符」时，用全局当前值作为起点，
+ * 这样用户是从现在看到的样子开始改，而不是从空白开始。
+ */
+function toggleSeparatorOverride(value: boolean): void {
+  draft.separatorCustom = value
+  if (value && !draft.separator.hm && !draft.separator.ms) {
+    draft.separator = { enabled: true, ...globalSeparator.value }
+    return
+  }
+  draft.separator = { ...draft.separator, enabled: value }
+}
+
+function separatorText(value: string): string {
+  return value === '' ? t('behavior.separatorPlaceholder') : value
+}
 </script>
 
 <template>
   <!--
-    吸顶栏：.el-card 自带 overflow: hidden，卡内 position: sticky 不会生效，
-    所以把「返回 / 标题 / 状态 / 保存 + 预览」整块搬到卡片外面吸顶，
-    滚到下面的外观设置时依然能看到实时效果与保存按钮。
+    操作栏吸顶：.el-card 自带 overflow: hidden，卡内 position: sticky 不会生效，
+    所以把「返回 / 标题 / 状态 / 保存」搬到卡片外面吸顶，滚到下面的外观设置时依然能直接保存。
+    这里不再放实时预览 —— 全局设置页已经有一份统一的预览样板，
+    而编辑页滚动时预览会一直占着屏幕上方，反而挡住了要改的字段。
   -->
   <div class="editor-sticky">
     <div class="editor-head">
@@ -423,10 +462,6 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
         <el-icon><Check /></el-icon>
         <span style="margin-left: 6px">{{ t('common.save') }}</span>
       </el-button>
-    </div>
-
-    <div class="editor-preview">
-      <CountdownPreview :config="previewConfig" compact />
     </div>
   </div>
 
@@ -528,6 +563,13 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
         <el-radio-button value="hide">{{ t('target.hide') }}</el-radio-button>
       </el-radio-group>
     </FieldRow>
+    <FieldRow :label="t('target.showUnit')" :hint="t('target.showUnitHint')">
+      <el-radio-group v-model="draft.text.showUnit">
+        <el-radio-button value="inherit">{{ t('target.followGlobal') }}</el-radio-button>
+        <el-radio-button value="show">{{ t('target.show') }}</el-radio-button>
+        <el-radio-button value="hide">{{ t('target.hide') }}</el-radio-button>
+      </el-radio-group>
+    </FieldRow>
     <FieldRow :label="t('target.hintText')">
       <el-input v-model="draft.text.hint" :placeholder="followPlaceholder('hint')" maxlength="60" />
     </FieldRow>
@@ -560,6 +602,62 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
         maxlength="6"
       />
     </FieldRow>
+
+    <!-- 时分秒分隔符：默认跟随全局，开启后这一项可以单独用别的符号 -->
+    <el-divider content-position="left">
+      <span class="divider-title">
+        {{ t('behavior.separatorTitle') }}
+        <el-tooltip
+          :content="`${t('behavior.separatorHint')}；${t('target.overrideSeparatorHint')}`"
+          placement="top"
+          :show-after="150"
+        >
+          <span class="panel-card__help" tabindex="0">
+            <el-icon :size="13"><QuestionFilled /></el-icon>
+          </span>
+        </el-tooltip>
+      </span>
+    </el-divider>
+    <FieldRow :label="t('target.overrideSeparator')" :hint="t('target.overrideSeparatorHint')">
+      <el-switch
+        :model-value="draft.separatorCustom"
+        @update:model-value="(v: string | number | boolean) => toggleSeparatorOverride(Boolean(v))"
+      />
+    </FieldRow>
+    <div v-if="draft.separatorCustom" class="panel-grid-2">
+      <FieldRow
+        :label="t('behavior.separatorHM')"
+        :hint="t('behavior.separatorPreview', { value: separatorText(draft.separator.hm) })"
+      >
+        <el-select
+          :model-value="draft.separator.hm"
+          filterable
+          allow-create
+          default-first-option
+          style="max-width: 200px"
+          @update:model-value="(v: string) => setSeparator('hm', v)"
+        >
+          <el-option :label="t('behavior.separatorPlaceholder')" value="" />
+          <el-option v-for="preset in SEPARATOR_PRESETS" :key="preset" :label="preset" :value="preset" />
+        </el-select>
+      </FieldRow>
+      <FieldRow
+        :label="t('behavior.separatorMS')"
+        :hint="t('behavior.separatorPreview', { value: separatorText(draft.separator.ms) })"
+      >
+        <el-select
+          :model-value="draft.separator.ms"
+          filterable
+          allow-create
+          default-first-option
+          style="max-width: 200px"
+          @update:model-value="(v: string) => setSeparator('ms', v)"
+        >
+          <el-option :label="t('behavior.separatorPlaceholder')" value="" />
+          <el-option v-for="preset in SEPARATOR_PRESETS" :key="preset" :label="preset" :value="preset" />
+        </el-select>
+      </FieldRow>
+    </div>
 
     <el-divider content-position="left">
       <span class="divider-title">
@@ -605,24 +703,6 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
 
       <div class="override-group">
         <div class="override-group__title">{{ t('appearance.background') }}</div>
-        <FieldRow :label="t('appearance.opacity')">
-          <div class="override-row">
-            <el-checkbox
-              :model-value="typeof appearance.opacity === 'number'"
-              @update:model-value="(v: string | number | boolean) => setOverride('opacity', Boolean(v))"
-            />
-            <SliderField
-              v-if="typeof appearance.opacity === 'number'"
-              :model-value="appearance.opacity"
-              :min="0.2"
-              :max="1"
-              :step="0.01"
-              @update:model-value="patchOpacity"
-            />
-            <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
-          </div>
-        </FieldRow>
-
         <FieldRow :label="t('appearance.bgColor')">
           <div class="override-row">
             <el-checkbox
@@ -641,23 +721,24 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
           </div>
         </FieldRow>
 
-        <FieldRow v-if="appearance.background" :label="`${t('appearance.radius')} / ${t('appearance.padding')}`">
-          <div class="inline-group">
-            <SliderField
-              :model-value="backgroundFields.radius ?? config.appearance.background.radius"
-              :min="0"
-              :max="60"
-              unit="px"
-              @update:model-value="(v: number) => patchBackground({ radius: v })"
-            />
-            <SliderField
-              :model-value="backgroundFields.padding ?? config.appearance.background.padding"
-              :min="0"
-              :max="64"
-              unit="px"
-              @update:model-value="(v: number) => patchBackground({ padding: v })"
-            />
-          </div>
+        <!-- 圆角与内边距是两个独立设置项，不再挤在同一行用一个斜杠隔开 -->
+        <FieldRow v-if="appearance.background" :label="t('appearance.radius')">
+          <SliderField
+            :model-value="backgroundFields.radius ?? config.appearance.background.radius"
+            :min="0"
+            :max="60"
+            unit="px"
+            @update:model-value="(v: number) => patchBackground({ radius: v })"
+          />
+        </FieldRow>
+        <FieldRow v-if="appearance.background" :label="t('appearance.padding')">
+          <SliderField
+            :model-value="backgroundFields.padding ?? config.appearance.background.padding"
+            :min="0"
+            :max="64"
+            unit="px"
+            @update:model-value="(v: number) => patchBackground({ padding: v })"
+          />
         </FieldRow>
       </div>
 
@@ -707,6 +788,33 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
 
       <div class="override-group">
         <div class="override-group__title">{{ t('appearance.textGroup') }}</div>
+
+        <!--
+          文字透明度总开关：与背景透明度无关，只影响四行文字。
+          勾选后下面每个文字样式还能再调各自的透明度，两者相乘。
+        -->
+        <FieldRow :label="t('appearance.textAlpha')" :hint="t('appearance.textAlphaHint')">
+          <div class="override-row">
+            <el-checkbox
+              :model-value="typeof appearance.textAlpha === 'number'"
+              @update:model-value="(v: string | number | boolean) => setOverride('textAlpha', Boolean(v))"
+            />
+            <SliderField
+              v-if="typeof appearance.textAlpha === 'number'"
+              :model-value="appearance.textAlpha"
+              :min="0"
+              :max="1"
+              :step="0.01"
+              @update:model-value="patchTextAlpha"
+            />
+            <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
+          </div>
+        </FieldRow>
+
+        <!--
+          每个文字样式：容器标题已经写在复选框上，勾选后展开的编辑器里不再重复一次标题
+          （重复标题只会白占高度、增加阅读负担）。
+        -->
         <div
           v-for="entry in ([
             { key: 'title', label: t('appearance.titleStyle'), sample: draft.name || '元旦' },
@@ -728,6 +836,7 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
           <TextStyleEditor
             v-if="appearance[entry.key]"
             :title="entry.label"
+            :show-title="false"
             :sample="entry.sample"
             :model-value="appearance[entry.key] as TextStyle"
             @update:model-value="(v: TextStyle) => patchStyle(entry.key, v)"
@@ -787,10 +896,6 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
 
 .editor-head__title {
   font-weight: 600;
-}
-
-.editor-preview {
-  margin-top: 10px;
 }
 
 .editor-style {

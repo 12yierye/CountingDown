@@ -1,15 +1,35 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { AppConfig } from '@shared/types'
+import type { AppConfig, TrayMenuConfig } from '@shared/types'
 import FieldRow from '@/components/FieldRow.vue'
 
-defineProps<{ config: AppConfig }>()
+const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{ (event: 'patch', patch: unknown): void }>()
 
 const { t } = useI18n()
 const recording = ref(false)
+
+/** 托盘右键菜单里可开关的条目，「设置」与「退出」始终保留，所以不在这里 */
+const trayItems = computed<Array<{ key: keyof TrayMenuConfig; label: string }>>(() => [
+  { key: 'toggleVisible', label: t('integration.trayToggleVisible') },
+  { key: 'resetPosition', label: t('integration.trayResetPosition') },
+  { key: 'allowDrag', label: t('integration.trayAllowDrag') },
+  { key: 'alwaysOnTop', label: t('integration.trayAlwaysOnTop') },
+  { key: 'startAtLogin', label: t('integration.trayStartup') },
+  { key: 'hotkey', label: t('integration.trayHotkey') }
+])
+
+function trayChecked(key: keyof TrayMenuConfig): boolean {
+  return props.config.runtime.trayMenu?.[key] !== false
+}
+
+function setTrayItem(key: keyof TrayMenuConfig, value: boolean): void {
+  emit('patch', { runtime: { trayMenu: { [key]: value } } })
+  // 配置变了主进程会重建菜单，这里再显式喊一次，保证切换后立刻能看到效果
+  void window.cd.refreshTray()
+}
 
 const modifierKeys = new Set(['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'])
 
@@ -127,16 +147,45 @@ async function openConfigFolder(): Promise<void> {
       <span class="tray-info__dot"></span>
       <span>{{ t('integration.trayHint') }}</span>
     </p>
+
+    <el-divider content-position="left">
+      <span class="divider-title">
+        {{ t('integration.trayMenu') }}
+        <el-tooltip :content="t('integration.trayMenuHint')" placement="top" :show-after="150">
+          <span class="panel-card__help" tabindex="0">
+            <el-icon :size="13"><QuestionFilled /></el-icon>
+          </span>
+        </el-tooltip>
+      </span>
+    </el-divider>
+
+    <div class="tray-menu-grid">
+      <div v-for="item in trayItems" :key="item.key" class="tray-menu-item">
+        <el-checkbox
+          :model-value="trayChecked(item.key)"
+          @update:model-value="(v: string | number | boolean) => setTrayItem(item.key, Boolean(v))"
+        >
+          {{ item.label }}
+        </el-checkbox>
+      </div>
+    </div>
   </el-card>
 
   <el-card shadow="never" class="panel-card">
     <template #header>
       <div class="panel-card__header">
-        <span>{{ t('integration.hotkey') }}</span>
+        <span class="panel-card__title">
+          {{ t('integration.hotkey') }}
+          <el-tooltip :content="t('integration.hotkeyHint')" placement="top" :show-after="150">
+            <span class="panel-card__help" tabindex="0">
+              <el-icon :size="13"><QuestionFilled /></el-icon>
+            </span>
+          </el-tooltip>
+        </span>
       </div>
     </template>
 
-    <FieldRow :label="t('integration.hotkey')">
+    <FieldRow :label="t('integration.hotkey')" :hint="t('integration.hotkeyHint')">
       <div class="hotkey">        <div
           class="hotkey__display"
           :class="{ 'is-recording': recording }"
@@ -188,6 +237,24 @@ async function openConfigFolder(): Promise<void> {
 </template>
 
 <style scoped>
+.divider-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tray-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 2px 20px;
+}
+
+.tray-menu-item {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
 .tray-info {
   display: flex;
   align-items: flex-start;

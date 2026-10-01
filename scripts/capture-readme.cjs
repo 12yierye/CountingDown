@@ -202,8 +202,9 @@ const SECTION_STATE =
   ' editor:!!document.querySelector(".editor-head"),' +
   ' sticky:!!document.querySelector(".editor-sticky"),' +
   ' hasPreview:!!document.querySelector(".preview-wrap"),' +
-  ' cardPreview:!!document.querySelector(".editor-preview .cd-card"),' +
-  ' widgetNumber:(document.querySelector(".editor-preview .cd-card__number")||{}).textContent||""})'
+  // 编辑页不再自带预览，这里看的是设置页左上角那份统一的全局预览样板
+  ' cardPreview:!!document.querySelector(".preview-wrap .cd-card"),' +
+  ' widgetNumber:(document.querySelector(".preview-wrap .cd-card__number")||{}).textContent||""})'
 
 app.whenReady().then(async () => {
   await wait(4500)

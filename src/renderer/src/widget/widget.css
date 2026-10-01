@@ -138,6 +138,11 @@ body,
   cursor: grabbing;
 }
 
+/* 点击穿透：卡片不接收任何鼠标事件，光标也不该再显示成可拖动的抓手 */
+.cd-stage[data-interactive='false'] .cd-card.is-draggable {
+  cursor: default;
+}
+
 .cd-card--empty {
   min-width: 200px;
   gap: 8px;

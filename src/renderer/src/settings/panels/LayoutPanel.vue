@@ -97,12 +97,30 @@ const anchorParts = computed(() => {
   return { vertical, horizontal }
 })
 
+/**
+ * 偏移量方向：正值统一表示「离开所贴的那条边、朝屏幕内侧移动」。
+ * 于是贴右边时正值向左、贴上边时正值向下 —— 标签必须跟着基准变，
+ * 而且要和 computeCornerPosition 的符号约定严格一致，否则就会出现
+ * 「叫向左偏移、填正数却往右跑」这种反着的说明。
+ */
 const offsetXLabel = computed(() =>
-  anchorParts.value.horizontal === 'left' ? t('layout.offsetXLeft') : t('layout.offsetXRight')
+  anchorParts.value.horizontal === 'left' ? t('layout.offsetXRight') : t('layout.offsetXLeft')
 )
 const offsetYLabel = computed(() =>
   anchorParts.value.vertical === 'top' ? t('layout.offsetYDown') : t('layout.offsetYUp')
 )
+
+const clickThrough = computed(() => win.value.clickThrough === true)
+const allowDrag = computed(() => win.value.allowDrag !== false)
+
+/** 拖动和点击穿透互斥：开着穿透就点不到组件，拖动无从谈起 */
+function setClickThrough(value: boolean): void {
+  patchWindow({ clickThrough: value })
+}
+
+function setAllowDrag(value: boolean): void {
+  patchWindow({ allowDrag: value })
+}
 </script>
 
 <template>
@@ -182,7 +200,7 @@ const offsetYLabel = computed(() =>
       <FieldRow :label="offsetXLabel">
         <SliderField
           :model-value="win.offsetX"
-          :min="-200"
+          :min="-area.width"
           :max="area.width"
           :step="1"
           unit="px"
@@ -192,7 +210,7 @@ const offsetYLabel = computed(() =>
       <FieldRow :label="offsetYLabel">
         <SliderField
           :model-value="win.offsetY"
-          :min="-200"
+          :min="-area.height"
           :max="area.height"
           :step="1"
           unit="px"
@@ -201,10 +219,26 @@ const offsetYLabel = computed(() =>
       </FieldRow>
     </div>
 
+    <el-alert
+      v-if="clickThrough"
+      class="panel-tip"
+      type="info"
+      :closable="false"
+      show-icon
+      :title="t('layout.clickThroughHint')"
+    />
+
     <FieldRow :label="t('layout.allowDrag')" :hint="t('layout.allowDragHint')">
       <el-switch
-        :model-value="config.runtime.window.allowDrag !== false"
-        @update:model-value="(v: string | number | boolean) => patchWindow({ allowDrag: Boolean(v) })"
+        :model-value="allowDrag"
+        @update:model-value="(v: string | number | boolean) => setAllowDrag(Boolean(v))"
+      />
+    </FieldRow>
+
+    <FieldRow :label="t('layout.clickThrough')" :hint="t('layout.clickThroughHint')">
+      <el-switch
+        :model-value="clickThrough"
+        @update:model-value="(v: string | number | boolean) => setClickThrough(Boolean(v))"
       />
     </FieldRow>
   </el-card>

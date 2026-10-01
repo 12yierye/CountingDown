@@ -5,42 +5,28 @@
     :class="{ 'is-opaque': !transparent }"
     :data-corner="config.runtime.window.corner"
   >
-    <div v-if="resolved" ref="shrink" class="cd-shrink" :style="shrinkStyle">
-      <div
-        ref="card"
+    <div v-if="card.resolved.value" ref="shrink" class="cd-shrink" :style="shrinkStyle">
+      <CountdownCard
+        ref="cardEl"
         class="cd-card"
-        :style="cardStyleObject"
         :class="{ 'is-draggable': allowDrag }"
+        :style="cardStyleObject"
+        :title="card.resolved.value.text.title"
+        :precise-parts="card.precisionMode.value ? card.preciseParts.value : null"
+        :abs-days="card.absDays.value"
+        :unit="card.resolved.value.text.unit"
+        :show-unit="card.showUnit.value"
+        :hint-text="card.hintText.value"
+        :status-text="card.statusText.value"
+        :show-hint="card.showHint.value"
+        :show-status="card.showStatus.value"
+        :title-style="card.titleStyle.value"
+        :count-style="card.countStyle.value"
+        :hint-style="card.hintStyle.value"
+        :status-style="card.statusStyle.value"
+        :unit-style="card.unitStyle.value"
         @pointerdown="onPointerDown"
-      >
-        <div v-if="resolved.text.title.trim()" class="cd-card__title" :style="titleStyle">
-          {{ resolved.text.title }}
-        </div>
-
-        <div
-          v-if="precisionMode"
-          class="cd-card__precise"
-          :style="countStyle"
-        >
-          <span v-for="(part, index) in preciseParts" :key="index" class="cd-card__precision-part">
-            <span class="cd-card__number">{{ part.value }}</span>
-            <small v-if="part.label">{{ part.label }}</small>
-          </span>
-        </div>
-
-        <div v-else class="cd-card__count" :style="countStyle">
-          <span class="cd-card__number">{{ absDays }}</span>
-          <span class="cd-card__unit" :style="unitStyle">{{ resolved.text.unit }}</span>
-        </div>
-
-        <div v-if="hintText && resolved.showHint" class="cd-card__hint" :style="hintStyle">
-          {{ hintText }}
-        </div>
-
-        <div v-if="statusText && resolved.showStatus" class="cd-card__status" :style="statusStyle">
-          {{ statusText }}
-        </div>
-      </div>
+      />
     </div>
 
     <!-- 列表为空时不再是一片全透明的“隐身”窗口，给一个可读的提示 -->
@@ -52,8 +38,12 @@
       :class="{ 'is-draggable': allowDrag }"
       @pointerdown="onPointerDown"
     >
-      <div class="cd-card__title" :style="titleStyle">{{ t('list.noCountdown') }}</div>
-      <div class="cd-card__hint" :style="hintStyle">{{ t('list.noCountdownHint') }}</div>
+      <div class="cd-card__title" :style="card.titleStyle.value">
+        {{ t('list.noCountdown') }}
+      </div>
+      <div class="cd-card__hint" :style="card.hintStyle.value">
+        {{ t('list.noCountdownHint') }}
+      </div>
     </div>
   </div>
 </template>
@@ -61,33 +51,32 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AppConfig, PrecisionMode } from '@shared/types'
-import {
-  applyTemplate,
-  buildPrecisionParts,
-  computeCountdown,
-  findActiveItem,
-  formatDateLabel,
-  resolveCountdown
-} from '@shared/defaults'
-import { cardStyle, textStyle } from '@/utils/style'
+import type { AppConfig } from '@shared/types'
+import { cardStyle } from '@/utils/style'
+import { useCountdownCard } from '@/composables/useCountdownCard'
+import CountdownCard from '@/components/CountdownCard.vue'
 
 const props = defineProps<{ config: AppConfig }>()
 
 const { t } = useI18n()
 
-const nowRef = ref(new Date())
-let timer: number | undefined
+const card = useCountdownCard(() => props.config, { live: true })
 
 const stage = ref<HTMLElement | null>(null)
-const card = ref<HTMLElement | null>(null)
+/** CountdownCard 组件实例：`$el` 就是卡片根元素（组件只有一个根节点） */
+const cardEl = ref<{ $el?: HTMLElement } | null>(null)
 const shrink = ref<HTMLElement | null>(null)
 const emptyCard = ref<HTMLElement | null>(null)
 const hoverLocked = ref(false)
+/** 主进程推来的最后一次屏幕坐标；关掉点击穿透时用它重新定位命中 */
+let lastPoint: { x: number; y: number } | null = null
 let interactive = false
 
 /** 是否真的在用透明渲染（系统关闭透明效果时会退回不透明模式） */
 const transparent = ref(true)
+
+/** 鼠标点击穿透：开启后组件完全不接收鼠标事件 */
+const clickThrough = computed(() => props.config.runtime.window.clickThrough === true)
 
 /**
  * 内容比窗口还宽时（例如精确模式 + 超大字号）整体等比缩小，
@@ -97,8 +86,6 @@ const transparent = ref(true)
  * 测量要点：zoom 作用在 .cd-shrink 上，所以 `getBoundingClientRect()` 给的是**缩放后**的
  * 视觉尺寸，而 `scrollWidth` / `offsetWidth` 给的是**布局尺寸**（不随 zoom 变化）。
  * 这里一律用布局尺寸算「自然宽度」，一次就能得到正确的比例。
- * 早先直接用视觉宽度与可用宽度比较，收敛点会偏大（约 √(可用 / 自然)），表现就是
- * 显示到秒时文字比卡片还宽、卡片也顶出安全区 —— 也就是「超出或贴近容器边缘」。
  */
 const zoom = ref(1)
 const shrinkStyle = computed(() => (zoom.value < 1 ? { zoom: String(zoom.value) } : undefined))
@@ -114,9 +101,14 @@ const cardMaxWidth = ref(0)
 const SAFE_AREA_INSET = 24
 const SAFE_AREA_SLACK = 2
 
+/** 卡片本体：拖动与命中判定都要拿到真实 DOM 节点 */
+function cardNode(): HTMLElement | null {
+  return cardEl.value?.$el ?? emptyCard.value
+}
+
 function measureShrink(): void {
   const host = shrink.value
-  const el = card.value
+  const el = cardNode()
   // 不透明模式下卡片就是整窗，不需要缩放
   if (!host || !el || !transparent.value) {
     zoom.value = 1
@@ -158,111 +150,34 @@ function measureShrink(): void {
   if (Math.abs(next - zoom.value) > 0.005) zoom.value = next
 }
 
-/** 当前显示在桌面上的倒数日（含单项覆盖合并结果） */
-const resolved = computed(() => {
-  const item = findActiveItem(props.config)
-  if (!item || !item.enabled) return null
-  return resolveCountdown(props.config, item)
-})
-
-const result = computed(() =>
-  resolved.value ? computeCountdown(resolved.value.target, nowRef.value) : null
-)
-
 const cardStyleObject = computed(() => ({
-  ...cardStyle(props.config, resolved.value?.appearance),
-  opacity: String(resolved.value?.appearance.opacity ?? props.config.appearance.opacity ?? 1),
+  ...card.cardStyleObject.value,
   ...(cardMaxWidth.value > 0 ? { maxWidth: `${cardMaxWidth.value}px` } : {})
 }))
 
 /** 空态卡片固定使用全局外观，避免单项覆盖干扰 */
 const emptyCardStyle = computed(() => ({
   ...cardStyle(props.config, props.config.appearance),
-  opacity: String(props.config.appearance.opacity ?? 1),
   maxWidth: '320px'
 }))
-const titleStyle = computed(() =>
-  textStyle((resolved.value?.appearance ?? props.config.appearance).title)
-)
-const countStyle = computed(() =>
-  textStyle((resolved.value?.appearance ?? props.config.appearance).count)
-)
-const hintStyle = computed(() =>
-  textStyle((resolved.value?.appearance ?? props.config.appearance).hint)
-)
-const statusStyle = computed(() =>
-  textStyle((resolved.value?.appearance ?? props.config.appearance).status)
-)
-const unitStyle = computed(() => {
-  const count = (resolved.value?.appearance ?? props.config.appearance).count
-  return {
-    fontSize: `${Math.max(12, Math.round(count.fontSize * 0.42))}px`,
-    color: count.color,
-    fontWeight: String(Math.min(600, count.weight)),
-    letterSpacing: `${count.letterSpacing}px`
-  }
-})
-
-const absDays = computed(() => (result.value ? Math.abs(result.value.days) : 0))
 
 /** 是否允许直接拖动组件（布局设置 / 托盘菜单里都能开关） */
-const allowDrag = computed(() => props.config.runtime.window.allowDrag !== false)
-
-const hintText = computed(() => {
-  if (!resolved.value || !result.value) return ''
-  const custom = resolved.value.text.hint.trim()
-  if (custom) return custom
-  return formatDateLabel(
-    resolved.value.target,
-    result.value.effective,
-    props.config.runtime.language
-  )
-})
-
-const statusText = computed(() => {
-  if (!resolved.value || !result.value) return ''
-  const text = resolved.value.text
-  if (result.value.state === 'future') {
-    return applyTemplate(text.futureText, { days: result.value.days })
-  }
-  if (result.value.state === 'today') {
-    return applyTemplate(text.todayText, { days: 0 })
-  }
-  if (props.config.behavior.showPastDays && !text.pastText.includes('{days}')) {
-    return `${text.pastText} · ${absDays.value}`
-  }
-  return applyTemplate(text.pastText, { days: absDays.value })
-})
-
-interface PrecisePart {
-  value: string
-  label: string
-}
-
-/** 显示模式：'days' 走大数字 + 单位，其余三种走「大数字 + 小标签」序列 */
-const precisionMode = computed<PrecisionMode | null>(() =>
-  props.config.behavior.displayMode === 'days' ? null : props.config.behavior.displayMode
+const allowDrag = computed(
+  () => props.config.runtime.window.allowDrag !== false && !clickThrough.value
 )
-
-const preciseParts = computed<PrecisePart[]>(() => {
-  const mode = precisionMode.value
-  if (!mode || !resolved.value || !result.value) return []
-  return buildPrecisionParts(
-    mode,
-    props.config.behavior.showDaysInPrecise,
-    resolved.value.text.unit,
-    result.value
-  )
-})
 
 /** 透明窗口默认让点击穿透到桌面，只有指针落在卡片上才恢复命中 */
 function syncInteractive(): void {
-  const el = card.value ?? emptyCard.value
+  const el = cardNode()
   if (!el) return
-  // 拖动期间必须一直保持命中，否则指针甩出卡片就会丢掉拖动
-  const next = hoverLocked.value || dragging.value
+  // 点击穿透模式下永远不恢复命中；拖动期间必须保持命中，否则指针甩出卡片就会丢掉拖动
+  const next = clickThrough.value
+    ? false
+    : hoverLocked.value || dragging.value
   if (next === interactive) return
   interactive = next
+  // 主进程会在应用状态前用 clickThrough 判一次「是否真的需要穿透」，渲染层的这次调用
+  // 只负责把状态同步过去，因此即便两边判断一致也不会互相打架
   window.cd.setInteractive(next)
   if (stage.value) stage.value.dataset.interactive = interactive ? 'true' : 'false'
 }
@@ -279,8 +194,9 @@ function endDrag(): void {
 
 function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0) return
+  if (!allowDrag.value) return
   if (props.config.runtime.window.allowDrag === false) return
-  const el = (event.currentTarget as HTMLElement | null) ?? card.value ?? emptyCard.value
+  const el = (event.currentTarget as HTMLElement | null) ?? cardNode()
   if (!el) return
   const rect = el.getBoundingClientRect()
   if (rect.width < 2 || rect.height < 2) return
@@ -309,14 +225,37 @@ function pointIn(el: HTMLElement | null, x: number, y: number, pad = 4): boolean
 
 /** 主进程轮询到的屏幕坐标（透明窗口收不到鼠标事件，靠它判断命中） */
 function onGlobalCursor(point: { x: number; y: number }): void {
-  const clientX = point.x - window.screenX
-  const clientY = point.y - window.screenY
-  const el = card.value ?? emptyCard.value
-  hoverLocked.value = pointIn(el, clientX, clientY)
+  // 穿透期间虽然不处理命中，但坐标要一直记着：关掉穿透的那一刻要靠它立刻恢复命中
+  lastPoint = point
+  if (clickThrough.value) return
+  hoverLocked.value = pointIn(cardNode(), point.x - window.screenX, point.y - window.screenY)
   if (stage.value) {
-    stage.value.dataset.hoverPoint = `${Math.round(clientX)},${Math.round(clientY)}`
+    stage.value.dataset.hoverPoint = `${Math.round(point.x - window.screenX)},${Math.round(
+      point.y - window.screenY
+    )}`
   }
   syncInteractive()
+}
+
+/**
+ * 关闭点击穿透那一刻的兜底判定。
+ *
+ * 指针可能正停在卡片上而且一动不动：主进程的光标轮询只对「坐标变化」发事件，
+ * 复位后的命中状态就没人再上报，组件会一直不可点（表现为「关了穿透还是点不到」）。
+ *
+ * 渲染进程拿不到全局光标位置，但主进程推来的最后一次坐标是有效的：
+ * 用它 + 当前窗口位置重新算一次即可，指针真移开了的话，
+ * 下一次轮询（80ms 一次）会用新坐标纠正回来。
+ */
+function relocalizeHover(): void {
+  const el = cardNode()
+  if (!el) return
+  if (lastPoint) {
+    hoverLocked.value = pointIn(el, lastPoint.x - window.screenX, lastPoint.y - window.screenY)
+    return
+  }
+  // 还从没收到过光标位置：用 :hover 兜底（Chromium 会按真实指针位置计算）
+  hoverLocked.value = el.matches(':hover')
 }
 
 let unhookCursor: (() => void) | null = null
@@ -329,9 +268,6 @@ function onPointerUp(): void {
 }
 
 onMounted(async () => {
-  timer = window.setInterval(() => {
-    nowRef.value = new Date()
-  }, 1000)
   if (stage.value) stage.value.dataset.interactive = 'false'
   window.addEventListener('pointerup', onPointerUp)
   window.addEventListener('pointercancel', onPointerUp)
@@ -341,6 +277,8 @@ onMounted(async () => {
   // 否则「显示前指针已经在卡片上」时会被误判成不需要恢复命中
   unhookShown = window.cd.onWidgetShown(() => {
     interactive = false
+    hoverLocked.value = false
+    lastPoint = null
     if (stage.value) stage.value.dataset.interactive = 'false'
   })
   try {
@@ -358,15 +296,33 @@ onMounted(async () => {
     observer.observe(shrink.value)
     resizeObserver = observer
   }
+  syncInteractive()
 })
 
 /** 配置变化后重新测量（等 DOM 更新完） */
 watch(
-  () => [props.config, resolved.value] as const,
+  () => [props.config, card.resolved.value] as const,
   () => {
     void nextTick(measureShrink)
   }
 )
+
+/**
+ * 点击穿透开关变化：立刻重新判定命中状态。
+ *
+ * 关闭穿透时指针可能正停在卡片上而且一动不动，主进程的光标轮询不会再产生新事件，
+ * 这里必须主动做一次本地判定（用真实屏幕坐标算，而不是盲目置 true），
+ * 否则组件会一直保持「不接收鼠标」，表现为「关了穿透还是点不到」。
+ */
+watch(clickThrough, (value) => {
+  if (value) {
+    hoverLocked.value = false
+    syncInteractive()
+    return
+  }
+  relocalizeHover()
+  syncInteractive()
+})
 
 /** 拖动状态对外暴露，便于自动化验证与调试 */
 watch(dragging, (value) => {
@@ -374,7 +330,6 @@ watch(dragging, (value) => {
 })
 
 onBeforeUnmount(() => {
-  if (timer) window.clearInterval(timer)
   resizeObserver?.disconnect()
   window.removeEventListener('pointerup', onPointerUp)
   window.removeEventListener('pointercancel', onPointerUp)

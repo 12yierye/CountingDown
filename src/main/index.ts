@@ -35,6 +35,7 @@ import { setPreviewItem } from './preview'
 import type { AppConfig, CountdownItem, HostInfo } from '../shared/types'
 
 export { trayMenuSnapshot } from './tray'
+export { previewOverlay } from './preview'
 
 type Corner = AppConfig['runtime']['window']['corner']
 
@@ -167,6 +168,12 @@ function registerIpc(): void {
   ipcMain.handle('runtime:hideAll', () => {
     setWidgetVisible(false)
     getSettingsWindow()?.hide()
+    return true
+  })
+
+  /** 托盘菜单内容变化后立刻重建菜单（标题、勾选状态都由配置派生） */
+  ipcMain.handle('runtime:refreshTray', () => {
+    refreshTray()
     return true
   })
 

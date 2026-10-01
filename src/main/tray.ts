@@ -63,20 +63,25 @@ function resolveTrayImage(): Electron.NativeImage {
 function buildMenu(): Menu {
   const config = getConfig()
   const text = dict()
-  return Menu.buildFromTemplate([
-    {
-      label: config.runtime.widgetVisible ? text.hide : text.show,
-      click: () => {
-        toggleWidgetVisible()
-        refreshTray()
-      }
-    },
-    {
-      label: text.settings,
-      click: () => createSettingsWindow()
-    },
-    { type: 'separator' },
-    {
+  const tray = config.runtime.trayMenu
+  const template: Electron.MenuItemConstructorOptions[] = []
+
+  // 「显示 / 隐藏倒数日」与「设置」是托盘最基本的两个入口，这里始终保留
+  template.push({
+    label: config.runtime.widgetVisible ? text.hide : text.show,
+    click: () => {
+      toggleWidgetVisible()
+      refreshTray()
+    }
+  })
+  template.push({
+    label: text.settings,
+    click: () => createSettingsWindow()
+  })
+
+  const extras: Electron.MenuItemConstructorOptions[] = []
+  if (tray.resetPosition !== false) {
+    extras.push({
       label: text.resetPosition,
       click: () => {
         // 「吸附」= 回到右上角并清空偏移量（角落与参考基准一起改，否则位置不会真的回到右上角）
@@ -87,8 +92,10 @@ function buildMenu(): Menu {
         setWidgetVisible(true)
         refreshTray()
       }
-    },
-    {
+    })
+  }
+  if (tray.allowDrag !== false) {
+    extras.push({
       label: text.allowDrag,
       type: 'checkbox',
       checked: config.runtime.window.allowDrag !== false,
@@ -96,14 +103,18 @@ function buildMenu(): Menu {
         updateConfig({ runtime: { window: { allowDrag: item.checked } } })
         refreshTray()
       }
-    },
-    {
+    })
+  }
+  if (tray.alwaysOnTop !== false) {
+    extras.push({
       label: text.alwaysOnTop,
       type: 'checkbox',
       checked: config.behavior.alwaysOnTop,
       click: (item) => updateConfig({ behavior: { alwaysOnTop: item.checked } })
-    },
-    {
+    })
+  }
+  if (tray.startAtLogin !== false) {
+    extras.push({
       label: text.startup,
       type: 'checkbox',
       checked: config.runtime.startAtLogin,
@@ -112,18 +123,29 @@ function buildMenu(): Menu {
         if (!app.isPackaged) return
         app.setLoginItemSettings({ openAtLogin: item.checked, args: ['--hidden'] })
       }
-    },
-    { type: 'separator' },
-    { label: text.hotkeyHint(config.runtime.toggleHotkey), enabled: false },
-    { type: 'separator' },
-    {
-      label: text.quit,
-      click: () => {
-        ;(app as unknown as { isQuitting?: boolean }).isQuitting = true
-        app.quit()
-      }
+    })
+  }
+  if (extras.length) {
+    template.push({ type: 'separator' }, ...extras)
+  }
+
+  if (tray.hotkey !== false) {
+    template.push(
+      { type: 'separator' },
+      { label: text.hotkeyHint(config.runtime.toggleHotkey), enabled: false }
+    )
+  }
+
+  // 「退出」不能关闭，也不放进设置里
+  template.push({ type: 'separator' }, {
+    label: text.quit,
+    click: () => {
+      ;(app as unknown as { isQuitting?: boolean }).isQuitting = true
+      app.quit()
     }
-  ])
+  })
+
+  return Menu.buildFromTemplate(template)
 }
 
 export function refreshTray(): void {

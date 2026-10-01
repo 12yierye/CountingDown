@@ -10,6 +10,7 @@ import { config, loadConfig, patchConfig, resetConfig } from '@/composables/useC
 import { onSaved } from '@/utils/misc'
 import CountdownPreview from '@/components/CountdownPreview.vue'
 import PresetGallery from '@/components/PresetGallery.vue'
+import type { PresetSaveTarget } from '@/components/PresetGallery.vue'
 import CountdownList from '@/list/CountdownList.vue'
 import TargetPanel from '@/settings/panels/TargetPanel.vue'
 import AppearancePanel from '@/settings/panels/AppearancePanel.vue'
@@ -35,6 +36,15 @@ type SectionId =
   | 'about'
 
 const section = ref<SectionId>('list')
+
+/**
+ * 实时预览：全局样式页展示「元旦 1 月 1 日」这一份样板，
+ * 因此标题与日期都固定，只有外观与文案跟随全局设置。
+ * 倒数日列表页有自己的逐项预览，系统集成与关于页没有可预览的东西，都不显示。
+ */
+const showPreview = computed(
+  () => section.value !== 'list' && section.value !== 'integration' && section.value !== 'about'
+)
 
 interface NavGroup {
   id: string
@@ -93,16 +103,34 @@ async function applyPreset(
 }
 
 /** 把当前全局外观存成自定义预设 */
-async function saveCurrentPreset(name: string): Promise<void> {
+async function savePreset(payload: {
+  name: string
+  appearance: AppConfig['appearance']
+  target: PresetSaveTarget
+  itemId: string
+  tune: boolean
+}): Promise<void> {
   const preset: CustomPreset = {
     id: `cp_${Date.now().toString(36)}`,
-    name,
+    name: payload.name,
     createdAt: Date.now(),
-    appearance: JSON.parse(JSON.stringify(config.value.appearance)) as AppConfig['appearance']
+    appearance: JSON.parse(JSON.stringify(payload.appearance)) as AppConfig['appearance']
+  }
+  // 顺序很重要：先把外观写进去，再追加预设，避免第二次 patch 覆盖掉第一次的结果
+  if (payload.target === 'global') {
+    await patchConfig({ appearance: payload.appearance })
+  } else if (payload.itemId) {
+    const countdowns = config.value.countdowns.map((item) =>
+      item.id === payload.itemId
+        ? { ...item, appearance: { ...item.appearance, ...payload.appearance } }
+        : item
+    )
+    await patchConfig({ countdowns })
   }
   await patchConfig({ customPresets: [preset, ...config.value.customPresets] })
-  presetSaving.value = false
-  ElMessage.success(t('preset.saved', { name }))
+  ElMessage.success(t('preset.saved', { name: payload.name }))
+  // 「手动调整所有参数」直接带到外观设置页，方便继续微调
+  if (payload.tune) section.value = 'appearance'
 }
 
 async function removePreset(id: string): Promise<void> {
@@ -110,8 +138,6 @@ async function removePreset(id: string): Promise<void> {
   await patchConfig({ customPresets: config.value.customPresets.filter((item) => item.id !== id) })
   if (target) ElMessage.success(t('preset.removed', { name: target.name }))
 }
-
-const presetSaving = ref(false)
 
 async function snapCorner(corner: Corner): Promise<void> {
   await window.cd.snapCorner(corner)
@@ -229,10 +255,10 @@ watch(
           </div>
         </header>
 
-        <div v-if="section !== 'list'" class="settings-preview">
+        <div v-if="showPreview" class="settings-preview">
           <div class="preview-wrap">
             <div class="preview-wrap__label">{{ t('common.preview') }}</div>
-            <CountdownPreview :config="config" />
+            <CountdownPreview :config="config" sample />
           </div>
         </div>
 
@@ -270,11 +296,12 @@ watch(
           />
           <PresetGallery
             v-else-if="section === 'preset'"
-            v-model:saving="presetSaving"
             :appearance="config.appearance"
+            :text="config.text"
+            :countdowns="config.countdowns"
             :custom-presets="config.customPresets"
             @apply="applyPreset"
-            @save-current="saveCurrentPreset"
+            @save="savePreset"
             @remove="removePreset"
           />
           <AboutPanel v-else :config="config" @patch="(p: unknown) => patch(p)" />
@@ -293,9 +320,15 @@ watch(
 }
 
 .preview-wrap__label {
-  padding: 8px 14px 0;
+  /* 「实时预览」四个字不能贴着预览容器：留出一行文字的呼吸空间 */
+  padding: 10px 14px 0;
   font-size: 12px;
+  line-height: 1.6;
   color: var(--el-text-color-secondary);
+}
+
+.preview-wrap :deep(.preview) {
+  padding: 14px 14px 16px;
 }
 
 .saved-fade-enter-active,
