@@ -8,20 +8,20 @@ import type {
   FieldResolution,
   PrecisionMode,
   ResolvedCountdown,
-  SeparatorConfig,
-  SeparatorOverride,
   TargetConfig,
   TextConfig,
   TextOverride,
   TextStyle,
   ThemePreset,
   TrayMenuConfig,
+  UnitLabelConfig,
+  UnitLabelOverride,
   VisibilityOverride,
   VisibilityResolution
 } from './types'
 
-/** 可覆盖的文案字段（不含三个显示开关） */
-type TextFieldKey = 'hint' | 'futureText' | 'todayText' | 'pastText' | 'unit'
+/** 可覆盖的文案字段（不含两个显示开关） */
+type TextFieldKey = 'hint' | 'futureText' | 'todayText' | 'pastText'
 
 export const DAY_MS = 86_400_000
 
@@ -65,15 +65,13 @@ function emptyTextOverride(): TextOverride {
     futureText: '',
     todayText: '',
     pastText: '',
-    unit: '',
     showHint: 'inherit',
-    showStatus: 'inherit',
-    showUnit: 'inherit'
+    showStatus: 'inherit'
   }
 }
 
-function emptySeparatorOverride(): SeparatorOverride {
-  return { enabled: false, hm: '', ms: '' }
+function emptyUnitOverride(): UnitLabelOverride {
+  return { enabled: false, ...BUILTIN_UNITS }
 }
 
 function emptyTarget(): TargetConfig {
@@ -87,7 +85,7 @@ export function createCountdownItem(partial: Partial<CountdownItem> = {}): Count
     enabled: partial.enabled ?? true,
     target: partial.target ?? emptyTarget(),
     text: { ...emptyTextOverride(), ...(partial.text ?? {}) },
-    separator: { ...emptySeparatorOverride(), ...(partial.separator ?? {}) },
+    units: { ...emptyUnitOverride(), ...(partial.units ?? {}) },
     appearance: partial.appearance ?? {}
   }
 }
@@ -101,30 +99,50 @@ export const BUILTIN_TEXT: TextConfig = {
   futureText: '还有 {days} 天',
   todayText: '就在今天！',
   pastText: '已远去',
-  unit: '天',
   showHint: true,
-  showStatus: true,
-  showUnit: true
+  showStatus: true
 }
 
-/** 内置兜底的分隔符：天/时/分 都用中文单位，最后一段不带分隔 */
-export const BUILTIN_SEPARATOR: SeparatorConfig = { hm: '时', ms: '分' }
+/** 四个分段的默认单位字 */
+export const BUILTIN_UNITS: UnitLabelConfig = { day: '天', hour: '时', minute: '分', second: '秒' }
 
-/** 分隔符下拉里的常见选项（仍可自由输入） */
-export const SEPARATOR_PRESETS = [':', '时', '分', '秒', '·', ' ', '天'] as const
-
-/** 单项分隔符 -> 全局分隔符 -> 内置默认 */
-export function resolveSeparator(
-  override: SeparatorOverride | undefined,
-  global: SeparatorConfig | undefined
-): SeparatorConfig {
-  if (override?.enabled) {
-    return { hm: override.hm ?? '', ms: override.ms ?? '' }
+/**
+ * 单位字兜底，并把旧结构迁移过来：
+ * - 旧版把「天」这个字放在 text.unit 里（单项在 text.unit 覆盖），现在归到 units.day；
+ * - 旧版把三个边界拆成 separator.hour / minute / second，现在这层概念没有了
+ *   —— 单位字本身就是分隔，所以只把它们当默认值用：谁在 separator 里填了非空的
+ *   内容，就把它当成该分段的单位字（例如填 `:` 就得到 `92:`）。
+ */
+export function normalizeUnits(
+  input: Partial<UnitLabelConfig> | undefined,
+  legacy: {
+    separator?: Partial<Record<'hour' | 'minute' | 'second', unknown>>
+    textUnit?: unknown
+  } = {},
+  fallback: UnitLabelConfig = BUILTIN_UNITS
+): UnitLabelConfig {
+  const pick = (value: unknown, alt: string): string => {
+    if (typeof value === 'string') return value.slice(0, 8)
+    return alt
   }
+  const sep = legacy.separator ?? {}
+  const legacyTextUnit = typeof legacy.textUnit === 'string' ? legacy.textUnit : ''
   return {
-    hm: global?.hm ?? BUILTIN_SEPARATOR.hm,
-    ms: global?.ms ?? BUILTIN_SEPARATOR.ms
+    day: pick(input?.day, pick(legacyTextUnit, fallback.day)),
+    hour: pick(input?.hour, pick(sep.hour, fallback.hour)),
+    minute: pick(input?.minute, pick(sep.minute, fallback.minute)),
+    second: pick(input?.second, pick(sep.second, fallback.second))
   }
+}
+
+/** 单项单位字 -> 全局单位字 -> 内置默认 */
+export function resolveUnits(
+  override: UnitLabelOverride | undefined,
+  global: UnitLabelConfig | undefined
+): UnitLabelConfig {
+  const base = normalizeUnits(global)
+  if (override?.enabled) return normalizeUnits(override, {}, base)
+  return base
 }
 
 /** 副标题/状态文案的显示与否：单项三态优先，其次全局 */
@@ -155,7 +173,7 @@ export function resolveText(
   item: TextOverride | undefined,
   global: TextConfig
 ): Record<TextFieldKey, FieldResolution> {
-  const keys: TextFieldKey[] = ['hint', 'futureText', 'todayText', 'pastText', 'unit']
+  const keys: TextFieldKey[] = ['hint', 'futureText', 'todayText', 'pastText']
   const out = {} as Record<TextFieldKey, FieldResolution>
   for (const key of keys) out[key] = resolveTextField(item, global, key)
   return out
@@ -201,10 +219,8 @@ export function createDefaultConfig(): AppConfig {
       futureText: '还有 {days} 天',
       todayText: '就在今天！',
       pastText: '已远去',
-      unit: '天',
       showHint: true,
-      showStatus: true,
-      showUnit: true
+      showStatus: true
     },
     appearance: {
       fontFamily:
@@ -229,8 +245,7 @@ export function createDefaultConfig(): AppConfig {
     behavior: {
       displayMode: 'days',
       showDaysInPrecise: true,
-      separatorHM: BUILTIN_SEPARATOR.hm,
-      separatorMS: BUILTIN_SEPARATOR.ms,
+      units: { ...BUILTIN_UNITS },
       showPastDays: false,
       alwaysOnTop: true
     },
@@ -304,13 +319,32 @@ export function mergeConfig(base: AppConfig, patch: unknown): AppConfig {
 }
 
 function normalizeItem(item: CountdownItem): CountdownItem {
+  const legacyText = (item.text ?? {}) as { unit?: unknown }
+  const raw = item as {
+    units?: Partial<UnitLabelConfig> & { enabled?: unknown }
+    separator?: Record<'hour' | 'minute' | 'second', unknown>
+  }
+  // 旧版把「天」放在单项 text.unit 里，这里搬到 units.day
+  const labels = normalizeUnits(
+    raw.units,
+    { separator: raw.separator, textUnit: legacyText.unit },
+    BUILTIN_UNITS
+  )
+  /*
+   * 没开覆盖时四个字一律写成空串：草稿侧（CountdownEditor.computeItem）就是这么组装的，
+   * 两边形状必须完全一致，否则一个没动过的项会被判成「有未保存修改」。
+   * 真正生效的值由全局决定，存进来的空值没有语义。
+   */
+  const enabled = raw.units?.enabled === true || raw.separator !== undefined
   return {
     id: item.id || createItemId(),
     name: item.name ?? '',
     enabled: item.enabled !== false,
     target: item.target ?? emptyTarget(),
     text: { ...emptyTextOverride(), ...(item.text ?? {}) },
-    separator: { ...emptySeparatorOverride(), ...(item.separator ?? {}) },
+    units: enabled
+      ? { ...labels, enabled: true }
+      : { enabled: false, day: '', hour: '', minute: '', second: '' },
     appearance: normalizeOverride(item.appearance)
   }
 }
@@ -337,12 +371,6 @@ function normalizeOverride(input: AppearanceOverride | undefined): AppearanceOve
 /** 全部合法的显示模式，用于兜底非法值（旧配置 / 手改配置） */
 const DISPLAY_MODES: DisplayMode[] = ['days', 'days-hours', 'days-hours-minutes', 'precise']
 
-/** 分隔符兜底：非字符串一律回落到内置默认，长度也收一收 */
-function normalizeSeparator(value: unknown, fallback: string): string {
-  if (typeof value !== 'string') return fallback
-  return value.slice(0, 6)
-}
-
 /** 行为配置兜底：显示模式只认已知的四种，其余回落到「只显示天数」 */
 function normalizeBehavior(input: BehaviorConfig | undefined): BehaviorConfig {
   const fallback = createDefaultConfig().behavior
@@ -350,8 +378,15 @@ function normalizeBehavior(input: BehaviorConfig | undefined): BehaviorConfig {
   return {
     displayMode: DISPLAY_MODES.includes(source.displayMode) ? source.displayMode : fallback.displayMode,
     showDaysInPrecise: source.showDaysInPrecise !== false,
-    separatorHM: normalizeSeparator(source.separatorHM, fallback.separatorHM),
-    separatorMS: normalizeSeparator(source.separatorMS, fallback.separatorMS),
+    // 旧结构（text.unit / separator.* ）在 normalizeUnits 里一并迁移
+    units: normalizeUnits(
+      source.units,
+      {
+        separator: (source as { separator?: Record<'hour' | 'minute' | 'second', unknown> })
+          .separator
+      },
+      fallback.units
+    ),
     showPastDays: source.showPastDays === true,
     alwaysOnTop: source.alwaysOnTop !== false
   }
@@ -451,7 +486,8 @@ export function migrateLegacy(raw: unknown): unknown {
   const source = raw as Record<string, unknown>
   if (Array.isArray(source.countdowns) && source.countdowns.length > 0) return raw
   const legacyTarget = source.target as TargetConfig | undefined
-  const legacyText = source.text as TextConfig | undefined
+  // 旧配置的 text 里还有 title / unit 这些字段，读取时按宽松结构处理
+  const legacyText = source.text as (Partial<TextConfig> & { title?: string; unit?: string }) | undefined
   const legacyAppearance = source.appearance as AppearanceConfig | undefined
   if (!legacyTarget && !legacyText) return raw
 
@@ -485,10 +521,13 @@ export function migrateLegacy(raw: unknown): unknown {
       futureText: legacyText?.futureText || '还有 {days} 天',
       todayText: legacyText?.todayText || '就在今天！',
       pastText: legacyText?.pastText || '已远去',
-      unit: legacyText?.unit || '天',
       showHint: true,
-      showStatus: true,
-      showUnit: true
+      showStatus: true
+    },
+    // 旧版的「天」在 text.unit 里，搬到单位字配置
+    behavior: {
+      ...(rest.behavior as object | undefined),
+      units: normalizeUnits(undefined, { textUnit: legacyText?.unit }, BUILTIN_UNITS)
     }
   }
 }
@@ -539,7 +578,7 @@ function mergeBackground(
 
 /** 文案覆盖：空字符串表示跟随全局 */
 export function mergeText(base: TextConfig, override?: TextOverride): TextConfig {
-  const keys: TextFieldKey[] = ['hint', 'futureText', 'todayText', 'pastText', 'unit']
+  const keys: TextFieldKey[] = ['hint', 'futureText', 'todayText', 'pastText']
   const out = { ...base }
   for (const key of keys) {
     out[key] = resolveTextField(override, base, key).value
@@ -570,11 +609,7 @@ export function resolveCountdown(config: AppConfig, item: CountdownItem): Resolv
     text: { title: item.name, ...mergeText(config.text, item.text) },
     showHint: resolveVisibility(item.text?.showHint, config.text.showHint).show,
     showStatus: resolveVisibility(item.text?.showStatus, config.text.showStatus).show,
-    showUnit: resolveVisibility(item.text?.showUnit, config.text.showUnit !== false).show,
-    separator: resolveSeparator(item.separator, {
-      hm: config.behavior.separatorHM,
-      ms: config.behavior.separatorMS
-    }),
+    units: resolveUnits(item.units, config.behavior.units),
     appearance: mergeAppearance(config.appearance, item.appearance)
   }
 }
@@ -709,48 +744,40 @@ export interface PrecisionPart {
 }
 
 /**
- * 按显示模式组装「数字 + 单位/分隔符」序列。桌面组件与设置里的预览共用这一份，
+ * 按显示模式组装「分段」序列。桌面组件与设置里的预览共用这一份，
  * 免得两边的模式判断各写一遍、改一处漏一处。
  *
- * 分隔符不写死成冒号，而是由 SeparatorConfig 决定，用户可以选「:」「时」或自己写的符号。
- * 规则：每一段带的是**它自己的单位**（天/时/分），秒不带动词也不需要分隔符，
- * 因此末尾永远不会出现 `46分 11:` 这种多余尾巴；单位本身取对应那一档的分隔符，
- * 所以换掉分隔符就等于换掉那个单位字：
+ * 每一段是「数字 + 单位字」，单位字来自 UnitLabelConfig，默认「天 / 时 / 分 / 秒」，
+ * 用户可以逐个换成别的字（`天`→`D`、`时`→`h`），留空就表示这一段不带单位：
  *
- * - days-hours          天 + 时                → `95天 02时`
- * - days-hours-minutes  天 + 时 + 分           → `95天 02时 46分`
- * - precise             天 + 时 + 分 + 秒      → `95天 02时 46分 11`
- * - precise + 不含天数                         → `02时 46分 11`
- * - 分隔符改成 `:`                             → `95天 02: 46: 11`
+ *   默认                → `92天04时36分45秒`
+ *   天换 D、时换 h      → `92D04h36分45秒`
+ *   时留空              → `92天0436分45秒`
+ *   天留空（days 模式）  → `92`
  *
- * 「时与分之间」这一档在两个模式下是同一个设置：
- * `天+时+分` 里它出现在 46 后面，`天+时+分+秒` 里同时出现在 46 和 11 前面，
- * 所以两个显示模式选项展示出来的那一档必须一模一样。
+ * 单位字本身就把两段分开了，所以不再有单独的「分隔符」概念 ——
+ * 想让两段之间有空格或冒号，直接把它写进单位字里（写 `"天 "` 或 `"天:"`）。
+ *
+ * 某一段不渲染时它就不会出现：`天 + 时` 里根本没有分钟那一段，
+ * 「天」留空时 days 模式就只剩一个数字（等价于旧的「不显示天数单位」开关）。
  */
 export function buildPrecisionParts(
   mode: PrecisionMode,
   showDays: boolean,
-  unit: string,
-  separator: SeparatorConfig,
+  units: UnitLabelConfig,
   result: CountdownResult
 ): PrecisionPart[] {
   const withDays = mode !== 'precise' || showDays
-  // 每一段记下它所属的单位；单位是后面挑分隔符的依据，与「是不是最后一段」无关
-  const entries: Array<{ value: string; kind: 'day' | 'hour' | 'minute' | 'second' }> = []
-  if (withDays) entries.push({ value: String(Math.abs(result.days)), kind: 'day' })
-  entries.push({ value: pad2(result.hours), kind: 'hour' })
-  if (mode !== 'days-hours') entries.push({ value: pad2(result.minutes), kind: 'minute' })
-  if (mode === 'precise') entries.push({ value: pad2(result.seconds), kind: 'second' })
+  const hasMinutes = mode !== 'days-hours'
+  const hasSeconds = mode === 'precise'
 
-  const labelOf = (kind: 'day' | 'hour' | 'minute' | 'second'): string => {
-    if (kind === 'day') return unit
-    if (kind === 'hour') return separator.hm
-    if (kind === 'minute') return separator.ms
-    // 秒之后没有东西需要分隔，所以永远不带标签
-    return ''
-  }
+  const segments: Array<{ value: string; unit: string }> = []
+  if (withDays) segments.push({ value: String(Math.abs(result.days)), unit: units.day })
+  segments.push({ value: pad2(result.hours), unit: units.hour })
+  if (hasMinutes) segments.push({ value: pad2(result.minutes), unit: units.minute })
+  if (hasSeconds) segments.push({ value: pad2(result.seconds), unit: units.second })
 
-  return entries.map((entry) => ({ value: entry.value, label: labelOf(entry.kind) }))
+  return segments.map((segment) => ({ value: segment.value, label: segment.unit }))
 }
 
 export function applyTemplate(template: string, vars: Record<string, string | number>): string {

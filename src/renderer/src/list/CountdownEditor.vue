@@ -14,13 +14,14 @@ import {
   createCountdownItem,
   isTargetBlank,
   resolveTarget,
-  resolveText,
-  SEPARATOR_PRESETS
+  resolveText
 } from '@shared/defaults'
 import { toPlain } from '@/composables/useConfig'
 import { FONT_STACKS } from '@/utils/style'
+import { modeSlots } from '@/utils/preview'
 import FieldRow from '@/components/FieldRow.vue'
 import ColorField from '@/components/ColorField.vue'
+import UnitLabelField from '@/components/UnitLabelField.vue'
 import TextStyleEditor from '@/components/TextStyleEditor.vue'
 import SliderField from '@/components/SliderField.vue'
 
@@ -54,9 +55,9 @@ interface Draft {
   dateTouched: boolean
   useText: boolean
   text: CountdownItem['text']
-  /** 是否单独覆盖时分秒之间的分隔符 */
-  separatorCustom: boolean
-  separator: CountdownItem['separator']
+  /** 是否单独覆盖四个单位字 */
+  unitsCustom: boolean
+  units: CountdownItem['units']
 }
 
 const draft = reactive<Draft>({
@@ -70,8 +71,8 @@ const draft = reactive<Draft>({
   dateTouched: false,
   useText: false,
   text: createCountdownItem().text,
-  separatorCustom: false,
-  separator: createCountdownItem().separator
+  unitsCustom: false,
+  units: createCountdownItem().units
 })
 
 const appearance = ref<AppearanceOverride>({})
@@ -96,12 +97,17 @@ function syncFromItem(item: CountdownItem): void {
 
   draft.text = { ...createCountdownItem().text, ...(item.text ?? {}) }
   draft.useText = (
-    ['hint', 'futureText', 'todayText', 'pastText', 'unit'] as const
+    ['hint', 'futureText', 'todayText', 'pastText'] as const
   ).some((key) => String(draft.text[key] ?? '').trim().length > 0)
 
-  const separator = { ...createCountdownItem().separator, ...(item.separator ?? {}) }
-  draft.separatorCustom = separator.enabled === true
-  draft.separator = separator
+  /*
+   * 单位字覆盖：草稿里放的必须是**配置里存的那一份**，不能提前塞进全局值
+   * —— 否则「有未保存修改」的比较会把一个没动过的项判成脏的（打开新建页就弹放弃对话框）。
+   * 打开覆盖开关时再把全局当前值填进去（见 toggleUnitsOverride）。
+   */
+  const savedUnits = { ...createCountdownItem().units, ...(item.units ?? {}) }
+  draft.unitsCustom = savedUnits.enabled === true
+  draft.units = savedUnits
 
   appearance.value = JSON.parse(JSON.stringify(item.appearance ?? {})) as AppearanceOverride
   useAppearance.value = Object.keys(appearance.value).length > 0
@@ -130,7 +136,7 @@ function snapshotOf(item: CountdownItem): string {
     targetBlank: isTargetBlank(item.target),
     target: item.target,
     text: item.text,
-    separator: item.separator,
+    units: item.units,
     appearance: item.appearance
   })
 }
@@ -149,22 +155,25 @@ function computeItem(): CountdownItem {
       ? { mode: draft.mode, date: draft.date, month: draft.month, day: draft.day }
       : props.item.target,
     text: { ...createCountdownItem().text, ...cleanText(draft.text), ...visibilityPatch() },
-    separator: draft.separatorCustom
-      ? { enabled: true, hm: draft.separator.hm, ms: draft.separator.ms }
-      : { enabled: false, hm: '', ms: '' },
+    // 没开启覆盖时整组跟随全局
+    units: draft.unitsCustom
+      ? {
+          enabled: true,
+          day: draft.units.day,
+          hour: draft.units.hour,
+          minute: draft.units.minute,
+          second: draft.units.second
+        }
+      : { enabled: false, day: '', hour: '', minute: '', second: '' },
     appearance: useAppearance.value ? compact(appearance.value) : {}
   }
 }
 
-/** 显示开关（三个三态覆盖）单独取，避免被 cleanText 当普通字段过滤掉 */
-function visibilityPatch(): Pick<
-  CountdownItem['text'],
-  'showHint' | 'showStatus' | 'showUnit'
-> {
+/** 显示开关（两个三态覆盖）单独取，避免被 cleanText 当普通字段过滤掉 */
+function visibilityPatch(): Pick<CountdownItem['text'], 'showHint' | 'showStatus'> {
   return {
     showHint: draft.text.showHint,
-    showStatus: draft.text.showStatus,
-    showUnit: draft.text.showUnit
+    showStatus: draft.text.showStatus
   }
 }
 
@@ -231,7 +240,7 @@ watch(
 /** 只保留真正有内容的文案字段，空白字段继续跟随全局 */
 function cleanText(source: CountdownItem['text']): Partial<CountdownItem['text']> {
   const out: Partial<CountdownItem['text']> = {}
-  const keys = ['hint', 'futureText', 'todayText', 'pastText', 'unit'] as const
+  const keys = ['hint', 'futureText', 'todayText', 'pastText'] as const
   for (const key of keys) {
     const value = String(source[key] ?? '').trim()
     if (value) out[key] = value
@@ -386,7 +395,7 @@ const fontOptions = FONT_STACKS
 const backgroundFields = computed(() => appearance.value.background ?? {})
 
 /** placeholder：显示该字段「实际会生效的值」及其来源 */
-function followPlaceholder(key: 'hint' | 'futureText' | 'todayText' | 'pastText' | 'unit'): string {
+function followPlaceholder(key: 'hint' | 'futureText' | 'todayText' | 'pastText'): string {
   const resolved = globalText.value[key]
   if (!resolved.value) return t('common.followGlobalEmpty')
   const sourceLabel =
@@ -404,31 +413,29 @@ const targetFollowNote = computed(() => {
 
 const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {}).length > 0)
 
-/** 全局当前生效的分隔符，用作「跟随全局」时的占位提示 */
-const globalSeparator = computed(() => ({
-  hm: props.config.behavior.separatorHM,
-  ms: props.config.behavior.separatorMS
-}))
+/**
+ * 全局显示模式下真正渲染的分段。
+ * 它**只**决定编辑页里单位字输入框要不要标灰提示，不决定能否编辑：四项永远可编辑。
+ */
+const globalSlots = computed(() =>
+  modeSlots(props.config.behavior.displayMode, props.config.behavior.showDaysInPrecise)
+)
 
-function setSeparator(key: 'hm' | 'ms', value: string): void {
-  draft.separator = { ...draft.separator, [key]: value.slice(0, 6) }
+function setUnit(key: 'day' | 'hour' | 'minute' | 'second', value: string): void {
+  draft.units = { ...draft.units, [key]: value.slice(0, 8) }
 }
 
 /**
- * 打开「单独覆盖分隔符」时，用全局当前值作为起点，
+ * 打开「单独覆盖单位字」时，用全局当前值作为起点，
  * 这样用户是从现在看到的样子开始改，而不是从空白开始。
  */
-function toggleSeparatorOverride(value: boolean): void {
-  draft.separatorCustom = value
-  if (value && !draft.separator.hm && !draft.separator.ms) {
-    draft.separator = { enabled: true, ...globalSeparator.value }
+function toggleUnitsOverride(value: boolean): void {
+  draft.unitsCustom = value
+  if (value) {
+    draft.units = { ...draft.units, ...props.config.behavior.units, enabled: true }
     return
   }
-  draft.separator = { ...draft.separator, enabled: value }
-}
-
-function separatorText(value: string): string {
-  return value === '' ? t('behavior.separatorPlaceholder') : value
+  draft.units = { ...draft.units, enabled: false }
 }
 </script>
 
@@ -563,13 +570,6 @@ function separatorText(value: string): string {
         <el-radio-button value="hide">{{ t('target.hide') }}</el-radio-button>
       </el-radio-group>
     </FieldRow>
-    <FieldRow :label="t('target.showUnit')" :hint="t('target.showUnitHint')">
-      <el-radio-group v-model="draft.text.showUnit">
-        <el-radio-button value="inherit">{{ t('target.followGlobal') }}</el-radio-button>
-        <el-radio-button value="show">{{ t('target.show') }}</el-radio-button>
-        <el-radio-button value="hide">{{ t('target.hide') }}</el-radio-button>
-      </el-radio-group>
-    </FieldRow>
     <FieldRow :label="t('target.hintText')">
       <el-input v-model="draft.text.hint" :placeholder="followPlaceholder('hint')" maxlength="60" />
     </FieldRow>
@@ -594,21 +594,13 @@ function separatorText(value: string): string {
         maxlength="40"
       />
     </FieldRow>
-    <FieldRow :label="t('target.unit')">
-      <el-input
-        v-model="draft.text.unit"
-        :placeholder="followPlaceholder('unit')"
-        style="max-width: 200px"
-        maxlength="6"
-      />
-    </FieldRow>
 
-    <!-- 时分秒分隔符：默认跟随全局，开启后这一项可以单独用别的符号 -->
+    <!-- 单位字：默认跟随全局，开启后这一项可以把天/时/分/秒换成别的字 -->
     <el-divider content-position="left">
       <span class="divider-title">
-        {{ t('behavior.separatorTitle') }}
+        {{ t('behavior.unitsTitle') }}
         <el-tooltip
-          :content="`${t('behavior.separatorHint')}；${t('target.overrideSeparatorHint')}`"
+          :content="`${t('behavior.unitsHint')}；${t('target.overrideUnitsHint')}`"
           placement="top"
           :show-after="150"
         >
@@ -618,46 +610,28 @@ function separatorText(value: string): string {
         </el-tooltip>
       </span>
     </el-divider>
-    <FieldRow :label="t('target.overrideSeparator')" :hint="t('target.overrideSeparatorHint')">
+    <FieldRow :label="t('target.overrideUnits')" :hint="t('target.overrideUnitsHint')">
       <el-switch
-        :model-value="draft.separatorCustom"
-        @update:model-value="(v: string | number | boolean) => toggleSeparatorOverride(Boolean(v))"
+        :model-value="draft.unitsCustom"
+        @update:model-value="(v: string | number | boolean) => toggleUnitsOverride(Boolean(v))"
       />
     </FieldRow>
-    <div v-if="draft.separatorCustom" class="panel-grid-2">
-      <FieldRow
-        :label="t('behavior.separatorHM')"
-        :hint="t('behavior.separatorPreview', { value: separatorText(draft.separator.hm) })"
-      >
-        <el-select
-          :model-value="draft.separator.hm"
-          filterable
-          allow-create
-          default-first-option
-          style="max-width: 200px"
-          @update:model-value="(v: string) => setSeparator('hm', v)"
-        >
-          <el-option :label="t('behavior.separatorPlaceholder')" value="" />
-          <el-option v-for="preset in SEPARATOR_PRESETS" :key="preset" :label="preset" :value="preset" />
-        </el-select>
-      </FieldRow>
-      <FieldRow
-        :label="t('behavior.separatorMS')"
-        :hint="t('behavior.separatorPreview', { value: separatorText(draft.separator.ms) })"
-      >
-        <el-select
-          :model-value="draft.separator.ms"
-          filterable
-          allow-create
-          default-first-option
-          style="max-width: 200px"
-          @update:model-value="(v: string) => setSeparator('ms', v)"
-        >
-          <el-option :label="t('behavior.separatorPlaceholder')" value="" />
-          <el-option v-for="preset in SEPARATOR_PRESETS" :key="preset" :label="preset" :value="preset" />
-        </el-select>
-      </FieldRow>
-    </div>
+    <FieldRow v-if="draft.unitsCustom" stacked>
+      <UnitLabelField
+        :day="draft.units.day"
+        :hour="draft.units.hour"
+        :minute="draft.units.minute"
+        :second="draft.units.second"
+        :day-on="globalSlots.days"
+        :hour-on="globalSlots.hours"
+        :minute-on="globalSlots.minutes"
+        :second-on="globalSlots.seconds"
+        @update:day="(v: string) => setUnit('day', v)"
+        @update:hour="(v: string) => setUnit('hour', v)"
+        @update:minute="(v: string) => setUnit('minute', v)"
+        @update:second="(v: string) => setUnit('second', v)"
+      />
+    </FieldRow>
 
     <el-divider content-position="left">
       <span class="divider-title">
@@ -849,28 +823,25 @@ function separatorText(value: string): string {
 
 <style scoped>
 /*
- * 吸顶栏。::before 在栏体上方补一块同色背景，盖住滚动容器 padding 造成的缝隙
- * （sticky 的 top:0 相对滚动容器的 padding box 还是 content box 在各版本里并不一致，
- * 补一块底色两种情况都不会露出下面的滚动内容）。
+ * 吸顶操作栏。
+ *
+ * 关键点：sticky 的定位基准是滚动容器的 **padding box**，而 .settings-content 有
+ * 18px 的 padding-top —— 也就是说 `top: 0` 时栏体其实停在滚动视口顶端下方 18px 处，
+ * 上方那条缝会让下面的内容（首屏时是预览卡片的下边框）露出来。
+ * 所以这里直接把栏体上提一个 padding-top 的高度，让它真正贴住滚动视口顶端。
+ *
+ * 以前是靠一个 ::before 假元素去盖住那条缝，但那个假元素自身也会被当成滚动内容
+ * 推到容器外面，结果就是标题栏上方多出一块遮住边框的色块 —— 换成负偏移后不再需要它。
  */
 .editor-sticky {
   position: sticky;
-  top: 0;
+  /* 与 .settings-content 的 padding-top 保持一致；它变了这里也要跟着变 */
+  top: -18px;
   z-index: 5;
   margin-bottom: 16px;
   padding: 10px 16px 12px;
   border: 1px solid var(--el-border-color-light);
   border-radius: var(--cd-radius, 12px);
-  background: var(--el-bg-color);
-}
-
-.editor-sticky::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  height: 24px;
   background: var(--el-bg-color);
 }
 

@@ -1,4 +1,4 @@
-// 1.1.0 变更验证：显示格式 / 分隔符 / 文字透明度 / 天数单位 / 全局预览 /
+// 1.1.0 变更验证：显示格式 / 单位字 / 文字透明度 / 全局预览 /
 //                偏移方向 / 点击穿透 / 托盘菜单 / 预设保存与查看参数
 const { app, BrowserWindow, Tray, screen } = require('electron')
 const fs = require('node:fs')
@@ -29,7 +29,7 @@ try {
 
 /**
  * 目标日期取「明天」，这样无论今天几号，天/时/分/秒都有确定的值，
- * 显示格式（分隔符、单位）的断言才有意义。
+ * 显示格式（单位字）的断言才有意义。
  */
 const tomorrow = new Date(Date.now() + 86_400_000)
 const pad = (n) => String(n).padStart(2, '0')
@@ -45,12 +45,10 @@ const ITEM = {
     futureText: '还有 {days} 天',
     todayText: '就在今天！',
     pastText: '已远去',
-    unit: '天',
     showHint: 'inherit',
-    showStatus: 'inherit',
-    showUnit: 'inherit'
+    showStatus: 'inherit'
   },
-  separator: { enabled: false, hm: '', ms: '' },
+  units: { enabled: false, day: '', hour: '', minute: '', second: '' },
   appearance: {}
 }
 
@@ -64,8 +62,8 @@ fs.writeFileSync(
         behavior: {
           displayMode: 'days',
           showDaysInPrecise: true,
-          separatorHM: '时',
-          separatorMS: '分',
+          // 单位字默认就是「天 / 时 / 分 / 秒」
+          units: { day: '天', hour: '时', minute: '分', second: '秒' },
           showPastDays: false,
           alwaysOnTop: true
         },
@@ -171,6 +169,7 @@ const CARD_TEXT = `JSON.stringify((function(){
     title: title ? title.textContent.trim() : null,
     count: count ? count.textContent.replace(/\\s+/g,' ').trim() : null,
     hasUnit: !!(count && count.querySelector('.cd-card__unit')),
+    unit: (function(){ var u = count && count.querySelector('.cd-card__unit'); return u ? u.textContent : null; })(),
     parts: parts(precise),
     hint: hint ? hint.textContent.trim() : null,
     status: status ? status.textContent.trim() : null,
@@ -303,20 +302,23 @@ function windowAt(x, y, useCache = true) {
     const raw = String(out).replace(/^\uFEFF/, '').trim()
     const match = /TITLE\s+([0-9A-Fa-f ]*)/.exec(raw)
     const codepoints = (match ? match[1].trim().split(/\s+/) : []).filter(Boolean).map((h) => parseInt(h, 16))
-    result = { raw, text: String.fromCodePoint(...codepoints) }
+    const text = String.fromCodePoint(...codepoints)
+    // 必须精确比对：桌面上别的窗口标题里也可能带「倒数日」三个字（例如本项目的浏览器标签页），
+    // 用 includes 判定会把它们误认成组件窗口。
+    result = { raw, text, isWidget: text === '倒数日' }
   } catch (error) {
-    result = { raw: 'PROBE_FAIL ' + String(error), text: '' }
+    result = { raw: 'PROBE_FAIL ' + String(error), text: '', isWidget: false }
   }
   if (useCache) probeCache.set(key, result)
   return result
 }
 
-/** 该点归属的窗口是不是组件窗口（标题为「倒数日」，不含「设置」） */
+/** 该点归属的窗口是不是组件窗口（标题正好是「倒数日」） */
 function isWidgetWindow(x, y, useCache = true) {
-  const { text } = windowAt(x, y, useCache)
-  return text.includes('倒数日') && !text.includes('设置')
+  return windowAt(x, y, useCache).isWidget === true
 }
 
+/** 该点归属的窗口是不是设置窗口（标题是「倒数日 · 设置」） */
 function isSettingsWindow(x, y, useCache = true) {
   return windowAt(x, y, useCache).text.includes('设置')
 }
@@ -336,23 +338,35 @@ app.whenReady().then(async () => {
     return
   }
 
-  /* ---------------- 1. days 模式的单位开关 ---------------- */
+  /* ---------------- 1. 天数单位就是可换的单位字 ---------------- */
   let card = await readCard(win)
-  check('days 模式默认显示天数单位', card.hasUnit === true, JSON.stringify(card))
+  check('days 模式默认显示「天」', card.hasUnit === true && card.count === '1天', JSON.stringify(card))
 
-  await patch(win, { text: { showUnit: false } })
+  await patch(win, { behavior: { units: { day: 'D' } } })
   await wait(700)
   card = await readCard(win)
-  check('全局关闭天数单位后大数字后面不再有「天」', card.hasUnit === false, JSON.stringify(card))
+  check('把「天」换成 D 后大数字后面就是 D', card.count === '1D', JSON.stringify(card))
 
-  // 单项三态覆盖优先于全局：单项强制显示
-  await patch(win, { countdowns: [{ ...ITEM, text: { ...ITEM.text, showUnit: 'show' } }] })
+  await patch(win, { behavior: { units: { day: '' } } })
   await wait(700)
   card = await readCard(win)
-  check('单项 showUnit=show 覆盖掉全局的关闭', card.hasUnit === true, JSON.stringify(card))
+  check('「天」留空后 days 模式只剩一个数字', card.hasUnit === false && card.count === '1', JSON.stringify(card))
 
-  await patch(win, { text: { showUnit: true }, countdowns: [ITEM] })
+  // 单项覆盖优先于全局：单项把「天」写成 days
+  await patch(win, {
+    behavior: { units: { day: '天' } },
+    countdowns: [
+      { ...ITEM, units: { enabled: true, day: 'days', hour: '', minute: '', second: '' } }
+    ]
+  })
   await wait(700)
+  card = await readCard(win)
+  check('单项单位字覆盖掉全局的「天」', card.count === '1days', JSON.stringify(card))
+
+  await patch(win, { countdowns: [ITEM] })
+  await wait(700)
+  card = await readCard(win)
+  check('取消单项覆盖后回到全局的「天」', card.count === '1天', JSON.stringify(card))
 
   /* ---------------- 2. 三种时分秒模式的格式 ---------------- */
   await patch(win, { behavior: { displayMode: 'days-hours' } })
@@ -360,7 +374,7 @@ app.whenReady().then(async () => {
   card = await readCard(win)
   {
     const labels = (card.parts || []).map((p) => p.label)
-    const text = (card.parts || []).map((p) => `${p.value}${p.label}`).join(' ')
+    const text = (card.parts || []).map((p) => `${p.value}${p.label}`).join('')
     check(
       '天+时 显示 D天H时 且没有任何冒号',
       labels.length === 2 && labels[0] === '天' && labels[1] === '时' && !text.includes(':'),
@@ -373,28 +387,11 @@ app.whenReady().then(async () => {
   card = await readCard(win)
   {
     const labels = (card.parts || []).map((p) => p.label)
-    const text = (card.parts || []).map((p) => `${p.value}${p.label}`).join(' ')
+    const text = (card.parts || []).map((p) => `${p.value}${p.label}`).join('')
     check(
-      '天+时分 为 D天H时M分 且没有冒号，末段不带分隔符',
-      labels.length === 3 &&
-        labels[0] === '天' &&
-        labels[1] === '时' &&
-        labels[2] === '分' &&
-        !text.includes(':'),
+      '天+时分 为 D天H时M分，没有多余的尾巴',
+      labels.length === 3 && labels[0] === '天' && labels[1] === '时' && labels[2] === '分',
       `${text} (${JSON.stringify(labels)})`
-    )
-  }
-
-  // 「时与分之间」这一档在两种模式下必须是同一个设置，不能只在其中一种生效
-  await patch(win, { behavior: { separatorHM: '时', separatorMS: '|' } })
-  await wait(700)
-  card = await readCard(win)
-  {
-    const labels = (card.parts || []).map((p) => p.label)
-    check(
-      '天+时分 模式使用「时与分之间」分隔符',
-      labels[1] === '时' && labels[2] === '|',
-      JSON.stringify(labels)
     )
   }
 
@@ -403,52 +400,95 @@ app.whenReady().then(async () => {
   card = await readCard(win)
   {
     const labels = (card.parts || []).map((p) => p.label)
-    const text = (card.parts || []).map((p) => `${p.value}${p.label}`).join(' ')
+    const text = (card.parts || []).map((p) => `${p.value}${p.label}`).join('')
     check(
-      '天+时分秒 为 D天H时M分S，末段不带分隔符',
+      '天+时分秒 为 D天H时M分S秒',
       labels.length === 4 &&
         labels[0] === '天' &&
         labels[1] === '时' &&
-        labels[2] === '|' &&
-        labels[3] === '' &&
-        !text.includes(':'),
+        labels[2] === '分' &&
+        labels[3] === '秒',
       `${text} (${JSON.stringify(labels)})`
     )
   }
 
-  /* ---------------- 3. 自定义分隔符（全局） ---------------- */
-  await patch(win, { behavior: { separatorHM: ':', separatorMS: ':' } })
+  /* ---------------- 3. 四个单位字互不影响 ---------------- */
+  // 只改「时」：另外三个必须原样不动（这正是之前「改时和分、天和时也变了」的毛病）
+  await patch(win, { behavior: { units: { hour: 'h' } } })
   await wait(700)
   card = await readCard(win)
   {
     const labels = (card.parts || []).map((p) => p.label)
     check(
-      '全局分隔符换成冒号后立即生效',
-      labels[1] === ':' && labels[2] === ':' && labels[3] === '',
+      '只换「时」不会连天/分/秒一起改',
+      labels[0] === '天' && labels[1] === 'h' && labels[2] === '分' && labels[3] === '秒',
       JSON.stringify(labels)
     )
   }
 
-  await patch(win, { behavior: { separatorHM: '/', separatorMS: ' 秒 ' } })
+  // 只改「分」
+  await patch(win, { behavior: { units: { hour: '时', minute: 'm' } } })
   await wait(700)
   card = await readCard(win)
   {
     const labels = (card.parts || []).map((p) => p.label)
-    check('分隔符支持任意自定义文本', labels[1] === '/' && labels[2] === ' 秒 ', JSON.stringify(labels))
+    check(
+      '只换「分」同样不影响别的分段',
+      labels[0] === '天' && labels[1] === '时' && labels[2] === 'm' && labels[3] === '秒',
+      JSON.stringify(labels)
+    )
   }
 
-  /* ---------------- 4. 单项覆盖分隔符 ---------------- */
+  // 全部换成自定义，含用冒号当作单位字
   await patch(win, {
-    behavior: { separatorHM: '时', separatorMS: '分' },
-    countdowns: [{ ...ITEM, separator: { enabled: true, hm: '-', ms: '~' } }]
+    behavior: { units: { day: 'D', hour: ':', minute: ':', second: '' } }
+  })
+  await wait(700)
+  card = await readCard(win)
+  {
+    const labels = (card.parts || []).map((p) => p.label)
+    const text = (card.parts || []).map((p) => `${p.value}${p.label}`).join('')
+    check(
+      '单位字可以换成任意字（含冒号），秒留空就没有单位',
+      labels[0] === 'D' && labels[1] === ':' && labels[2] === ':' && labels[3] === '' && /D\d/.test(text),
+      `${text} (${JSON.stringify(labels)})`
+    )
+  }
+
+  // 把单位字写成带空格的形式：空格也算单位字的一部分
+  await patch(win, {
+    behavior: { units: { day: '天 ', hour: '时 ', minute: '分 ', second: '' } }
   })
   await wait(700)
   card = await readCard(win)
   {
     const labels = (card.parts || []).map((p) => p.label)
     check(
-      '单项分隔符覆盖掉全局',
-      labels[1] === '-' && labels[2] === '~',
+      '单位字里可以带空格，于是分段自然分开',
+      labels[0] === '天 ' && labels[1] === '时 ' && labels[2] === '分 ',
+      JSON.stringify(labels)
+    )
+  }
+
+  await patch(win, {
+    behavior: { units: { day: '天', hour: '时', minute: '分', second: '秒' } }
+  })
+  await wait(700)
+
+  /* ---------------- 4. 单项覆盖四个单位字 ---------------- */
+  await patch(win, {
+    behavior: { displayMode: 'precise' },
+    countdowns: [
+      { ...ITEM, units: { enabled: true, day: 'D', hour: 'H', minute: 'M', second: 'S' } }
+    ]
+  })
+  await wait(700)
+  card = await readCard(win)
+  {
+    const labels = (card.parts || []).map((p) => p.label)
+    check(
+      '单项覆盖四个单位字全部生效',
+      labels[0] === 'D' && labels[1] === 'H' && labels[2] === 'M' && labels[3] === 'S',
       JSON.stringify(labels)
     )
   }
@@ -458,8 +498,15 @@ app.whenReady().then(async () => {
   card = await readCard(win)
   {
     const labels = (card.parts || []).map((p) => p.label)
-    check('取消单项覆盖后回到全局分隔符', labels[1] === '时' && labels[2] === '分', JSON.stringify(labels))
+    check(
+      '取消单项覆盖后回到全局单位字',
+      labels[0] === '天' && labels[1] === '时' && labels[2] === '分' && labels[3] === '秒',
+      JSON.stringify(labels)
+    )
   }
+
+  await patch(win, { behavior: { displayMode: 'days' } })
+  await wait(500)
 
   /* ---------------- 5. 文字透明度与背景透明度相互独立 ---------------- */
   await patch(win, { behavior: { displayMode: 'days' } })
@@ -511,7 +558,7 @@ app.whenReady().then(async () => {
     )
   }
 
-  /* ---------------- 6. 显示模式与分隔符覆盖的 UI ---------------- */
+  /* ---------------- 6. 显示模式与单位字覆盖的 UI ---------------- */
   await patch(win, {
     appearance: { textAlpha: 1, background: { alpha: 0.78 }, title: { fontSize: 16, color: '#b9dcff', weight: 500, letterSpacing: 0, opacity: 1 } }
   })
@@ -576,28 +623,112 @@ app.whenReady().then(async () => {
       )
     }
 
-    // 行为页：显示模式选项文案必须是真实格式
+    // 行为页：显示模式选项文案必须是真实格式，且用 DD天 HH时 MM分 SS秒 这样的占位符
     await nav('行为')
-    const behaviorHtml = await ev(
+    const behaviorOptions = await ev(
       s,
       `Array.prototype.map.call(document.querySelectorAll('.el-radio-button__inner'), function(e){return e.textContent.trim();}).join(' | ')`
     )
     check(
-      '显示模式选项展示真实格式（D天H时 等）',
-      typeof behaviorHtml === 'string' &&
-        /天 \+ 时 \+ 分/.test(behaviorHtml) === false &&
-        behaviorHtml.includes('天') &&
-        behaviorHtml.includes('时'),
-      String(behaviorHtml)
+      '显示模式选项展示真实格式占位符（DD天 HH时 …）',
+      typeof behaviorOptions === 'string' &&
+        behaviorOptions.includes('DD天') &&
+        behaviorOptions.includes('HH时') &&
+        behaviorOptions.includes('MM分') &&
+        behaviorOptions.includes('SS秒') &&
+        !/95|天 \+ 时/.test(behaviorOptions),
+      String(behaviorOptions)
     )
     const behaviorText = await ev(s, `document.querySelector('.settings-content').innerText`)
     check(
-      '行为页提供两个分隔符设置项',
+      '行为页的单位字设置用的是「天/时/分/秒」而不是「分隔符」',
       typeof behaviorText === 'string' &&
-        behaviorText.includes('天与小时之间') &&
-        behaviorText.includes('时与分'),
+        behaviorText.includes('单位字') &&
+        !behaviorText.includes('分隔符'),
       'checked settings-content text'
     )
+
+    // 切到「天+时+分+秒」：四个单位字输入框都要出现，且初值就是 天/时/分/秒
+    await ev(
+      s,
+      `(function(){
+         var bs = Array.prototype.slice.call(document.querySelectorAll('.el-radio-button__inner'));
+         var b = bs.find(function(x){ return x.textContent.indexOf('SS')>=0; });
+         if (!b) return 'no-button';
+         b.click();
+         return 'ok';
+       })()`
+    )
+    await wait(1200)
+    const unitInputs = await ev(
+      s,
+      `JSON.stringify(Array.prototype.map.call(document.querySelectorAll('.units__input'), function(e){return {tag:e.tagName, value:e.value, disabled:e.disabled};}))`
+    )
+    {
+      const parsed = typeof unitInputs === 'string' ? JSON.parse(unitInputs) : []
+      check(
+        '四个单位字输入框初值就是 天/时/分/秒，且都可编辑',
+        parsed.length === 4 &&
+          parsed.every((i) => i.tag === 'INPUT' && i.disabled === false) &&
+          parsed.map((i) => i.value).join('') === '天时分秒',
+        String(unitInputs)
+      )
+    }
+    const unitSamples = await ev(
+      s,
+      `Array.prototype.map.call(document.querySelectorAll('.units__sample'), function(e){return e.textContent.trim();}).join(' ')`
+    )
+    check(
+      '每个单位字前面都标出它是哪一段（DD/HH/MM/SS）',
+      typeof unitSamples === 'string' &&
+        unitSamples.includes('DD') &&
+        unitSamples.includes('HH') &&
+        unitSamples.includes('MM') &&
+        unitSamples.includes('SS'),
+      String(unitSamples)
+    )
+
+    // 真换一次：把「时」写成 h，显示模式选项文字里的「时」也要跟着变成 h
+    await ev(
+      s,
+      `(function(){
+         var inputs = document.querySelectorAll('.units__input');
+         if (inputs.length < 2) return 'no-input';
+         var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+         setter.call(inputs[1], 'h');
+         inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+         return 'ok';
+       })()`
+    )
+    await wait(1200)
+    const optionsAfterRename = await ev(
+      s,
+      `Array.prototype.map.call(document.querySelectorAll('.el-radio-button__inner'), function(e){return e.textContent.trim();}).join(' | ')`
+    )
+    check(
+      '换掉「时」之后显示模式选项同步变成 h',
+      typeof optionsAfterRename === 'string' && optionsAfterRename.includes('HHh'),
+      String(optionsAfterRename)
+    )
+    // 改回默认，避免影响后面的断言
+    await ev(
+      s,
+      `window.cd.updateConfig({behavior:{units:{day:'天',hour:'时',minute:'分',second:'秒'}}}).then(function(){return 'ok'})`
+    )
+    await wait(900)
+
+    // 回到「只显示天数」，避免影响后面的断言
+    await ev(
+      s,
+      `(function(){
+         var bs = Array.prototype.slice.call(document.querySelectorAll('.el-radio-button__inner'));
+         var b = bs.find(function(x){ return x.textContent.trim() === '只显示天数'; });
+         if (!b) return 'no-button';
+         b.click();
+         return 'ok';
+       })()`
+    )
+    await wait(900)
 
     // 布局页：偏移量标签方向、鼠标点击穿透
     await nav('布局')
@@ -791,12 +922,13 @@ app.whenReady().then(async () => {
 
   /* ---------------- 9. 鼠标点击穿透 ---------------- */
   {
-    // 把组件挪到左上角：右上角常年被编辑器/浏览器占着，测出来的是它们而不是组件
+    // 把组件挪到左上角并设为置顶：右上角常年被编辑器/浏览器占着，
+    // 而取样点如果被别的窗口盖住，探针读到的就是它，判定会变得不可靠。
     await ev(
       widget(),
-      `window.cd.updateConfig({runtime:{window:{corner:'top-left',cornerPreset:'top-left',offsetX:0,offsetY:0,clickThrough:false}}}).then(function(){return 'ok'})`
+      `window.cd.updateConfig({runtime:{window:{corner:'top-left',cornerPreset:'top-left',offsetX:0,offsetY:0,clickThrough:false}},behavior:{alwaysOnTop:true}}).then(function(){return 'ok'})`
     )
-    await wait(1400)
+    await wait(1600)
     const wb = widget().getBounds()
 
     /**
@@ -820,11 +952,13 @@ app.whenReady().then(async () => {
     const ownWindow = settleAt(spot.x, spot.y)
     check(
       '关闭穿透时组件窗口接收该点的鼠标输入',
-      ownWindow.text.includes('倒数日') && !ownWindow.text.includes('设置'),
+      ownWindow.isWidget === true,
       `取样点(${spot.x},${spot.y}) -> "${ownWindow.text}"`
     )
 
-    // 打开穿透 + 渲染层反复请求命中：组件仍不该接收
+    // 打开穿透 + 渲染层反复请求命中：组件仍不该接收。
+    // 断言只要求「该点不再归属组件」：具体落到哪个窗口取决于桌面环境，
+    // 关键是组件依然可见地立在那里，却已经不再吃掉鼠标输入。
     await ev(
       widget(),
       `window.cd.updateConfig({runtime:{window:{clickThrough:true}}}).then(function(){return window.cd.setInteractive(true)}).then(function(){return 'ok'})`
@@ -832,8 +966,8 @@ app.whenReady().then(async () => {
     await wait(1400)
     const otherWindow = settleAt(spot.x, spot.y)
     check(
-      '开启穿透后该点不再归属组件（点击落到组件后面）',
-      !otherWindow.text.includes('倒数日'),
+      '开启穿透后该点不再归属组件（点击落到它后面的窗口）',
+      otherWindow.isWidget === false,
       `取样点(${spot.x},${spot.y}) -> "${otherWindow.text}"（开启前为 "${ownWindow.text}"）`
     )
     const stageDuring = await ev(
@@ -860,13 +994,20 @@ app.whenReady().then(async () => {
     const restored = settleAt(spot.x, spot.y)
     check(
       '关闭穿透后该点重新归属组件窗口',
-      restored.text.includes('倒数日') && !restored.text.includes('设置') && widget().isFocusable() === true,
+      restored.isWidget === true && widget().isFocusable() === true,
       `取样点(${spot.x},${spot.y}) -> "${restored.text}" focusable=${widget().isFocusable()}`
     )
   }
 
   /* ---------------- 10. 编辑页不再有吸顶预览 ---------------- */
   if (s) {
+    // 先把显示模式切成含秒的模式、并给全局单位字填上值，
+    // 这样编辑页里的单位字覆盖才有东西可看、也才能验证「以全局当前值为起点」
+    await ev(
+      s,
+      `window.cd.updateConfig({behavior:{displayMode:'precise', units:{day:'-', hour:'-', minute:'', second:''}}}).then(function(){return 'ok'})`
+    )
+    await wait(900)
     await ev(
       s,
       `(function(){var btns=Array.prototype.slice.call(document.querySelectorAll('.settings-nav__item'));var hit=btns.find(function(b){return b.textContent.indexOf('倒数日列表')>=0});if(hit)hit.click();return 'ok';})()`
@@ -889,15 +1030,41 @@ app.whenReady().then(async () => {
     )
     const editorText = await ev(s, `document.querySelector('.settings-content').innerText`)
     check(
-      '编辑页有「显示天数单位」设置项',
-      typeof editorText === 'string' && editorText.includes('显示天数单位'),
+      '编辑页可以单独覆盖单位字',
+      typeof editorText === 'string' && editorText.includes('单独覆盖单位字'),
       'checked editor text'
     )
-    check(
-      '编辑页可以单独覆盖分隔符',
-      typeof editorText === 'string' && editorText.includes('单独覆盖分隔符'),
-      'checked editor text'
+    // 打开覆盖后，编辑页里要出现与全局同样的四个单位字输入框，且以全局当前值为起点
+    await ev(
+      s,
+      `(function(){
+         var rows = Array.prototype.slice.call(document.querySelectorAll('.settings-content .field-row'));
+         var row = rows.find(function(r){ var t = r.querySelector('.field-row__text'); return t && t.textContent.indexOf('单独覆盖单位字')>=0; });
+         if (!row) return 'no-row';
+         var sw = row.querySelector('.el-switch');
+         if (!sw) return 'no-switch';
+         sw.click();
+         return 'ok';
+       })()`
     )
+    await wait(1100)
+    const editorUnits = await ev(
+      s,
+      `JSON.stringify(Array.prototype.map.call(document.querySelectorAll('.units__input'), function(e){return {tag:e.tagName, value:e.value, disabled:e.disabled};}))`
+    )
+    {
+      const parsed = typeof editorUnits === 'string' ? JSON.parse(editorUnits) : []
+      check(
+        '编辑页的单位字覆盖以全局当前值为起点（- - 空）',
+        parsed.length === 4 &&
+          parsed.every((i) => i.tag === 'INPUT') &&
+          parsed[0].value === '-' &&
+          parsed[1].value === '-' &&
+          parsed[2].value === '' &&
+          parsed[3].value === '',
+        String(editorUnits)
+      )
+    }
     // 展开外观覆盖：找到「启用外观覆盖」那一行的开关再点
     await ev(
       s,
@@ -964,6 +1131,57 @@ app.whenReady().then(async () => {
         String(bigNumberDup)
       )
     }
+
+    /*
+     * 吸顶栏上方不该再有任何东西。
+     * 以前那里有个 ::before 假元素负责盖住滚动容器 padding 造成的缝隙，
+     * 但它自身会被当成滚动内容推到容器外面，于是在标题栏上方留下一块盖住边框的色块。
+     * 现在改成把栏体上提一个 padding-top 的高度，滚到底部时应正好贴住滚动视口顶端。
+     */
+    await ev(s, `(function(){var c=document.querySelector('.settings-content');c.scrollTop=c.scrollHeight;return 'ok';})()`)
+    await wait(900)
+    const headerState = await ev(
+      s,
+      `JSON.stringify((function(){
+         var bar = document.querySelector('.editor-sticky');
+         var sc = document.querySelector('.settings-content');
+         if (!bar || !sc) return { found:false };
+         var br = bar.getBoundingClientRect();
+         var sr = sc.getBoundingClientRect();
+         var before = getComputedStyle(bar, '::before');
+         var padTop = parseFloat(getComputedStyle(sc).paddingTop) || 0;
+         var hit = document.elementFromPoint(Math.round(br.left + br.width/2), Math.round(br.top - 6));
+         return {
+           found: true,
+           beforeContent: before.content,
+           scrollTop: sc.scrollTop,
+           padTop: padTop,
+           gapAboveBar: Math.round(br.top - sr.top),
+           hitAbove: hit ? hit.tagName + '.' + String(hit.className).slice(0, 40) : 'null',
+           hitIsBar: hit ? bar.contains(hit) : false
+         };
+       })())`
+    )
+    {
+      const parsed = typeof headerState === 'string' ? JSON.parse(headerState) : { found: false }
+      check(
+        '吸顶栏不再有那个多余的 ::before 色块',
+        parsed.found === true && (parsed.beforeContent === 'none' || parsed.beforeContent === ''),
+        String(headerState)
+      )
+      check(
+        '滚到底部时吸顶栏正好贴住滚动视口顶端，上方没有缝隙',
+        parsed.found === true && parsed.scrollTop > 0 && Math.abs(parsed.gapAboveBar) <= 1,
+        `gapAboveBar=${parsed.gapAboveBar} padTop=${parsed.padTop} scrollTop=${parsed.scrollTop}`
+      )
+      check(
+        '标题栏上方没有被色块盖住（该处不在栏体内部）',
+        parsed.found === true && parsed.hitIsBar === false,
+        `hitAbove="${parsed.hitAbove}"`
+      )
+    }
+    await ev(s, `(function(){var c=document.querySelector('.settings-content');c.scrollTop=0;return 'ok';})()`)
+    await wait(400)
   }
 
   write(failures === 0 ? 'ALL CHECKS PASSED' : `FAILURES: ${failures}`)

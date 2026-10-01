@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AppConfig, DisplayMode, SeparatorConfig } from '@shared/types'
-import { SEPARATOR_PRESETS } from '@shared/defaults'
+import type { AppConfig, DisplayMode, UnitLabelConfig } from '@shared/types'
 import FieldRow from '@/components/FieldRow.vue'
-import { modePreviewLabel } from '@/utils/preview'
+import UnitLabelField from '@/components/UnitLabelField.vue'
+import { modePreviewLabel, modeSlots } from '@/utils/preview'
 
 const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{ (event: 'patch', patch: unknown): void }>()
@@ -16,25 +16,27 @@ interface ModeOption {
   label: string
 }
 
-const separator = computed<SeparatorConfig>(() => ({
-  hm: props.config.behavior.separatorHM,
-  ms: props.config.behavior.separatorMS
-}))
+const units = computed<UnitLabelConfig>(() => props.config.behavior.units)
 
-/** 选项文案直接显示真实渲染结果，回车换行前也能看出分隔符是什么 */
+/**
+ * 当前显示模式下真正会渲染出来的分段。
+ * 它**只**决定单位字输入框要不要标灰提示，不决定能否编辑：四项永远可编辑。
+ */
+const slots = computed(() =>
+  modeSlots(props.config.behavior.displayMode, props.config.behavior.showDaysInPrecise)
+)
+
+/** 选项文案直接显示真实渲染结果，因此换单位字时选项也会跟着变 */
 const modes = computed<ModeOption[]>(() => [
   { value: 'days', label: t('behavior.days') },
-  {
-    value: 'days-hours',
-    label: modePreviewLabel('days-hours', true, separator.value)
-  },
+  { value: 'days-hours', label: modePreviewLabel('days-hours', true, units.value) },
   {
     value: 'days-hours-minutes',
-    label: modePreviewLabel('days-hours-minutes', true, separator.value)
+    label: modePreviewLabel('days-hours-minutes', true, units.value)
   },
   {
     value: 'precise',
-    label: modePreviewLabel('precise', props.config.behavior.showDaysInPrecise, separator.value)
+    label: modePreviewLabel('precise', props.config.behavior.showDaysInPrecise, units.value)
   }
 ])
 
@@ -42,13 +44,9 @@ function patchBehavior(patch: Record<string, unknown>): void {
   emit('patch', { behavior: patch })
 }
 
-function setSeparator(key: 'separatorHM' | 'separatorMS', value: string): void {
-  patchBehavior({ [key]: value.slice(0, 6) })
-}
-
-/** 分隔符当前显示成什么；空串要有明确的「不显示」提示 */
-function separatorText(value: string): string {
-  return value === '' ? t('behavior.separatorPlaceholder') : value
+/** 四个单位字独立更新，互不影响 */
+function patchUnits(patch: Partial<UnitLabelConfig>): void {
+  patchBehavior({ units: patch })
 }
 </script>
 
@@ -83,8 +81,8 @@ function separatorText(value: string): string {
 
     <el-divider content-position="left">
       <span class="divider-title">
-        {{ t('behavior.separatorTitle') }}
-        <el-tooltip :content="t('behavior.separatorHint')" placement="top" :show-after="150">
+        {{ t('behavior.unitsTitle') }}
+        <el-tooltip :content="t('behavior.unitsHint')" placement="top" :show-after="150">
           <span class="panel-card__help" tabindex="0">
             <el-icon :size="13"><QuestionFilled /></el-icon>
           </span>
@@ -92,41 +90,27 @@ function separatorText(value: string): string {
       </span>
     </el-divider>
 
-    <div class="panel-grid-2">
-      <FieldRow
-        :label="t('behavior.separatorHM')"
-        :hint="t('behavior.separatorPreview', { value: separatorText(config.behavior.separatorHM) })"
-      >
-        <el-select
-          :model-value="config.behavior.separatorHM"
-          class="separator-select"
-          filterable
-          allow-create
-          default-first-option
-          @update:model-value="(v: string) => setSeparator('separatorHM', v)"
-        >
-          <el-option :label="t('behavior.separatorPlaceholder')" value="" />
-          <el-option v-for="preset in SEPARATOR_PRESETS" :key="preset" :label="preset" :value="preset" />
-        </el-select>
-      </FieldRow>
-
-      <FieldRow
-        :label="t('behavior.separatorMS')"
-        :hint="t('behavior.separatorPreview', { value: separatorText(config.behavior.separatorMS) })"
-      >
-        <el-select
-          :model-value="config.behavior.separatorMS"
-          class="separator-select"
-          filterable
-          allow-create
-          default-first-option
-          @update:model-value="(v: string) => setSeparator('separatorMS', v)"
-        >
-          <el-option :label="t('behavior.separatorPlaceholder')" value="" />
-          <el-option v-for="preset in SEPARATOR_PRESETS" :key="preset" :label="preset" :value="preset" />
-        </el-select>
-      </FieldRow>
-    </div>
+    <!--
+      这里换的是每一段后面的那个字本身：`92天` 的「天」换成 `D` 就是 `92D`。
+      单位字同时起了分隔作用，所以没有单独的「分隔符」设置；留空即这一段不带单位。
+      下面的 xx-on 只用来给「当前模式用不到」的分段标灰，**不会**禁用输入框。
+    -->
+    <FieldRow stacked>
+      <UnitLabelField
+        :day="units.day"
+        :hour="units.hour"
+        :minute="units.minute"
+        :second="units.second"
+        :day-on="slots.days || config.behavior.displayMode === 'days'"
+        :hour-on="slots.hours"
+        :minute-on="slots.minutes"
+        :second-on="slots.seconds"
+        @update:day="(v: string) => patchUnits({ day: v })"
+        @update:hour="(v: string) => patchUnits({ hour: v })"
+        @update:minute="(v: string) => patchUnits({ minute: v })"
+        @update:second="(v: string) => patchUnits({ second: v })"
+      />
+    </FieldRow>
 
     <FieldRow :label="t('behavior.alwaysOnTop')" :hint="t('behavior.alwaysOnTopHint')">
       <el-switch
@@ -142,10 +126,5 @@ function separatorText(value: string): string {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-
-.separator-select {
-  width: 100%;
-  max-width: 220px;
 }
 </style>

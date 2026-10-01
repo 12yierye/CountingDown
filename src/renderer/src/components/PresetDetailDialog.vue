@@ -47,8 +47,7 @@ const textRows = computed(() => {
     { label: 'target.hintText', value: text.hint },
     { label: 'target.futureText', value: text.futureText },
     { label: 'target.todayText', value: text.todayText },
-    { label: 'target.pastText', value: text.pastText },
-    { label: 'target.unit', value: text.unit }
+    { label: 'target.pastText', value: text.pastText }
   ]
 })
 

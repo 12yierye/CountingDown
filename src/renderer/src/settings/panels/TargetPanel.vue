@@ -154,16 +154,6 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
         <el-radio-button :value="false">{{ t('target.hide') }}</el-radio-button>
       </el-radio-group>
     </FieldRow>
-
-    <FieldRow :label="t('target.showUnit')" :hint="t('target.showUnitHint')">
-      <el-radio-group
-        :model-value="config.text.showUnit !== false"
-        @update:model-value="(v: string | number | boolean | undefined) => patchText({ showUnit: v === true || v === 'true' })"
-      >
-        <el-radio-button :value="true">{{ t('target.show') }}</el-radio-button>
-        <el-radio-button :value="false">{{ t('target.hide') }}</el-radio-button>
-      </el-radio-group>
-    </FieldRow>
   </el-card>
 
   <el-card shadow="never" class="panel-card">
@@ -211,16 +201,6 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
         :model-value="config.text.pastText"
         maxlength="40"
         @update:model-value="(v: string) => patchText({ pastText: v })"
-      />
-    </FieldRow>
-
-    <FieldRow :label="t('target.unit')">
-      <el-input
-        :model-value="config.text.unit"
-        :placeholder="t('target.unitPlaceholder')"
-        style="max-width: 160px"
-        maxlength="6"
-        @update:model-value="(v: string) => patchText({ unit: v })"
       />
     </FieldRow>
 

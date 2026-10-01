@@ -238,6 +238,54 @@ Element Plus 的次要灰，暗到几乎看不见。现在深色主题下统一�
 实测：总开关关 → `checkboxes: 0, styleEditors: 0`；开 → `checkboxes: 7, styleEditors: 0`；
 勾选「大数字样式」→ `styleEditors: 1`；保存后只写入 `{"count": {...}}`，未勾选项不落盘。
 
+### 单位字不受显示模式限制
+
+`UnitLabelField` 的四个输入框**永远可编辑**。曾经它写的是
+`:disabled="disabled || !slot.on"`，于是「只显示天数」模式下时/分/秒三格是禁用的、根本点不进去 ——
+但换显示模式后它们立刻生效，用户没理由被当前模式锁住手。
+
+现在的分工：
+
+- `dayOn / hourOn / minuteOn / secondOn` **只**驱动标灰（`.units__slot.is-off`，`opacity: .6`），
+  **不得**再参与 `disabled`。加控件或改表单时别把这个 prop 当成「能不能改」的开关。
+- 标灰格的 `cursor` 必须是 `text` 而不是 `not-allowed`，否则用户以为点不动。
+- 文案（i18n `behavior.unitsHint`）说的是「淡一档提示，但照样可以填写」，与行为一致。
+
+实测（`scripts/units-check.cjs`，13 条断言全过）：`displayMode: 'days'` 下
+`disabled: 0` / `off: 3`，往「时」格里打字 `h` 能落盘成 `units.hour === 'h'`，
+切到「天 + 时」后该值仍在；编辑子页的「单位字覆盖」同样 `disabled: 0`。
+
+### 预设「手动调整所有参数」= 模态框里的草稿
+
+预设页的保存来源有三条，接收端靠 `PresetSaveMode`（`'global' | 'item' | 'manual'`）分派：
+
+| saveMode | 写自定义预设 | 还写什么 |
+| --- | --- | --- |
+| `global` | ✅ | **覆盖全局 `appearance`**（这个来源的字面语义就是如此） |
+| `item` | ✅ | 写回那个倒数日的 `appearance` 覆盖 |
+| `manual` | ✅ | 什么都不写 —— 只加预设 |
+
+- 之前是 `target: 'global' | 'item'` + `tune: boolean` 两个字段，但「手动调整」与
+  「当前全局外观」**都会发 `target='global'`**，接收端分不出来。改这块时最容易犯的错，
+  就是顺手把「写全局外观」整段删掉 —— 那会把 `global` 来源一起弄坏。
+  `scripts/preset-sources-check.cjs` 专门守住这两条。
+- `manual` 的一切改动都落在一份 `JSON.parse(JSON.stringify(...))` 的**深拷贝草稿**上（`PresetTuneDialog`），
+  取消即丢弃；确定时才 `patchConfig({ customPresets })`。草稿与全局配置之间不能留任何共享引用，
+  否则「改草稿」就等于「改全局」。
+- 外观表单本身抽在 `AppearanceFields.vue`（纯表现层：`v-model:appearance`，不读配置、不落盘），
+  全局外观页 `AppearancePanel.vue` 退化成薄壳；模态框传 `dense` 用平铺分组外壳。
+  **不要**把全局外观页那个「一改就 patch 落盘」的组件塞进模态框 —— 那样点取消也已经写盘了。
+
+> **`<component :is>` 不能和 `v-else` 凑宿主标签**：想用一个组件在「el-card / section」两种外壳间切换，
+> `:is` 与 `#header` 那套写法会报 `v-else/v-else-if has no adjacent v-if`，而且 **`vue-tsc` 查不出来**，
+> 只有真正 `pnpm run build` 才会炸。所以外壳单独抽成了 `AppearanceGroup.vue`。
+> 同理，模板里 `@click` 写多行语句也会在构建期报解析错误 —— 用具名函数。
+
+实测（`scripts/preset-tune-check.cjs`，23 条断言全过）：模态框里 17 滑块 / 1 数字输入 / 7 取色器 /
+4 段文字样式 / 4 个平铺分组 / 1 张实时预览；拖滑块后磁盘 `appearance` 逐字段不变、
+`customPresets` 数量不变；确定后 `customPresets` +1 且新预设是草稿那一份（圆角 51 vs 全局 18），
+全局仍是 18；取消后两个数字都不动。名称空着点「打开外观编辑器」原地报错、不进模态框。
+
 ### 标签式切换的边框（`el-radio-button`）
 
 Element Plus 默认**不是**每个标签各画一圈边框，而是靠 `margin-left: -1px` + `box-shadow`
@@ -330,6 +378,13 @@ Element Plus 默认**不是**每个标签各画一圈边框，而是靠 `margin-
 | 项目 | 结果 |
 | --- | --- |
 | `pnpm dev` / `pnpm run build` / `pnpm run typecheck` | 全部通过 |
+| **单位字不受显示模式限制**：只显示天数模式下 4 格全可编辑（`disabled: 0`），打字能落盘 | ✅ `units-check.cjs` |
+| **外观页抽取后行为不变**：4 分组 / 17 滑块 / 1 数字输入 / 7 取色器 / 4 段样式，拖滑块仍立刻写全局 | ✅ `appearance-check.cjs` |
+| **手动调整预设不碰全局**：模态框里拖动后磁盘 `appearance` 逐字段不变、预设数不变 | ✅ `preset-tune-check.cjs` |
+| **手动调整只多预设**：确定后 `customPresets` +1 且存的是草稿那份（圆角 51 vs 全局 18） | ✅ `preset-tune-check.cjs` |
+| **手动调整可无痕取消**：取消后预设数与 `appearance` 都不动 | ✅ `preset-tune-check.cjs` |
+| **另外两个保存来源未回归**：`global` 仍覆盖全局（44）、`item` 仍写该项覆盖（`#ff0055`/30） | ✅ `preset-sources-check.cjs` |
+| 外观页浅色审计在改动前后完全一致（`clipped=2/3`、`contrast=7`） | ✅ 基线对比 |
 | 组件窗口出现在主屏右上角（624×600，工作区 1920×1032，`x=1276, y=20`） | ✅ 截图确认 |
 | 四角停靠：左上 `20,20` / 左下 `20,412` / 右下 `1276,412` / 右上 `1276,20` | ✅ 自动化验证 |
 | 卡片到窗口安全区的四向间距均为 24px | ✅ DOM 测量 |
@@ -371,6 +426,10 @@ node_modules\electron\dist\electron.exe scripts\dom-check.cjs --theme=dark    # 
 node_modules\electron\dist\electron.exe scripts\widget-check.cjs   # 组件 6 种状态的尺寸/裁切测量
 node_modules\electron\dist\electron.exe scripts\overlap-check.cjs  # 控件两两重叠检测（多窗口宽度）
 node_modules\electron\dist\electron.exe scripts\preview-check.cjs  # 编辑实时预览 / 放弃还原 / 吸顶 / 新建项回滚
+node_modules\electron\dist\electron.exe scripts\appearance-check.cjs    # 外观页控件齐全 + 改值确实落盘（薄壳链路）
+node_modules\electron\dist\electron.exe scripts\units-check.cjs         # 单位字不受显示模式限制（禁用/标灰/能落盘）
+node_modules\electron\dist\electron.exe scripts\preset-tune-check.cjs   # 手动调整模态框：不碰全局、只多预设、取消无痕
+node_modules\electron\dist\electron.exe scripts\preset-sources-check.cjs # 另外两个保存来源仍写全局 / 仍写该项覆盖
 node_modules\electron\dist\electron.exe scripts\capture-readme.cjs # 重新生成 assets/screenshots/ 里的 README 配图
 ```
 
@@ -383,6 +442,12 @@ node_modules\electron\dist\electron.exe scripts\capture-readme.cjs # 重新生�
 >    会立刻返回、`$LASTEXITCODE` 为空。要么用管道（`| Select-String`），要么用
 >    `Start-Process -Wait`。另外用 `Select-Object -First N` 这类会提前关闭管道的消费者时，
 >    stdout 会发 EPIPE，脚本里必须忽略它，否则会在异常处理里再写一次 stdout 而无限刷屏。
+>
+> **不要用 `Start-Process -RedirectStandardOutput/-RedirectStandardError` 跑这些脚本**：实测
+> `overlap-check.cjs` 会因此把 EPIPE 的异常栈反复写进自己的日志，把 `.verify/overlap.log`
+> 撑到 **168 MB** 并持续烧 CPU（它的 `uncaughtException` 里用 `console.warn` 回写，管道坏了就自激）。
+> 要看结果就读脚本自己写的 `.verify/*.log`，或者用管道 + `Select-String`（那一次是干净的）。
+> 同理，清理时用 `Get-Process electron | Stop-Process -Force` 收掉残留进程，别让它们继续写日志。
 >
 > **截图类脚本**（`visual-audit.cjs`、`capture-readme.cjs`）依赖桌面会话未锁屏：
 > 锁屏时 GDI 截图返回全白、Electron 的 `desktopCapturer` 返回 0 个源。

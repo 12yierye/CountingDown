@@ -28,11 +28,11 @@ export interface CountdownCardState {
   absDays: ComputedRef<number>
   hintText: ComputedRef<string>
   statusText: ComputedRef<string>
-  /** days 模式下是否渲染「天」这个单位 */
-  showUnit: ComputedRef<boolean>
   /** 是否渲染副标题 / 状态文案 */
   showHint: ComputedRef<boolean>
   showStatus: ComputedRef<boolean>
+  /** days 模式下渲染的「天」这个单位字；留空表示这一段不带单位 */
+  unit: ComputedRef<string>
   cardStyleObject: ComputedRef<Record<string, string>>
   titleStyle: ComputedRef<Record<string, string>>
   countStyle: ComputedRef<Record<string, string>>
@@ -107,10 +107,7 @@ export function useCountdownCard(
         ...base,
         target: { mode: 'annual', date: '', month, day },
         text: { ...base.text, title: options.sampleTitle ?? base.text.title },
-        separator: {
-          hm: cfg.behavior.separatorHM,
-          ms: cfg.behavior.separatorMS
-        }
+        units: { ...cfg.behavior.units }
       }
     }
     const item = findActiveItem(cfg)
@@ -192,8 +189,7 @@ export function useCountdownCard(
     return buildPrecisionParts(
       mode,
       config().behavior.showDaysInPrecise,
-      current.text.unit,
-      current.separator,
+      current.units,
       computedResult
     )
   })
@@ -206,9 +202,9 @@ export function useCountdownCard(
     absDays,
     hintText,
     statusText,
-    showUnit: computed(() => resolved.value?.showUnit !== false),
     showHint: computed(() => resolved.value?.showHint !== false),
     showStatus: computed(() => resolved.value?.showStatus !== false),
+    unit: computed(() => resolved.value?.units.day ?? config().behavior.units.day),
     cardStyleObject,
     titleStyle,
     countStyle,

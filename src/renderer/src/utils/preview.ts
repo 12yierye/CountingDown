@@ -1,36 +1,50 @@
-import type { DisplayMode } from '@shared/types'
+import type { DisplayMode, UnitLabelConfig } from '@shared/types'
 
 /**
- * 设置面板里「显示模式」选项的文案：直接给出真实渲染出来长什么样，
- * 而不是抽象地描述成「天 + 时」。示例值固定为 95天 02时 46分 11秒，
- * 因此用户选分隔符时能立刻看出差别。
- *
- * 规则与 buildPrecisionParts 严格一致：每个数字后面跟它所属单位那一档的分隔符，
- * 最后一个数字不带任何标签 —— 这正是「天+时」与「天+时分」过去显示成
- * `95天 02:` 这种带尾巴冒号的根源。
- *
- * 注意「时与分之间」在 `天+时+分` 与 `天+时+分+秒` 里是同一个设置，
- * 所以两个选项展示出来的那一档必须一模一样（都是 02 后面那一段）。
+ * 显示模式的展示样例。统一用 DD天 HH时 MM分 SS秒 这样的占位符，
+ * 不再拿「95天」当示例 —— 用户看到的应该是一个格式模板，而不是一组具体数字。
  */
-export const MODE_SAMPLE = { days: 95, hours: '02', minutes: '46', seconds: '11' }
+export const MODE_SAMPLE = { day: 'DD', hour: 'HH', minute: 'MM', second: 'SS' }
 
+/** 当前模式下实际会渲染出哪些分段 */
+export interface ModeSlots {
+  days: boolean
+  hours: boolean
+  minutes: boolean
+  seconds: boolean
+}
+
+/**
+ * 由显示模式推出实际渲染的分段。某一段不存在时，它对应的单位字也不会渲染，
+ * 这条规则在设置面板与编辑页共用，免得两边的判断各写一套。
+ */
+export function modeSlots(mode: DisplayMode, showDaysInPrecise: boolean): ModeSlots {
+  if (mode === 'days') return { days: true, hours: false, minutes: false, seconds: false }
+  return {
+    days: mode !== 'precise' || showDaysInPrecise,
+    hours: true,
+    minutes: mode !== 'days-hours',
+    seconds: mode === 'precise'
+  }
+}
+
+/**
+ * 「显示模式」选项的文案：直接给出该模式渲染出来的格式模板，用的就是当前单位字，
+ * 所以换单位字时选项文字会同步变化。
+ *
+ * 分段之间补一个空格只是为了在标签里看得清；卡片本身是紧挨着的
+ * （想加间距就把空格写进单位字里，见 buildPrecisionParts）。
+ */
 export function modePreviewLabel(
   mode: DisplayMode,
   showDays: boolean,
-  separator: { hm: string; ms: string }
+  units: UnitLabelConfig
 ): string {
-  switch (mode) {
-    case 'days':
-      return String(MODE_SAMPLE.days)
-    case 'days-hours':
-      return `${MODE_SAMPLE.days}天 ${MODE_SAMPLE.hours}时`
-    case 'days-hours-minutes':
-      return `${MODE_SAMPLE.days}天 ${MODE_SAMPLE.hours}${separator.hm} ${MODE_SAMPLE.minutes}${separator.ms}`
-    case 'precise': {
-      const head = showDays ? `${MODE_SAMPLE.days}天 ` : ''
-      return `${head}${MODE_SAMPLE.hours}${separator.hm} ${MODE_SAMPLE.minutes}${separator.ms} ${MODE_SAMPLE.seconds}`
-    }
-    default:
-      return String(MODE_SAMPLE.days)
-  }
+  const slots = modeSlots(mode, showDays)
+  const parts: string[] = []
+  if (slots.days) parts.push(`${MODE_SAMPLE.day}${units.day}`)
+  if (slots.hours) parts.push(`${MODE_SAMPLE.hour}${units.hour}`)
+  if (slots.minutes) parts.push(`${MODE_SAMPLE.minute}${units.minute}`)
+  if (slots.seconds) parts.push(`${MODE_SAMPLE.second}${units.second}`)
+  return parts.join(' ')
 }

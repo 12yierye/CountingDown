@@ -6,29 +6,35 @@ import type { AppConfig, CountdownItem, CustomPreset } from '@shared/types'
 import { THEME_PRESETS, mergeAppearance } from '@shared/defaults'
 import { cardStyleFor, textStyle } from '@/utils/style'
 import PresetDetailDialog from '@/components/PresetDetailDialog.vue'
+import PresetTuneDialog from '@/components/PresetTuneDialog.vue'
 
 const props = defineProps<{
   appearance: AppConfig['appearance']
   text: AppConfig['text']
   customPresets: CustomPreset[]
   countdowns: CountdownItem[]
+  /** 「手动调整」模态框里的实时预览需要完整配置上下文 */
+  config: AppConfig
 }>()
 
-/** 保存预设的来源：全局外观 / 某个倒数日的外观覆盖 */
-export type PresetSaveTarget = 'global' | 'item'
+/**
+ * 保存预设的来源，与保存弹窗里三选一的取值一一对应。
+ * 之前是 target + tune 两个字段，但「手动调整」和「当前全局外观」都会发 target='global'，
+ * 接收端分不出来（只有一个布尔量能区分），所以换成显式枚举。
+ */
+export type PresetSaveMode = 'global' | 'item' | 'manual'
 
 const emit = defineEmits<{
   (event: 'apply', appearance: AppConfig['appearance'], id: string, name: string): void
   (event: 'remove', id: string): void
-  /** 保存预设：name = 名称，target = 来源，然后跳到外观页继续手动微调 */
+  /** 保存预设：name = 名称，saveMode = 来源；manual 时 appearance 来自模态框里的草稿 */
   (
     event: 'save',
     payload: {
       name: string
       appearance: AppConfig['appearance']
-      target: PresetSaveTarget
+      saveMode: PresetSaveMode
       itemId: string
-      tune: boolean
     }
   ): void
 }>()
@@ -55,12 +61,14 @@ function labelStyle(appearance: AppConfig['appearance']): Record<string, string>
 }
 
 /* ------------------------------------------------------------------ *
- * 保存预设：先弹出模态框问清楚「要保存的是哪一份设置」
+ * 保存预设
+ *   global / item：弹窗收「名称 + 来源」，确定即保存（global 会覆盖全局外观）
+ *   manual：弹窗只收名称，确定后进外观模态框，在模态框里点保存才落盘
  * ------------------------------------------------------------------ */
 
 const saveOpen = ref(false)
 const saveName = ref('')
-const saveMode = ref<'global' | 'item' | 'manual'>('global')
+const saveMode = ref<PresetSaveMode>('global')
 const saveItemId = ref('')
 
 const saveItems = computed(() => props.countdowns ?? [])
@@ -69,6 +77,7 @@ function openSave(): void {
   saveName.value = ''
   saveMode.value = 'global'
   saveItemId.value = saveItems.value[0]?.id ?? ''
+  saveNameError.value = false
   saveOpen.value = true
 }
 
@@ -82,18 +91,48 @@ const resolvedSaveAppearance = computed<AppConfig['appearance']>(() => {
 
 const saveNameError = ref(false)
 
+/** 手动调整：名称先在这里校验，通过后交给模态框去调参并保存 */
+function submitTune(): void {
+  const trimmed = saveName.value.trim()
+  saveNameError.value = trimmed.length === 0
+  if (!trimmed) return
+  tuneName.value = trimmed
+  saveOpen.value = false
+  tuneOpen.value = true
+}
+
 function submitSave(): void {
+  if (saveMode.value === 'manual') {
+    submitTune()
+    return
+  }
   const trimmed = saveName.value.trim()
   saveNameError.value = trimmed.length === 0
   if (!trimmed) return
   emit('save', {
     name: trimmed,
     appearance: JSON.parse(JSON.stringify(resolvedSaveAppearance.value)) as AppConfig['appearance'],
-    target: saveMode.value === 'item' ? 'item' : 'global',
-    itemId: saveMode.value === 'item' ? saveItemId.value : '',
-    tune: saveMode.value === 'manual'
+    saveMode: saveMode.value,
+    itemId: saveMode.value === 'item' ? saveItemId.value : ''
   })
   saveOpen.value = false
+}
+
+/** 取消：顺手清掉上一次的名称报错，避免下次打开弹窗还挂着红字 */
+function closeSave(): void {
+  saveOpen.value = false
+  saveNameError.value = false
+}
+
+/* ------------------------------------------------------------------ *
+ * 手动调整所有参数：模态框里改外观，只存预设、不动全局
+ * ------------------------------------------------------------------ */
+
+const tuneOpen = ref(false)
+const tuneName = ref('')
+
+function onTuned(appearance: AppConfig['appearance']): void {
+  emit('save', { name: tuneName.value, appearance, saveMode: 'manual', itemId: '' })
 }
 
 async function confirmRemove(preset: CustomPreset): Promise<void> {
@@ -279,14 +318,20 @@ function viewDetail(name: string, appearance: AppConfig['appearance']): void {
           @keydown.enter="submitSave"
         />
       </el-form-item>
+      <!-- 手动调整：保存动作发生在模态框里，这里只说清楚接下来会发生什么 -->
+      <p v-if="saveMode === 'manual'" class="save-hint save-hint--tune">{{ t('preset.tuneHint') }}</p>
       <p v-if="saveNameError" class="save-error">{{ t('preset.nameRequired') }}</p>
     </el-form>
 
     <template #footer>
-      <el-button @click="saveOpen = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="submitSave">{{ t('common.confirm') }}</el-button>
+      <el-button @click="closeSave">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="submitSave">
+        {{ saveMode === 'manual' ? t('preset.tuneOpen') : t('common.confirm') }}
+      </el-button>
     </template>
   </el-dialog>
+
+  <PresetTuneDialog v-model="tuneOpen" :config="config" @confirm="onTuned" />
 
   <PresetDetailDialog
     v-model="detailOpen"
@@ -377,6 +422,11 @@ function viewDetail(name: string, appearance: AppConfig['appearance']): void {
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--el-text-color-secondary);
+}
+
+/* 手动调整那行说明紧跟在名称输入框下面，间距要收一点 */
+.save-hint--tune {
+  margin: -6px 0 12px;
 }
 
 .save-error {

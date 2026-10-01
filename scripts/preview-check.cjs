@@ -423,14 +423,18 @@ app.whenReady().then(async () => {
   await wait(1200)
   const itemsDuring = (persisted().countdowns || []).length
   const newEditor = await jsonIn(s, EDITOR_STATE)
-  await jsonIn(s, CLICK_BUTTON('/返回列表|Back to list/'))
+  const backNew = await jsonIn(s, CLICK_BUTTON('/返回列表|Back to list/'))
   await wait(1200)
+  const dialogNew = await jsonIn(
+    s,
+    `(function(){var box=document.querySelector(".el-message-box");return box?{found:true,text:(box.textContent||"").slice(0,80)}:{found:false};})()`
+  )
   const itemsAfter = (persisted().countdowns || []).length
   const rowsAfter = await evalIn(s, 'document.querySelectorAll(".cd-row").length')
   write(
     `new-item flow: rowsBefore=${rowsBefore} itemsBefore=${itemsBefore} itemsDuring=${itemsDuring} ` +
       `itemsAfter=${itemsAfter} rowsAfter=${rowsAfter} newEditor=${JSON.stringify(newEditor)} ` +
-      `click=${JSON.stringify(newClick)}`
+      `click=${JSON.stringify(newClick)} back=${JSON.stringify(backNew)} dialog=${JSON.stringify(dialogNew)}`
   )
   check('new-item-editor-opened', newEditor.editor === true, JSON.stringify(newEditor))
   check('new-item-added', itemsDuring === itemsBefore + 1, `${itemsBefore} -> ${itemsDuring}`)

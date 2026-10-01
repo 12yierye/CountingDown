@@ -2,7 +2,7 @@
 /**
  * 卡片本体：桌面组件窗口与设置里的实时预览共用这一份模板。
  *
- * 以前预览是照抄一遍组件结构，新增一种显示模式或改一次分隔符就得改两处，
+ * 以前预览是照抄一遍组件结构，新增一种显示模式或改一次单位字就得改两处，
  * 漏一处预览就和真实组件对不上。现在结构只有这一份，两边只在「外壳」
  * （窗口舞台 / 预览舞台）和交互（拖动、窗口缩放）上不同。
  */
@@ -10,11 +10,11 @@ import type { PrecisionPart } from '@shared/defaults'
 
 defineProps<{
   title: string
-  /** 非 null 时渲染「数字 + 单位/分隔符」序列，否则渲染大数字 + 单位 */
+  /** 非 null 时渲染「数字 + 单位字」序列，否则渲染大数字 + 天数单位 */
   preciseParts: PrecisionPart[] | null
   absDays: number
+  /** days 模式下的天数单位字；留空表示这一段不带单位 */
   unit: string
-  showUnit: boolean
   hintText: string
   statusText: string
   showHint: boolean
@@ -41,7 +41,7 @@ defineProps<{
 
     <div v-else class="cd-card__count" :style="countStyle">
       <span class="cd-card__number">{{ absDays }}</span>
-      <span v-if="showUnit" class="cd-card__unit" :style="unitStyle">{{ unit }}</span>
+      <span v-if="unit" class="cd-card__unit" :style="unitStyle">{{ unit }}</span>
     </div>
 
     <div v-if="hintText && showHint" class="cd-card__hint" :style="hintStyle">{{ hintText }}</div>

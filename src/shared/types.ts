@@ -11,8 +11,7 @@ export type DateMode = 'annual' | 'once'
  * - days-hours-minutes 天 + 时 + 分
  * - precise            天 + 时 + 分 + 秒（可用 showDaysInPrecise 去掉天数部分）
  *
- * 非 days 的三种模式一律以「数字 + 单位/分隔符」序列渲染，分隔符由
- * BehaviorConfig.separatorHM / separatorMS 决定，默认为中文单位而不是冒号。
+ * 四个分段的单位字由 BehaviorConfig.units 决定，默认是「天 / 时 / 分 / 秒」。
  */
 export type DisplayMode = 'days' | 'days-hours' | 'days-hours-minutes' | 'precise'
 /** 带时分秒的三种显示模式（除「只显示天数」以外） */
@@ -46,28 +45,32 @@ export interface CountdownItem {
   target: TargetConfig
   /** 单项文案覆盖；空字符串表示跟随全局 */
   text: TextOverride
-  /** 单项时分隔符覆盖；enabled 为 false 时全部跟随全局 */
-  separator: SeparatorOverride
+  /** 单项单位字覆盖；enabled 为 false 时整组跟随全局 */
+  units: UnitLabelOverride
   /** 单项外观覆盖；字段未设置表示跟随全局 */
   appearance: AppearanceOverride
 }
 
 /**
- * 时分秒之间的分隔符。默认用中文单位（天/时/分/秒）而不是冒号，
- * 用户可以把任意一段换成「:」「时」或自己写的符号。
+ * 四个分段的单位字。默认就是「天 / 时 / 分 / 秒」，用户可以逐个换成别的字
+ * （例如 `天`→`D`、`时`→`h`），**留空表示这一段不带单位**。
+ *
+ * 单位字同时承担了分段之间的分隔作用，所以不需要另设一套「分隔符」：
+ * 写 `92天` 是中文单位，写 `92 D` 就是空格分隔，写 `92:` 就是冒号结尾。
+ * 四项**完全独立**，改其中一个不会影响另外三个。
+ *
+ * 注意「天」留空时，`只显示天数` 模式下就只剩一个数字（等价于旧的「不显示天数单位」开关）。
  */
-export interface SeparatorConfig {
-  /** 天与小时之间显示的字；留空表示不加任何字符 */
-  hm: string
-  /** 小时与分钟（或分钟与秒）之间显示的字；留空表示不加任何字符 */
-  ms: string
+export interface UnitLabelConfig {
+  day: string
+  hour: string
+  minute: string
+  second: string
 }
 
-/** 单项分隔符覆盖：要么整组跟随全局，要么整组自定义 */
-export interface SeparatorOverride {
+/** 单项单位字覆盖：要么整组跟随全局，要么整组自定义 */
+export interface UnitLabelOverride extends UnitLabelConfig {
   enabled: boolean
-  hm: string
-  ms: string
 }
 
 /** 文案覆盖：空字符串表示跟随全局 */
@@ -76,13 +79,10 @@ export interface TextOverride {
   futureText: string
   todayText: string
   pastText: string
-  unit: string
   /** 副标题是否显示；inherit = 跟随全局 */
   showHint: VisibilityOverride
   /** 状态文案是否显示；inherit = 跟随全局 */
   showStatus: VisibilityOverride
-  /** days 模式下是否显示天数单位（「天」）；inherit = 跟随全局 */
-  showUnit: VisibilityOverride
 }
 
 /** 外观覆盖：字段缺省表示跟随全局 */
@@ -106,14 +106,10 @@ export interface TextConfig {
   todayText: string
   /** 过期文案 */
   pastText: string
-  /** days 模式下的单位 */
-  unit: string
   /** 是否显示副标题（全局默认） */
   showHint: boolean
   /** 是否显示状态文案（全局默认） */
   showStatus: boolean
-  /** days 模式下是否显示天数单位（全局默认） */
-  showUnit: boolean
 }
 
 /** 三态覆盖：'inherit' 跟随全局，其余强制显示/隐藏 */
@@ -161,10 +157,8 @@ export interface BehaviorConfig {
   displayMode: DisplayMode
   /** precise 模式是否显示天数部分 */
   showDaysInPrecise: boolean
-  /** 天与时之间的分隔符（days-hours 及以上都生效） */
-  separatorHM: string
-  /** 时与分/分与秒之间显示的文字或符号；按模式取用，留空表示不加分隔 */
-  separatorMS: string
+  /** 四个分段的单位字（天/时/分/秒）；每项倒数日都能单独覆盖 */
+  units: UnitLabelConfig
   /** 过期后显示「过去 N 天」而不是纯文案 */
   showPastDays: boolean
   /** 组件是否始终置顶 */
@@ -301,16 +295,13 @@ export interface ResolvedCountdown {
     futureText: string
     todayText: string
     pastText: string
-    unit: string
   }
   /** 副标题最终是否显示（单项三态覆盖优先于全局） */
   showHint: boolean
   /** 状态文案最终是否显示 */
   showStatus: boolean
-  /** days 模式下的天数单位最终是否显示 */
-  showUnit: boolean
-  /** 最终生效的分隔符（单项覆盖优先于全局） */
-  separator: SeparatorConfig
+  /** 最终生效的单位字（单项覆盖优先于全局） */
+  units: UnitLabelConfig
   appearance: AppearanceConfig
 }
 

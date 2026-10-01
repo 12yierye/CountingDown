@@ -5,7 +5,8 @@
  * 少数确实需要常显示的提示（例如带按钮的引导）用 #note 插槽传进来。
  */
 defineProps<{
-  label: string
+  /** 留空表示这一行不需要标签（例如整行就是一个公式） */
+  label?: string
   hint?: string
   /** tooltip 里替换 {xxx} 的变量，例如 { days: 3 } */
   hintVars?: Record<string, string | number>
@@ -21,8 +22,8 @@ function fill(template: string, vars?: Record<string, string | number>): string 
 </script>
 
 <template>
-  <div class="field-row" :class="{ 'field-row--stacked': stacked }">
-    <div class="field-row__label">
+  <div class="field-row" :class="{ 'field-row--stacked': stacked, 'is-bare': !label }">
+    <div v-if="label || hint" class="field-row__label">
       <span class="field-row__text">{{ label }}</span>
       <el-tooltip
         v-if="hint"
@@ -79,6 +80,11 @@ function fill(template: string, vars?: Record<string, string | number>): string 
 .field-row--stacked .field-row__label {
   width: auto;
   padding-top: 0;
+}
+
+/* 没有标签的行（整行一个公式）：控件占满整行 */
+.field-row.is-bare .field-row__control {
+  flex: 1;
 }
 
 /* 「?」用图标而不是小圆点，深色主题下也能看清 */

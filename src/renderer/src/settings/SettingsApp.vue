@@ -10,7 +10,7 @@ import { config, loadConfig, patchConfig, resetConfig } from '@/composables/useC
 import { onSaved } from '@/utils/misc'
 import CountdownPreview from '@/components/CountdownPreview.vue'
 import PresetGallery from '@/components/PresetGallery.vue'
-import type { PresetSaveTarget } from '@/components/PresetGallery.vue'
+import type { PresetSaveMode } from '@/components/PresetGallery.vue'
 import CountdownList from '@/list/CountdownList.vue'
 import TargetPanel from '@/settings/panels/TargetPanel.vue'
 import AppearancePanel from '@/settings/panels/AppearancePanel.vue'
@@ -102,13 +102,17 @@ async function applyPreset(
   ElMessage.success(t('preset.applied', { name }))
 }
 
-/** 把当前全局外观存成自定义预设 */
+/**
+ * 保存预设。
+ *   global：存预设 + 把全局外观覆盖成这一份（这个来源的字面语义就是如此）
+ *   item  ：存预设 + 把该倒数日的覆盖改成这一份
+ *   manual：**只**存预设。手动调整是在模态框里对着草稿改的，全程不碰全局外观
+ */
 async function savePreset(payload: {
   name: string
   appearance: AppConfig['appearance']
-  target: PresetSaveTarget
+  saveMode: PresetSaveMode
   itemId: string
-  tune: boolean
 }): Promise<void> {
   const preset: CustomPreset = {
     id: `cp_${Date.now().toString(36)}`,
@@ -117,9 +121,9 @@ async function savePreset(payload: {
     appearance: JSON.parse(JSON.stringify(payload.appearance)) as AppConfig['appearance']
   }
   // 顺序很重要：先把外观写进去，再追加预设，避免第二次 patch 覆盖掉第一次的结果
-  if (payload.target === 'global') {
+  if (payload.saveMode === 'global') {
     await patchConfig({ appearance: payload.appearance })
-  } else if (payload.itemId) {
+  } else if (payload.saveMode === 'item' && payload.itemId) {
     const countdowns = config.value.countdowns.map((item) =>
       item.id === payload.itemId
         ? { ...item, appearance: { ...item.appearance, ...payload.appearance } }
@@ -129,8 +133,6 @@ async function savePreset(payload: {
   }
   await patchConfig({ customPresets: [preset, ...config.value.customPresets] })
   ElMessage.success(t('preset.saved', { name: payload.name }))
-  // 「手动调整所有参数」直接带到外观设置页，方便继续微调
-  if (payload.tune) section.value = 'appearance'
 }
 
 async function removePreset(id: string): Promise<void> {
@@ -296,6 +298,7 @@ watch(
           />
           <PresetGallery
             v-else-if="section === 'preset'"
+            :config="config"
             :appearance="config.appearance"
             :text="config.text"
             :countdowns="config.countdowns"
