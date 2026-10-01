@@ -12,7 +12,10 @@ import {
 import { cardStyle, textStyle } from '@/utils/style'
 import '@/widget/widget.css'
 
-const props = withDefaults(defineProps<{ config: AppConfig; scale?: number }>(), { scale: 0 })
+const props = withDefaults(
+  defineProps<{ config: AppConfig; scale?: number; compact?: boolean }>(),
+  { scale: 0, compact: false }
+)
 
 const resolved = computed(() => {
   const item = findActiveItem(props.config)
@@ -98,7 +101,7 @@ const titleText = computed(() => resolved.value?.text.title ?? '')
 </script>
 
 <template>
-  <div class="preview">
+  <div class="preview" :class="{ 'is-compact': compact }">
     <div class="preview__stage" :style="{ transform: `scale(${scale})` }">
       <div v-if="resolved" class="cd-card" :style="cardStyleObject">
         <div v-if="titleText.trim()" class="cd-card__title" :style="titleStyle">
@@ -162,5 +165,11 @@ const titleText = computed(() => resolved.value?.text.title ?? '')
   align-items: center;
   justify-content: center;
   max-width: 100%;
+}
+
+/* 编辑页吸顶栏里的紧凑版：少占竖向空间，把高度让给下面的表单 */
+.preview.is-compact {
+  min-height: 128px;
+  padding: 14px 16px;
 }
 </style>

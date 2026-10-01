@@ -52,7 +52,7 @@ export type DeepPartial<T> = {
  * 直接把 reactive 对象发给 Electron 会抛出「An object could not be cloned」，
  * 而 structuredClone / toRaw 都只处理最外层，嵌套的 Proxy 仍会失败，所以这里手动递归。
  */
-function toPlain<T>(value: T): T {
+export function toPlain<T>(value: T): T {
   if (isRef(value)) return toPlain(value.value) as T
   if (Array.isArray(value)) return value.map((entry) => toPlain(entry)) as unknown as T
   if (value && typeof value === 'object') {

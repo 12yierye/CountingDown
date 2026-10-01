@@ -1,6 +1,8 @@
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { BrowserWindow, app, nativeTheme, screen, shell } from 'electron'
 import { getConfig, isDev, onConfigChange, updateConfig } from './config-store'
+import { clearPreviewItem, getPreviewItem, widgetConfig } from './preview'
 import type { Corner, WindowConfig } from '../shared/types'
 
 let widgetWindow: BrowserWindow | null = null
@@ -187,6 +189,7 @@ export function createWidgetWindow(): BrowserWindow {
     // 透明模式下自己画圆角；不透明模式让系统给窗口加圆角，避免出现直角大色块
     roundedCorners: transparent,
     title: '倒数日',
+    icon: appIconPath() ?? undefined,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -208,6 +211,9 @@ export function createWidgetWindow(): BrowserWindow {
     stopCursorWatch()
   })
 
+  // 组件窗口可能因「透明渲染开关」被重建，新渲染进程必须重新拿一次生效配置
+  widgetWindow.webContents.on('did-finish-load', () => pushWidgetConfig())
+
   loadRenderer(widgetWindow, 'widget')
   startCursorWatch()
   return widgetWindow
@@ -215,6 +221,36 @@ export function createWidgetWindow(): BrowserWindow {
 
 export function getWidgetWindow(): BrowserWindow | null {
   return widgetWindow && !widgetWindow.isDestroyed() ? widgetWindow : null
+}
+
+/**
+ * 应用图标文件。
+ *
+ * dev 下进程本身就是 electron.exe，窗口不显式指定 `icon` 就会显示 Electron 默认图标，
+ * 因此必须显式给一次；打包后 exe 自带图标，这里给的又是同一个资源，两边观感一致。
+ */
+function appIconPath(): string | null {
+  const roots = app.isPackaged
+    ? [
+        join(process.resourcesPath, 'resources'),
+        join(process.resourcesPath, 'app.asar', 'resources')
+      ]
+    : [join(__dirname, '../../resources'), join(process.cwd(), 'resources')]
+  for (const root of roots) {
+    for (const name of ['icon.ico', 'icon.png']) {
+      const file = join(root, name)
+      if (existsSync(file)) return file
+    }
+  }
+  console.warn('[window] 未找到应用图标资源，请先执行 pnpm run icon')
+  return null
+}
+
+/** 把「持久化配置 + 编辑草稿」推给组件窗口（草稿为空时就是持久化配置） */
+export function pushWidgetConfig(): void {
+  const win = getWidgetWindow()
+  if (!win || win.webContents.isDestroyed()) return
+  win.webContents.send('widget:preview', widgetConfig())
 }
 
 /** 透明/不透明模式切换需要重建窗口（transparent 只能在创建时指定） */
@@ -488,6 +524,7 @@ export function createSettingsWindow(): BrowserWindow {
     show: false,
     title: '倒数日 · 设置',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#17181d' : '#f5f6fa',
+    icon: appIconPath() ?? undefined,
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -499,6 +536,24 @@ export function createSettingsWindow(): BrowserWindow {
   })
   // 设置窗口保留在任务栏中，方便切换
   settingsWindow.setSkipTaskbar(false)
+
+  /**
+   * 设置窗口一旦不可见就丢掉草稿覆盖层。
+   * 否则「隐藏设置」之后桌面卡片会一直显示未保存的草稿 —— 那正是要避免的。
+   */
+  const dropPreview = (): void => {
+    if (!getPreviewItem()) return
+    clearPreviewItem()
+    pushWidgetConfig()
+  }
+  settingsWindow.on('hide', dropPreview)
+  // 重新显示时让编辑器把当前草稿再发一次，补上隐藏期间失效的预览
+  settingsWindow.on('show', () => {
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send('preview:sync')
+    }
+  })
+
   settingsWindow.on('close', (event) => {
     if (!(app as unknown as { isQuitting?: boolean }).isQuitting) {
       event.preventDefault()
@@ -506,6 +561,7 @@ export function createSettingsWindow(): BrowserWindow {
     }
   })
   settingsWindow.on('closed', () => {
+    dropPreview()
     settingsWindow = null
   })
   settingsWindow.webContents.setWindowOpenHandler(({ url }) => {

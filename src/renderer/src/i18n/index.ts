@@ -92,6 +92,7 @@ export const messages = {
       appearanceOverrideHint: '开启后逐项勾选要覆盖的设置；未勾选的继续跟随全局',
       appearanceReset: '全部恢复为跟随全局',
       appearanceActive: '此项已覆盖外观',
+      liveOnDesktop: '桌面卡片实时预览',
       saved: '已保存'
     },
     target: {
@@ -352,6 +353,7 @@ export const messages = {
       appearanceOverrideHint: 'Tick the settings you want to override; unchecked ones keep following global',
       appearanceReset: 'Reset all to global',
       appearanceActive: 'This item overrides the appearance',
+      liveOnDesktop: 'Live on desktop',
       saved: 'Saved'
     },
     target: {

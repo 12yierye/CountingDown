@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type {
@@ -17,6 +17,7 @@ import {
   resolveTarget,
   resolveText
 } from '@shared/defaults'
+import { toPlain } from '@/composables/useConfig'
 import { FONT_STACKS } from '@/utils/style'
 import FieldRow from '@/components/FieldRow.vue'
 import ColorField from '@/components/ColorField.vue'
@@ -27,7 +28,7 @@ import CountdownPreview from '@/components/CountdownPreview.vue'
 const props = defineProps<{ config: AppConfig; item: CountdownItem }>()
 const emit = defineEmits<{
   (event: 'save', item: CountdownItem): void
-  (event: 'close'): void
+  (event: 'close', payload: { saved: boolean }): void
 }>()
 
 const { t } = useI18n()
@@ -154,6 +155,50 @@ function currentSnapshot(): string {
 
 const dirty = computed(() => currentSnapshot() !== baseline.value)
 
+/** 正在编辑的就是桌面显示项：此时才需要提示「桌面卡片实时预览」 */
+const liveOnDesktop = computed(
+  () => Boolean(props.item.id) && props.item.id === props.config.activeId
+)
+
+/* ------------------------------------------------------------------ *
+ * 桌面实时预览：把草稿发给主进程（纯内存，不落盘），由主进程决定是否套给组件
+ * 窗口 —— 只有「编辑项 == 当前显示项」时才会套。离开编辑页即清空覆盖层，
+ * 桌面卡片于是回到编辑前的样子。
+ * ------------------------------------------------------------------ */
+
+const PREVIEW_DEBOUNCE = 60
+let previewTimer: number | undefined
+
+function publishPreview(immediate = false): void {
+  if (previewTimer) window.clearTimeout(previewTimer)
+  if (immediate) {
+    previewTimer = undefined
+    void window.cd.setPreviewItem(toPlain(computeItem()))
+    return
+  }
+  previewTimer = window.setTimeout(() => {
+    previewTimer = undefined
+    // computeItem() 里有响应式依赖，必须等定时器触发后再取值
+    void window.cd.setPreviewItem(toPlain(computeItem()))
+  }, PREVIEW_DEBOUNCE)
+}
+
+// 用与「未保存修改」同一个信号：它覆盖到草稿的每一个字段
+watch(
+  () => currentSnapshot(),
+  () => publishPreview()
+)
+
+// 设置窗口重新显示时补发一次，避免隐藏期间预览失效
+const unsubscribePreviewSync = window.cd.onPreviewSync(() => publishPreview(true))
+
+onBeforeUnmount(() => {
+  if (previewTimer) window.clearTimeout(previewTimer)
+  unsubscribePreviewSync()
+  // 清空覆盖层 = 还原到编辑前；主进程在设置窗口隐藏/关闭时也会兜底清一次
+  void window.cd.setPreviewItem(null)
+})
+
 /** 只有外部真的改了配置才重载草稿 */
 watch(
   () => props.item,
@@ -203,12 +248,12 @@ function save(): void {
 
 function saveAndBack(): void {
   save()
-  emit('close')
+  emit('close', { saved: true })
 }
 
 async function requestClose(): Promise<void> {
   if (!dirty.value) {
-    emit('close')
+    emit('close', { saved: false })
     return
   }
   try {
@@ -220,7 +265,7 @@ async function requestClose(): Promise<void> {
     })
     saveAndBack()
   } catch (action) {
-    if (action === 'cancel') emit('close')
+    if (action === 'cancel') emit('close', { saved: false })
   }
 }
 
@@ -350,36 +395,42 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
 </script>
 
 <template>
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <div class="editor-head">
-          <el-button size="small" text @click="requestClose">
-            <el-icon><ArrowLeft /></el-icon>
-            <span style="margin-left: 4px">{{ t('common.back') }}</span>
-          </el-button>
-          <span class="editor-head__title">{{ t('editor.editTitle') }}</span>
-          <el-tag v-if="appearanceActive" size="small" type="danger" effect="plain">
-            {{ t('editor.appearanceActive') }}
-          </el-tag>
-          <el-tag v-if="dirty" size="small" type="warning" effect="plain">
-            {{ t('common.discardTitle') }}
-          </el-tag>
-          <el-tag v-else-if="savedFlash" size="small" type="success" effect="plain">
-            {{ t('common.savedOk') }}
-          </el-tag>
-        </div>
-        <el-button type="primary" size="small" @click="saveAndBack">
-          <el-icon><Check /></el-icon>
-          <span style="margin-left: 6px">{{ t('common.save') }}</span>
-        </el-button>
-      </div>
-    </template>
-
-    <div class="editor-preview">
-      <CountdownPreview :config="previewConfig" />
+  <!--
+    吸顶栏：.el-card 自带 overflow: hidden，卡内 position: sticky 不会生效，
+    所以把「返回 / 标题 / 状态 / 保存 + 预览」整块搬到卡片外面吸顶，
+    滚到下面的外观设置时依然能看到实时效果与保存按钮。
+  -->
+  <div class="editor-sticky">
+    <div class="editor-head">
+      <el-button size="small" text @click="requestClose">
+        <el-icon><ArrowLeft /></el-icon>
+        <span style="margin-left: 4px">{{ t('common.back') }}</span>
+      </el-button>
+      <span class="editor-head__title">{{ t('editor.editTitle') }}</span>
+      <el-tag v-if="liveOnDesktop" size="small" type="primary" effect="plain">
+        {{ t('editor.liveOnDesktop') }}
+      </el-tag>
+      <el-tag v-if="appearanceActive" size="small" type="danger" effect="plain">
+        {{ t('editor.appearanceActive') }}
+      </el-tag>
+      <el-tag v-if="dirty" size="small" type="warning" effect="plain">
+        {{ t('common.discardTitle') }}
+      </el-tag>
+      <el-tag v-else-if="savedFlash" size="small" type="success" effect="plain">
+        {{ t('common.savedOk') }}
+      </el-tag>
+      <el-button type="primary" size="small" class="editor-head__save" @click="saveAndBack">
+        <el-icon><Check /></el-icon>
+        <span style="margin-left: 6px">{{ t('common.save') }}</span>
+      </el-button>
     </div>
 
+    <div class="editor-preview">
+      <CountdownPreview :config="previewConfig" compact />
+    </div>
+  </div>
+
+  <el-card shadow="never" class="panel-card">
     <el-divider content-position="left">{{ t('editor.basic') }}</el-divider>
     <FieldRow :label="t('editor.name')" :hint="t('editor.nameHint')">
       <el-input
@@ -688,11 +739,43 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
 </template>
 
 <style scoped>
+/*
+ * 吸顶栏。::before 在栏体上方补一块同色背景，盖住滚动容器 padding 造成的缝隙
+ * （sticky 的 top:0 相对滚动容器的 padding box 还是 content box 在各版本里并不一致，
+ * 补一块底色两种情况都不会露出下面的滚动内容）。
+ */
+.editor-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin-bottom: 16px;
+  padding: 10px 16px 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--cd-radius, 12px);
+  background: var(--el-bg-color);
+}
+
+.editor-sticky::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 24px;
+  background: var(--el-bg-color);
+}
+
 .editor-head {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* 保存按钮推到最右，与原来的卡片头布局保持一致 */
+.editor-head__save {
+  margin-left: auto;
 }
 
 /* 分区标题右侧的「?」：补充说明收进 tooltip，不再另起一行 */
@@ -707,7 +790,7 @@ const appearanceActive = computed(() => Object.keys(props.item.appearance ?? {})
 }
 
 .editor-preview {
-  margin-bottom: 6px;
+  margin-top: 10px;
 }
 
 .editor-style {

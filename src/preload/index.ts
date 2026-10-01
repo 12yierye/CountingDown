@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppConfig, Corner, HostInfo } from '../shared/types'
+import type { AppConfig, Corner, CountdownItem, HostInfo } from '../shared/types'
 
 type Unsubscribe = () => void
 
@@ -55,6 +55,26 @@ const api = {
     ipcRenderer.invoke('countdown:reorder', from, to),
 
   closeSettings: (): Promise<boolean> => ipcRenderer.invoke('settings:close'),
+
+  /** 编辑草稿：发给主进程做桌面实时预览，null 表示清空覆盖层（= 还原） */
+  setPreviewItem: (item: CountdownItem | null): Promise<boolean> =>
+    ipcRenderer.invoke('preview:set', item),
+  /** 组件窗口专用：主进程推来的「持久化配置 + 草稿」 */
+  onWidgetConfig: (handler: (config: AppConfig) => void): Unsubscribe => {
+    const listener = (_event: unknown, config: AppConfig): void => handler(config)
+    ipcRenderer.on('widget:preview', listener)
+    return () => {
+      ipcRenderer.removeListener('widget:preview', listener)
+    }
+  },
+  /** 设置窗口重新显示时主进程会发一次：编辑器据此重发当前草稿 */
+  onPreviewSync: (handler: () => void): Unsubscribe => {
+    const listener = (): void => handler()
+    ipcRenderer.on('preview:sync', listener)
+    return () => {
+      ipcRenderer.removeListener('preview:sync', listener)
+    }
+  },
 
   setHotkey: (accelerator: string): Promise<{ ok: boolean; hotkey: string; registered: boolean }> =>
     ipcRenderer.invoke('runtime:setHotkey', accelerator),

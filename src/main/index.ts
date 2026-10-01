@@ -17,6 +17,7 @@ import {
   endWidgetDrag,
   getSettingsWindow,
   getWidgetWindow,
+  pushWidgetConfig,
   recreateWidgetWindow,
   setWidgetInteractive,
   setWidgetVisible,
@@ -30,7 +31,8 @@ import {
 } from './windows'
 import { applyHotkey, isHotkeyRegistered, registerHotkey, unregisterHotkey } from './hotkey'
 import { createTray, destroyTray, refreshTray } from './tray'
-import type { AppConfig, HostInfo } from '../shared/types'
+import { setPreviewItem } from './preview'
+import type { AppConfig, CountdownItem, HostInfo } from '../shared/types'
 
 export { trayMenuSnapshot } from './tray'
 
@@ -136,6 +138,17 @@ function registerIpc(): void {
     return true
   })
 
+  /**
+   * 编辑草稿：只推给组件窗口，既不写盘也不广播给设置窗口，
+   * 因此编辑器自己依赖的 props.config 不会被草稿污染。
+   * null 表示清空覆盖层 —— 桌面卡片随即回到「编辑前」的持久化配置。
+   */
+  ipcMain.handle('preview:set', (_event, item: unknown) => {
+    setPreviewItem((item as CountdownItem | null) ?? null)
+    pushWidgetConfig()
+    return true
+  })
+
   ipcMain.handle('runtime:setHotkey', (_event, accelerator: string) => {
     const ok = applyHotkey(String(accelerator ?? ''))
     return { ok, hotkey: getConfig().runtime.toggleHotkey, registered: isHotkeyRegistered() }
@@ -183,6 +196,8 @@ function bootstrap(): void {
 
   onConfigChange((next) => {
     broadcast('config:changed', next)
+    // 覆盖层存在期间，组件窗口拿到的必须是「最新持久化配置 + 草稿」
+    pushWidgetConfig()
     refreshTray()
   })
 
@@ -203,6 +218,9 @@ function bootstrap(): void {
 }
 
 app.whenReady().then(() => {
+  // 任务栏归属：与 package.json 的 appId 保持一致，打包后图标与名称才对得上
+  app.setAppUserModelId('com.countingdown.widget')
+
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {

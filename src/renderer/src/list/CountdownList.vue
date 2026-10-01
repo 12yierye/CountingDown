@@ -20,6 +20,9 @@ const { t, locale } = useI18n()
 
 const editingId = ref<string | null>(null)
 
+/** 本次「新建」出来的项：放弃编辑时要把它删掉，不在列表里留一条空白项 */
+const pendingNewId = ref<string | null>(null)
+
 const items = computed(() => props.config.countdowns ?? [])
 const enabledItems = computed(() => items.value.filter((item) => item.enabled))
 /** 未启用的项单独归一类：它们不能被选为桌面显示 */
@@ -86,6 +89,7 @@ function toggleEnabled(item: CountdownItem, enabled: boolean): void {
 function openNew(): void {
   const item = createCountdownItem({ name: '' })
   updateList([...items.value, item])
+  pendingNewId.value = item.id
   editingId.value = item.id
 }
 
@@ -126,8 +130,27 @@ function saveItem(next: CountdownItem): void {
   updateList(items.value.map((entry) => (entry.id === next.id ? next : entry)))
 }
 
-function closeEditor(): void {
+/**
+ * 编辑器关闭。
+ *
+ * 「新建」出来的项如果没保存就离开，把这条空白项一并删掉；空列表里新建时它可能
+ * 已被 normalizeConfig 选为 activeId，这里一并回退到剩下第一个启用项。
+ * pendingNewId 无论保存与否都要清掉，否则下次编辑同一项放弃时会被误删。
+ */
+function closeEditor(payload: { saved: boolean }): void {
+  const id = editingId.value
   editingId.value = null
+  if (!id || pendingNewId.value !== id) return
+  pendingNewId.value = null
+  if (payload?.saved) return
+
+  const next = items.value.filter((entry) => entry.id !== id)
+  const patch: Record<string, unknown> = { countdowns: next }
+  if (props.config.activeId === id) {
+    patch.activeId = next.find((entry) => entry.enabled)?.id ?? ''
+  }
+  emit('patch', patch)
+  emitSaved()
 }
 
 /** 一键创建示例项，避免列表为空时无从下手 */
