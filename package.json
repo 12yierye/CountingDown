@@ -61,7 +61,8 @@
           ]
         }
       ],
-      "icon": "resources/icon.png"
+      "icon": "resources/icon.ico",
+      "executableName": "CountingDown"
     },
     "nsis": {
       "artifactName": "CountingDown_Setup_${version}.${ext}",
@@ -69,7 +70,10 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "倒数日"
+      "shortcutName": "倒数日",
+      "installerIcon": "resources/icon.ico",
+      "uninstallerIcon": "resources/icon.ico",
+      "installerHeaderIcon": "resources/icon.ico"
     }
   }
 }

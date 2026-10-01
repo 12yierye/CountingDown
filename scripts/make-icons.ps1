@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$OutDir = "$PSScriptRoot\..\resources"
 )
 
@@ -25,10 +25,10 @@ function New-RoundedPath {
   return $path
 }
 
-function New-Icon {
+# 只负责画：返回一张位图，导出成 PNG 还是 ICO 由调用方决定
+function New-IconBitmap {
   param(
-    [Parameter(Mandatory = $true)][int]$Size,
-    [Parameter(Mandatory = $true)][string]$OutFile
+    [Parameter(Mandatory = $true)][int]$Size
   )
 
   $bmp = New-Object System.Drawing.Bitmap($Size, $Size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -124,12 +124,159 @@ function New-Icon {
     } finally {
       $path.Dispose()
     }
+  } finally {
+    $g.Dispose()
+  }
 
+  return $bmp
+}
+
+function New-Icon {
+  param(
+    [Parameter(Mandatory = $true)][int]$Size,
+    [Parameter(Mandatory = $true)][string]$OutFile
+  )
+
+  $bmp = New-IconBitmap -Size $Size
+  try {
     $bmp.Save($OutFile, [System.Drawing.Imaging.ImageFormat]::Png)
     Write-Host "生成 $OutFile"
   } finally {
-    $g.Dispose()
     $bmp.Dispose()
+  }
+}
+
+# --------------------------------------------------------------------------
+# 多尺寸 ICO
+#
+# 以前用 Bitmap.GetHicon() + Icon.Save() 只写出一个 256×256 层：
+# 任务栏 / 任务管理器要的是 16×16、24×24 这类小尺寸，让系统从 256 缩放下来会发糊。
+# 而且实测 Icon.Save() 对**所有**尺寸都写 PNG 压缩层，小尺寸下并非所有外壳组件都认。
+# 这里自己拼 ICO：≤128 用经典 DIB 层，256 用 PNG 层（体积小，Vista 以后都支持）。
+# --------------------------------------------------------------------------
+
+# 一层 DIB：BITMAPINFOHEADER + 自下而上的 BGRA 位图 + 全 0 的 AND 掩码
+function New-IcoDibEntry {
+  param(
+    [Parameter(Mandatory = $true)][System.Drawing.Bitmap]$Bitmap
+  )
+
+  $size = $Bitmap.Width
+  $rect = New-Object System.Drawing.Rectangle(0, 0, $size, $size)
+  $data = $Bitmap.LockBits(
+    $rect,
+    [System.Drawing.Imaging.ImageLockMode]::ReadOnly,
+    [System.Drawing.Imaging.PixelFormat]::Format32bppArgb
+  )
+  try {
+    $stride = $data.Stride
+    $raw = New-Object byte[] ([Math]::Abs($stride) * $size)
+    [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $raw, 0, $raw.Length)
+  } finally {
+    $Bitmap.UnlockBits($data)
+  }
+
+  # AND 掩码每行按 4 字节对齐；32bpp 走 alpha 通道，掩码全 0 即可
+  $maskStride = [int]([Math]::Floor(($size + 31) / 32) * 4)
+  $xorSize = $size * $size * 4
+  $ms = New-Object System.IO.MemoryStream
+  $bw = New-Object System.IO.BinaryWriter($ms)
+  try {
+    # BITMAPINFOHEADER 的高度写两倍：XOR 位图 + AND 掩码
+    $bw.Write([UInt32]40)
+    $bw.Write([Int32]$size)
+    $bw.Write([Int32]($size * 2))
+    $bw.Write([UInt16]1)
+    $bw.Write([UInt16]32)
+    $bw.Write([UInt32]0)
+    $bw.Write([UInt32]$xorSize)
+    $bw.Write([Int32]0)
+    $bw.Write([Int32]0)
+    $bw.Write([UInt32]0)
+    $bw.Write([UInt32]0)
+
+    for ($y = $size - 1; $y -ge 0; $y--) {
+      $rowStart = if ($stride -ge 0) { $y * $stride } else { ($size - 1 - $y) * (-$stride) }
+      $bw.Write($raw, $rowStart, $size * 4)
+    }
+
+    $mask = New-Object byte[] ($maskStride * $size)
+    $bw.Write($mask, 0, $mask.Length)
+    $bw.Flush()
+    return , $ms.ToArray()
+  } finally {
+    $bw.Dispose()
+    $ms.Dispose()
+  }
+}
+
+function New-IcoPngEntry {
+  param(
+    [Parameter(Mandatory = $true)][System.Drawing.Bitmap]$Bitmap
+  )
+
+  $ms = New-Object System.IO.MemoryStream
+  try {
+    $Bitmap.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+    return , $ms.ToArray()
+  } finally {
+    $ms.Dispose()
+  }
+}
+
+function Write-MultiSizeIco {
+  param(
+    [Parameter(Mandatory = $true)][string]$OutFile
+  )
+
+  $sizes = @(16, 24, 32, 48, 64, 128, 256)
+  $entries = New-Object System.Collections.ArrayList
+  foreach ($size in $sizes) {
+    $bmp = New-IconBitmap -Size $size
+    try {
+      $bytes = if ($size -ge 256) {
+        New-IcoPngEntry -Bitmap $bmp
+      } else {
+        New-IcoDibEntry -Bitmap $bmp
+      }
+      [void]$entries.Add([pscustomobject]@{ Size = $size; Bytes = $bytes })
+    } finally {
+      $bmp.Dispose()
+    }
+  }
+
+  $ms = New-Object System.IO.MemoryStream
+  $bw = New-Object System.IO.BinaryWriter($ms)
+  try {
+    $bw.Write([UInt16]0)                 # reserved
+    $bw.Write([UInt16]1)                 # type = icon
+    $bw.Write([UInt16]$entries.Count)
+
+    $offset = 6 + 16 * $entries.Count
+    foreach ($entry in $entries) {
+      # 256 在目录项里用 0 表示
+      $dim = if ($entry.Size -ge 256) { 0 } else { $entry.Size }
+      $bw.Write([byte]$dim)
+      $bw.Write([byte]$dim)
+      $bw.Write([byte]0)                 # 调色板数量
+      $bw.Write([byte]0)                 # reserved
+      $bw.Write([UInt16]1)               # planes
+      $bw.Write([UInt16]32)              # bpp
+      $bw.Write([UInt32]$entry.Bytes.Length)
+      $bw.Write([UInt32]$offset)
+      $offset += $entry.Bytes.Length
+    }
+
+    foreach ($entry in $entries) {
+      $bw.Write($entry.Bytes, 0, $entry.Bytes.Length)
+    }
+
+    $bw.Flush()
+    [System.IO.File]::WriteAllBytes($OutFile, $ms.ToArray())
+    Write-Host ("生成 {0}（{1} px，共 {2} 层）" -f $OutFile, ($sizes -join '/'), $entries.Count)
+  } finally {
+    $bw.Dispose()
+    $ms.Dispose()
   }
 }
 
@@ -141,18 +288,5 @@ New-Icon -Size 256 -OutFile (Join-Path $OutDir 'icon.png')
 New-Icon -Size 32 -OutFile (Join-Path $OutDir 'tray.png')
 New-Icon -Size 16 -OutFile (Join-Path $OutDir 'tray-16.png')
 
-# 打包用 ico
-$src = [System.Drawing.Image]::FromFile((Join-Path $OutDir 'icon.png'))
-try {
-  $hicon = $src.GetHicon()
-  $icon = [System.Drawing.Icon]::FromHandle($hicon)
-  $fs = [System.IO.File]::Create((Join-Path $OutDir 'icon.ico'))
-  try {
-    $icon.Save($fs)
-  } finally {
-    $fs.Close()
-  }
-  Write-Host "生成 $(Join-Path $OutDir 'icon.ico')"
-} finally {
-  $src.Dispose()
-}
+# 打包 / 窗口图标
+Write-MultiSizeIco -OutFile (Join-Path $OutDir 'icon.ico')
