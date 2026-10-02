@@ -281,10 +281,63 @@ Element Plus 的次要灰，暗到几乎看不见。现在深色主题下统一�
 > 只有真正 `pnpm run build` 才会炸。所以外壳单独抽成了 `AppearanceGroup.vue`。
 > 同理，模板里 `@click` 写多行语句也会在构建期报解析错误 —— 用具名函数。
 
-实测（`scripts/preset-tune-check.cjs`，23 条断言全过）：模态框里 17 滑块 / 1 数字输入 / 7 取色器 /
+实测（`scripts/preset-tune-check.cjs`，36 条断言全过）：模态框里 17 滑块 / 1 数字输入 / 7 取色器 /
 4 段文字样式 / 4 个平铺分组 / 1 张实时预览；拖滑块后磁盘 `appearance` 逐字段不变、
 `customPresets` 数量不变；确定后 `customPresets` +1 且新预设是草稿那一份（圆角 51 vs 全局 18），
-全局仍是 18；取消后两个数字都不动。名称空着点「打开外观编辑器」原地报错、不进模态框。
+全局仍是 18；取消后两个数字都不动。名称空着点「保存预设」原地报错、不新增预设。
+另有几何断言：预览不压表单（间距 16px）、表单无横向溢出、弹窗与底部按钮都收在视口内。
+
+### 三个踩过的坑（都已被 `scripts/bugs-check.cjs` 守住）
+
+**1. 「未保存的更改」误报 = JSON 键顺序不一致。**
+`CountdownEditor` 判断脏不脏比的是 `JSON.stringify(snapshot)`，**键顺序不同就是不同的字符串**。
+`normalizeItem()` 写出的 `units` 是 `{ ...normalizeUnits(...), enabled: true }`（四个字在前、
+`enabled` 在最后），而 `computeItem()` 曾经写成 `{ enabled: true, day, ... }` ——
+于是**开着「单位字覆盖」的项每次进编辑页都显示未保存**，点返回还会弹「放弃修改」。
+改这类快照比较的两侧时，必须逐字段对齐键顺序（或者别用 JSON 字符串当快照）。
+
+**2. 组件窗口被销毁后，「显示」永久失效。**
+`setWidgetVisible()` 从前是 `const win = getWidgetWindow(); if (!win) return visible` ——
+用户从任务栏把组件窗口关掉之后，窗口对象已经是 null，于是点托盘、按快捷键、改配置全都只是
+把 `runtime.widgetVisible` 这个**期望值**翻来翻去，卡片再也不会回来。
+现在：窗口缺失时 `showWidget()` 先重建再显示；`toggleWidgetVisible()` 用
+**窗口当前是否真的可见**判断（不是期望值），避免「第一次点击没反应、要点两次」。
+托盘菜单文案也改成看 `isWidgetWindowAlive()`，否则窗口没了菜单还写着「隐藏倒数日」，
+用户根本找不到「显示」这个入口。
+
+> 排查提示：这两个函数一度是「只有测试用」的导出，被 bundler 当成死代码 tree-shake 掉了，
+> 探针里 `main.isWidgetWindowAlive` 直接是 `undefined`。**测试脚手架要用到的入口必须在主流程里
+> 真的被调用**，不能靠 `export` 留着。也因此探针改成了只断言可观察行为（窗口对象 + 托盘菜单文案），
+> 不再依赖内部函数导出。
+
+**3. `el-dialog` 的高度分配：别碰 `display`，也别指望「外框限高 + 内部百分比」。**
+弹窗右下角按钮溢出到容器外面，根因是 `.el-dialog` 为 `box-sizing: border-box`，
+`max-height: 88vh` 限的是**含 16px 内边距与标题栏的外框**：外框 599px，而
+header 40 + body 503 + footer 48 = 607，footer 正好被顶到边框外 8px。
+
+试过并**全部否决**的写法：
+- `display: flex` 放在 `.el-dialog.tune-dialog` 上 → 特异性高过元素自带的 `display: none`，
+  弹窗「关掉」后仍占屏；
+- 改用 `:not([style*="display: none"])` 条件变体 → 背靠背连跑时出现关闭后 computed display
+  仍是 `flex`（inline style 里却没有 display），隐藏被静默破坏，**比原问题更糟**；
+- 给内部那层（`.tune-dialog__inner`）写 `max-height: 100%` → 无效，其包含块的 height 是 auto，
+  百分比无从解析，那层照样长成自然高度 1743px，footer 被推到弹窗外 **1248px**；
+- 给外框补 `height: fit-content` → `fit-content` 只是近似 definite，仍不生效。
+
+现在的写法：**只给 `.el-dialog__body` 一个明确的高度上限**
+（`max-height: max(160px, calc(88vh - 112px))`，112px ≈ 标题栏 40 + footer 48 + 上下内边距 32），
+让它自己滚。外框被正文撑到合适高度，完全不需要任何 display / height hack。
+实测 1000×720 / 900×660 / 880×600 三种窗口下 footer 与按钮都在弹窗内 ≥8px。
+
+> 另外两处同类坑：
+> - class 绑定在 `.el-dialog` **自身**（`class="el-dialog tune-dialog"`），只能用
+>   `.el-dialog.tune-dialog`；写成后代选择器 `.tune-dialog .el-dialog` 永远选不中（我踩了两次）；
+> - 组件 `<style scoped>` 盖不到元素封装出来的内部节点，这类结构性覆盖必须写在 `settings.css`。
+
+**4. 预览的样板标题要传取值函数。**
+`useCountdownCard({ sampleTitle })` 从前只接受字符串，`props.title || '元旦'` 在 setup 时求值一次，
+之后 props 变化不再反映 —— 表现为「预设调参弹窗里输入预设名，右侧预览标题纹丝不动」。
+现在 `sampleTitle` 也接受 `() => string`，`CountdownPreview` 传的就是取值函数。
 
 ### 标签式切换的边框（`el-radio-button`）
 
@@ -379,6 +432,12 @@ Element Plus 默认**不是**每个标签各画一圈边框，而是靠 `margin-
 | --- | --- |
 | `pnpm dev` / `pnpm run build` / `pnpm run typecheck` | 全部通过 |
 | **单位字不受显示模式限制**：只显示天数模式下 4 格全可编辑（`disabled: 0`），打字能落盘 | ✅ `units-check.cjs` |
+| **开启单位字覆盖后不再误报未保存**：重进编辑页 `dirty: false`，落盘键序 `[day,hour,minute,second,enabled]` | ✅ `bugs-check.cjs` |
+| **组件窗口被销毁后能叫回来**：关闭 → 托盘变「显示倒数日」→ 点击重建并可见、仍不进任务栏 | ✅ `bugs-check.cjs` |
+| **新建预设名称只问一次**：保存弹窗手动模式下无名称框，模态框里输入即时反映到预览标题 | ✅ `bugs-check.cjs` |
+| 预设调参弹窗收在视口内（`dialogBottom 633 / footerBottom 641 < 视口 681`）、预览不压表单、无横向溢出 | ✅ DOM 几何测量 |
+| **调参弹窗的底部按钮在弹窗容器内**（三种窗口高度下 `footerOverElDialog` 与 `buttonOverElDialog` 均 ≤ -8px） | ✅ `tunefit-check.cjs` |
+| **取消后弹窗确实隐藏**（不是「看着没了但仍在屏幕占位」） | ✅ `tunefit-check.cjs` |
 | **外观页抽取后行为不变**：4 分组 / 17 滑块 / 1 数字输入 / 7 取色器 / 4 段样式，拖滑块仍立刻写全局 | ✅ `appearance-check.cjs` |
 | **手动调整预设不碰全局**：模态框里拖动后磁盘 `appearance` 逐字段不变、预设数不变 | ✅ `preset-tune-check.cjs` |
 | **手动调整只多预设**：确定后 `customPresets` +1 且存的是草稿那份（圆角 51 vs 全局 18） | ✅ `preset-tune-check.cjs` |
@@ -430,6 +489,8 @@ node_modules\electron\dist\electron.exe scripts\appearance-check.cjs    # 外观
 node_modules\electron\dist\electron.exe scripts\units-check.cjs         # 单位字不受显示模式限制（禁用/标灰/能落盘）
 node_modules\electron\dist\electron.exe scripts\preset-tune-check.cjs   # 手动调整模态框：不碰全局、只多预设、取消无痕
 node_modules\electron\dist\electron.exe scripts\preset-sources-check.cjs # 另外两个保存来源仍写全局 / 仍写该项覆盖
+node_modules\electron\dist\electron.exe scripts\bugs-check.cjs          # 脏标记误报 / 组件窗口销毁后能否叫回来 / 名称只问一次
+node_modules\electron\dist\electron.exe scripts\tunefit-check.cjs       # 调参弹窗在 3 种窗口高度下的版面（按钮不外溢、取消后确实隐藏）
 node_modules\electron\dist\electron.exe scripts\capture-readme.cjs # 重新生成 assets/screenshots/ 里的 README 配图
 ```
 

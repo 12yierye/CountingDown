@@ -91,19 +91,11 @@ const resolvedSaveAppearance = computed<AppConfig['appearance']>(() => {
 
 const saveNameError = ref(false)
 
-/** 手动调整：名称先在这里校验，通过后交给模态框去调参并保存 */
-function submitTune(): void {
-  const trimmed = saveName.value.trim()
-  saveNameError.value = trimmed.length === 0
-  if (!trimmed) return
-  tuneName.value = trimmed
-  saveOpen.value = false
-  tuneOpen.value = true
-}
-
 function submitSave(): void {
+  // 手动调整：这个弹窗只管「来源」，名字留到调完参数之后再问（见 PresetTuneDialog）
   if (saveMode.value === 'manual') {
-    submitTune()
+    saveOpen.value = false
+    tuneOpen.value = true
     return
   }
   const trimmed = saveName.value.trim()
@@ -129,10 +121,15 @@ function closeSave(): void {
  * ------------------------------------------------------------------ */
 
 const tuneOpen = ref(false)
-const tuneName = ref('')
 
-function onTuned(appearance: AppConfig['appearance']): void {
-  emit('save', { name: tuneName.value, appearance, saveMode: 'manual', itemId: '' })
+/** 模态框把「调好的外观 + 用户起的名字」一起交回来，这里只负责转发 */
+function onTuned(payload: { name: string; appearance: AppConfig['appearance'] }): void {
+  emit('save', {
+    name: payload.name,
+    appearance: payload.appearance,
+    saveMode: 'manual',
+    itemId: ''
+  })
 }
 
 async function confirmRemove(preset: CustomPreset): Promise<void> {
@@ -279,8 +276,8 @@ function viewDetail(name: string, appearance: AppConfig['appearance']): void {
     </div>
   </el-card>
 
-  <!-- 保存预设：先问清楚存哪一份设置，再让用户起名 -->
-  <el-dialog v-model="saveOpen" :title="t('preset.saveModeTitle')" width="560px">
+  <!-- 新建预设：这里只问「存哪一份设置」；手动调整的名称留到调完参数之后再问 -->
+  <el-dialog v-model="saveOpen" :title="t('preset.saveTitle')" width="560px">
     <el-form label-position="top">
       <el-form-item :label="t('preset.saveModeTarget')">
         <el-radio-group v-model="saveMode" class="save-mode">
@@ -309,7 +306,7 @@ function viewDetail(name: string, appearance: AppConfig['appearance']): void {
         </el-select>
       </el-form-item>
 
-      <el-form-item :label="t('preset.nameLabel')">
+      <el-form-item v-if="saveMode !== 'manual'" :label="t('preset.nameLabel')">
         <el-input
           v-model="saveName"
           :placeholder="t('preset.namePlaceholder')"
@@ -318,8 +315,6 @@ function viewDetail(name: string, appearance: AppConfig['appearance']): void {
           @keydown.enter="submitSave"
         />
       </el-form-item>
-      <!-- 手动调整：保存动作发生在模态框里，这里只说清楚接下来会发生什么 -->
-      <p v-if="saveMode === 'manual'" class="save-hint save-hint--tune">{{ t('preset.tuneHint') }}</p>
       <p v-if="saveNameError" class="save-error">{{ t('preset.nameRequired') }}</p>
     </el-form>
 
@@ -422,11 +417,6 @@ function viewDetail(name: string, appearance: AppConfig['appearance']): void {
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--el-text-color-secondary);
-}
-
-/* 手动调整那行说明紧跟在名称输入框下面，间距要收一点 */
-.save-hint--tune {
-  margin: -6px 0 12px;
 }
 
 .save-error {

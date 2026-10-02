@@ -155,14 +155,21 @@ function computeItem(): CountdownItem {
       ? { mode: draft.mode, date: draft.date, month: draft.month, day: draft.day }
       : props.item.target,
     text: { ...createCountdownItem().text, ...cleanText(draft.text), ...visibilityPatch() },
-    // 没开启覆盖时整组跟随全局
+    /*
+     * 单位字：**键顺序必须和 normalizeItem 的输出逐字一致**，否则「有没有未保存修改」
+     * 会一直误报 —— 那个判断比的是 JSON.stringify，键序不同就是不同的字符串。
+     *   - 开启覆盖：normalizeItem 写 `{ ...normalizeUnits(...), enabled: true }`
+     *     （四个字在前、enabled 在最后），所以这里也必须 enabled 在最后；
+     *   - 未开启：两边都是 emptyUnitOverride() 的 `{ enabled, day, hour, minute, second }`。
+     * 曾经这里写成 enabled 在前，于是开着覆盖的项每次打开编辑页都显示「未保存的更改」。
+     */
     units: draft.unitsCustom
       ? {
-          enabled: true,
           day: draft.units.day,
           hour: draft.units.hour,
           minute: draft.units.minute,
-          second: draft.units.second
+          second: draft.units.second,
+          enabled: true
         }
       : { enabled: false, day: '', hour: '', minute: '', second: '' },
     appearance: useAppearance.value ? compact(appearance.value) : {}

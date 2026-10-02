@@ -510,6 +510,45 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
   color: var(--el-text-color-secondary);
 }
 
+/*
+ * 预设「手动调整参数」弹窗（PresetTuneDialog）的高度分配。
+ *
+ * 为什么写在这里而不是组件的 <style scoped> 里：class 绑定落在 .el-dialog **自身**
+ * （class="el-dialog tune-dialog"），组件里既选不中它，scoped 属性也盖不到元素封装出的
+ * 内部节点（如 .el-dialog__body）。因此 `.el-dialog.tune-dialog` 只能用「同一元素两个类」写，
+ * 写成后代选择器 `.tune-dialog .el-dialog` 永远选不中。
+ *
+ * 两条弯路记在这里，别再走：
+ *
+ * 1. **不要给 .el-dialog（或它的条件变体）写 display**。显示/隐藏是 `display: none` ↔ block
+ *    切换，`.el-dialog.tune-dialog` 的特异性高过元素自带的那条 `display: none`：无条件写
+ *    display 会把「隐藏」也变成可见（弹窗关掉后仍占屏）。改用
+ *    `:not([style*="display: none"])` 也不可靠 —— 实测在背靠背连跑时曾出现关闭后
+ *    computed display 仍是 flex（inline style 里却没有 display），隐藏被静默破坏。
+ *    现在的写法完全不碰 display。
+ *
+ * 2. **不要靠「外框限高 + 内部百分比」来分高度**。.el-dialog 是 box-sizing: border-box，
+ *    `max-height: 88vh` 限的是含 16px 内边距与标题栏的**外框**；内部那层写
+ *    `max-height: 100%` 也不管用（其包含块的 height 是 auto，百分比无从解析），实测它照样
+ *    长成内容的自然高度 1743px，footer 被推到弹窗外 1248px —— 用户看到的
+ *    「右下角取消/保存按钮超出容器」。给外框补 `height: fit-content` 也不解决。
+ *
+ * 现在的做法：只给正文一个明确的高度上限（视口高度减去标题栏 / footer / 内边距那点固定开销），
+ * 让它自己滚。外框自然被正文撑到合适高度，也就不需要任何 display hack。
+ */
+.el-dialog.tune-dialog {
+  max-height: 88vh;
+  margin-bottom: 6vh;
+}
+
+.el-dialog.tune-dialog .el-dialog__body {
+  /* --cd-tune-chrome ≈ 标题栏 + footer + 上下内边距（实测 40 + 48 + 2×16 ≈ 120，留 8px 余量） */
+  --cd-tune-chrome: 112px;
+  /* max() 兜住极矮窗口，避免算出负数把正文压成 0 高 */
+  max-height: max(160px, calc(88vh - var(--cd-tune-chrome)));
+  overflow-y: auto;
+}
+
 /* 两列布局：列间距必须留足，否则左列控件的数值会贴到右列标签上 */
 .panel-grid-2 {
   display: grid;

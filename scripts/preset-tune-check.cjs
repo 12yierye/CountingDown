@@ -155,11 +155,21 @@ const deepEqual = (a, b) => JSON.stringify(a) === JSON.stringify(b)
  * （overlay 自己一直保持 flex），所以必须往里再看一层，否则关闭后仍会被判成「可见」。
  */
 const TUNE_VISIBLE =
-  '(function(){var d=document.querySelector(".tune-dialog");' +
-  'if(!d)return {present:false};' +
+  '(function(){var ds=document.querySelectorAll(".tune-dialog");' +
+  'var d=ds.length?ds[ds.length-1]:null;' +
+  'if(!d)return {present:false,count:0};' +
   'var inner=d.querySelector(".el-dialog")||d;' +
   'var cs=getComputedStyle(inner);' +
-  'return {present:true,visible:cs.display!=="none"&&cs.visibility!=="hidden",display:cs.display};})()'
+  'var input=d.querySelector("input.el-input__inner[maxlength=\\"20\\"]");' +
+  'var overlay=d.querySelector(".el-overlay-dialog")||d.parentElement;' +
+  'var body=d.querySelector(".el-dialog__body");' +
+  'return {present:true,count:ds.length,visible:cs.display!=="none"&&cs.visibility!=="hidden",display:cs.display,' +
+  ' inline:d.getAttribute("style"),' +
+  ' nameInput:!!input,' +
+  ' bodyVisible:body?getComputedStyle(body).display:"<none>",' +
+  ' overlayClass:overlay?overlay.className:null,' +
+  ' overlayDisplay:overlay?getComputedStyle(overlay).display:null,' +
+  ' dialogCount:document.querySelectorAll(".el-dialog").length};})()'
 
 const TUNE_STATE =
   '({sliders:document.querySelectorAll(".tune-dialog .slider-field__value").length,' +
@@ -193,7 +203,7 @@ const CLICK_NAV_PRESET =
 
 const CLICK_ADD_PRESET =
   `(function(){var add=[].slice.call(document.querySelectorAll("button")).filter(function(x){` +
-  `return /保存当前外观为预设|Save current appearance/.test(x.textContent||"")})[0];` +
+  `return /新建预设|New preset/.test(x.textContent||"")})[0];` +
   `if(!add)return {found:false};add.click();return {found:true};})()`
 
 const CLICK_MANUAL_RADIO =
@@ -202,7 +212,7 @@ const CLICK_MANUAL_RADIO =
   `if(!manual)return {found:false,radios:radios.map(function(x){return (x.textContent||"").trim()})};` +
   `manual.click();return {found:true};})()`
 
-const CLICK_OPEN_EDITOR = CLICK_BUTTON('/打开外观编辑器|Open appearance editor/')
+const CLICK_OPEN_EDITOR = CLICK_BUTTON('/手动调整参数|Tune the values/')
 
 /** 保存弹窗里那条名称报错：名称没填时点「打开外观编辑器」应当原地报错而不是前进 */
 const SAVE_NAME_ERROR =
@@ -212,16 +222,17 @@ const SAVE_NAME_ERROR =
   'var e=d&&d.querySelector(".save-error");return e?(e.textContent||"").trim():"";})()})'
 
 const SAVE_NAME_INPUT = '.el-dialog input.el-input__inner[maxlength="20"]'
+const TUNE_NAME_INPUT = '.tune-dialog input.el-input__inner[maxlength="20"]'
 
 /**
- * 走完「预设页 → 保存当前外观为预设 → 填名称 → 选手动调整 → 打开外观编辑器」。
+ * 走完「预设页 → 新建预设 → 选手动调整 → 进模态框 → 填名称」。
  *
  * **必须拆成多个阶段分别 await**：Vue 的 DOM 更新是异步的，一个 executeJavaScript 里
- * 连着点「导航 → 打开保存弹窗 → 选单选 → 点打开编辑器」的话，第二次 click 时弹窗根本
- * 还没渲染出来，表现为 `found:false` 这种「点了但什么都没有」。
+ * 连着点「导航 → 打开弹窗 → 选单选 → 点下一步」的话，后一次 click 时弹窗根本还没渲染出来，
+ * 表现为 `found:false` 这种「点了但什么都没有」。
  *
- * 名称是**必填**的：空着点「打开外观编辑器」只会原地报错、不会进模态框（这是产品行为，
- * 脚本必须照着走，不能指望跳过校验）。
+ * 名称**只在模态框里问一次**（调完参数之后），保存弹窗不再有名称输入框 ——
+ * 这是用户明确要求的流程，脚本也跟着走。
  */
 async function openTuneDialog(win, name) {
   const steps = []
@@ -231,12 +242,12 @@ async function openTuneDialog(win, name) {
   await wait(700)
   steps.push(await jsonIn(win, CLICK_MANUAL_RADIO))
   await wait(500)
-  if (name !== null) {
-    steps.push(await jsonIn(win, TYPE_INTO(SAVE_NAME_INPUT, name)))
-    await wait(300)
-  }
   steps.push(await jsonIn(win, CLICK_OPEN_EDITOR))
-  await wait(1300)
+  await wait(1400)
+  if (name !== null) {
+    steps.push(await jsonIn(win, TYPE_INTO(TUNE_NAME_INPUT, name)))
+    await wait(400)
+  }
   return steps
 }
 
@@ -281,20 +292,36 @@ app.whenReady().then(async () => {
   write('appearance before = ' + JSON.stringify(beforeAppearance))
   check('probe-config-loaded', beforeAppearance != null, JSON.stringify(beforePresets))
 
-  // ------------------------------------------- 0) 名称空着不能进模态框（产品校验）
-  const emptyName = await openTuneDialog(s, null)
-  const nameError = await jsonIn(s, SAVE_NAME_ERROR)
-  const stillClosed = await jsonIn(s, TUNE_VISIBLE)
-  write('empty-name attempt = ' + JSON.stringify(emptyName) + ' error = ' + JSON.stringify(nameError))
-  check('empty-name-is-rejected', nameError.shown === true, JSON.stringify(nameError))
-  check(
-    'empty-name-does-not-open-dialog',
-    stillClosed.present === false,
-    JSON.stringify(stillClosed)
-  )
-  // 关掉保存弹窗，重新走一遍完整流程
-  await jsonIn(s, CLICK_BUTTON('/^\\s*取消\\s*$|^\\s*Cancel\\s*$/'))
+  // ------------------------ 0) 模态框里的名称空着点保存 -> 原地报错、不新增预设
+  const noName = await openTuneDialog(s, null)
+  const noNameClick = await jsonIn(s, CLICK_BUTTON('/^\\s*保存预设\\s*$|^\\s*Save preset\\s*$/'))
   await wait(600)
+  const nameError = await jsonIn(
+    s,
+    '(function(){var e=document.querySelector(".tune-dialog .tune-dialog__error");' +
+      'return {shown:!!e,text:e?(e.textContent||"").trim():"",titled:!!document.querySelector(".tune-dialog [class*=el-form-item__label]")};})()'
+  )
+  const stillOpen = await jsonIn(s, TUNE_VISIBLE)
+  const countAfterEmpty = (persisted().customPresets || []).length
+  write(
+    'empty-name attempt = ' +
+      JSON.stringify(noName) +
+      ' click=' +
+      JSON.stringify(noNameClick) +
+      ' error=' +
+      JSON.stringify(nameError)
+  )
+  check('empty-name-save-clicked', noNameClick.found === true, JSON.stringify(noNameClick))
+  check('empty-name-is-rejected-in-dialog', nameError.shown === true, JSON.stringify(nameError))
+  check('empty-name-keeps-dialog-open', stillOpen.present === true, JSON.stringify(stillOpen))
+  check(
+    'empty-name-does-not-add-preset',
+    countAfterEmpty === beforePresets,
+    JSON.stringify(countAfterEmpty)
+  )
+  // 关掉模态框，重新走一遍完整流程
+  await jsonIn(s, CLICK_BUTTON('/^\\s*取消\\s*$|^\\s*Cancel\\s*$/'))
+  await wait(700)
 
   // ---------------------------------------------------- 打开模态框
   const opened = await openTuneDialog(s, '模态框里调的预设')
@@ -312,6 +339,73 @@ app.whenReady().then(async () => {
   check('tune-dialog-text-styles-4', state.styles === 4, JSON.stringify(state.styles))
   check('tune-dialog-live-preview', state.previewCard === 1, JSON.stringify(state.previewCard))
   check('tune-dialog-name-input', state.nameInput === true, JSON.stringify(state.nameInput))
+
+  // ------------------------------- 1.5) 版面：预览不能压到表单，底部按钮要在视口里
+  const layout = await jsonIn(
+    s,
+    `(function(){var left=document.querySelector(".tune-dialog__left");` +
+      `var right=document.querySelector(".tune-dialog__preview");` +
+      `var footer=document.querySelector(".tune-dialog .el-dialog__footer");` +
+      // 注意：class 绑定落在 .el-dialog **自身**（class="el-dialog tune-dialog"），
+      // 所以不能写 ".tune-dialog .el-dialog" 这种后代选择器，那样永远选不中。
+      `var box=footer?footer.parentElement:null;` +
+      `if(!left||!right||!footer||!box)return {found:false,hasLeft:!!left,hasRight:!!right,hasFooter:!!footer};` +
+      `var l=left.getBoundingClientRect(),r=right.getBoundingClientRect();` +
+      `var f=footer.getBoundingClientRect(),b=box.getBoundingClientRect();` +
+      `var btns=[].slice.call(footer.querySelectorAll("button")).map(function(x){var z=x.getBoundingClientRect();return z.bottom;});` +
+      `return {found:true,` +
+      ` gap:Math.round(r.left-l.right),` +
+      ` leftOverflow:Math.round(left.scrollWidth-left.clientWidth),` +
+      ` dialogTop:Math.round(b.top),dialogBottom:Math.round(b.bottom),` +
+      ` footerTop:Math.round(f.top),footerBottom:Math.round(f.bottom),` +
+      ` footerOverElDialog:Math.round(f.bottom-b.bottom),` +
+      ` buttonOverElDialog:btns.length?Math.round(Math.max.apply(null,btns)-b.bottom):null,` +
+      ` viewportH:Math.round(window.innerHeight)};})()`
+  )
+  write('layout = ' + JSON.stringify(layout))
+  check('tune-layout-measured', layout.found === true, JSON.stringify(layout))
+  check(
+    'tune-preview-does-not-overlap-form',
+    layout.found === true && layout.gap > 0,
+    JSON.stringify({ gap: layout.gap })
+  )
+  check(
+    'tune-form-has-no-horizontal-overflow',
+    layout.found === true && layout.leftOverflow === 0,
+    JSON.stringify({ leftOverflow: layout.leftOverflow })
+  )
+  check(
+    'tune-footer-inside-viewport',
+    layout.found === true &&
+      layout.footerBottom <= layout.viewportH + 1 &&
+      layout.footerTop >= 0 &&
+      layout.dialogTop >= -1,
+    JSON.stringify({
+      footerBottom: layout.footerBottom,
+      viewportH: layout.viewportH,
+      dialogTop: layout.dialogTop
+    })
+  )
+  // 弹窗整体也必须收在视口里：底部表单是后加的，最容易把弹窗顶出屏幕下沿
+  check(
+    'tune-dialog-fits-viewport',
+    layout.found === true && layout.dialogBottom <= layout.viewportH + 1,
+    JSON.stringify({ dialogBottom: layout.dialogBottom, viewportH: layout.viewportH })
+  )
+  /*
+   * 「按钮在视口内」还不够 —— 用户报的是按钮溢出到**弹窗容器**外面。
+   * 之前只量了 viewport，于是「外框 599px、内部内容 607px」这种溢出整整漏掉了。
+   */
+  check(
+    'tune-footer-inside-dialog-box',
+    layout.found === true && layout.footerOverElDialog <= 1,
+    JSON.stringify({ footerOverElDialog: layout.footerOverElDialog })
+  )
+  check(
+    'tune-buttons-inside-dialog-box',
+    layout.found === true && layout.buttonOverElDialog <= 1,
+    JSON.stringify({ buttonOverElDialog: layout.buttonOverElDialog })
+  )
 
   // ------------------------------- 1) 改控件 -> 不写盘
   const itemsBefore = await evalIn(s, PRESET_ITEMS)
@@ -376,12 +470,23 @@ app.whenReady().then(async () => {
     deepEqual(afterSave.appearance, beforeAppearance),
     JSON.stringify(afterSave.appearance)
   )
-  // destroy-on-close：关闭后整个弹窗元素被移除，所以「已关闭」= 元素不在，或元素在但 display:none
+  /*
+   * 关闭用「先取一次基线，再等它真的关掉」的方式断言：
+   * 直接轮询「没关」会受前一个脚本残留的 electron 进程影响（背靠背连跑时出现过
+   * 8 秒还没关的假失败，单独跑 3 次全过）。这里只要求「本次保存之后确实关上了」，
+   * 并同时断言 display 变成 none —— 曾经给 .el-dialog 写了 display: flex，
+   * 特异性压过元素自带的 display: none，弹窗「关掉」后仍占着屏幕。
+   */
   const closed = await waitFor(
     () => jsonIn(s, TUNE_VISIBLE),
-    (v) => v.present === false || v.visible === false
+    (v) => v.present === false || (v.visible === false && v.display === 'none'),
+    15000
   )
-  check('tune-dialog-closed-after-save', closed.ok, JSON.stringify(closed.seen))
+  check(
+    'tune-dialog-closed-after-save',
+    closed.ok && grew.ok,
+    JSON.stringify({ closed: closed.seen, presetCreated: grew.ok })
+  )
 
   // ------------------------------- 3) 取消路径
   const beforeCancel = persisted()

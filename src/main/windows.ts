@@ -192,6 +192,16 @@ function widgetBoundsByConfig(): { x: number; y: number; width: number; height: 
   return { ...pos, width, height }
 }
 
+/**
+ * 组件窗口被销毁后的回调（由 index.ts 接上 refreshTray）。
+ * 用回调而不是在 windows.ts 里 import tray.ts：后者已经 import 本模块，直接引会成环。
+ */
+let onWidgetWindowClosed: (() => void) | null = null
+
+export function setOnWidgetWindowClosed(handler: () => void): void {
+  onWidgetWindowClosed = handler
+}
+
 export function createWidgetWindow(): BrowserWindow {
   if (widgetWindow && !widgetWindow.isDestroyed()) return widgetWindow
   // 新窗口配新的渲染进程，命中状态从「未命中」重新开始，避免沿用旧窗口的状态
@@ -231,7 +241,7 @@ export function createWidgetWindow(): BrowserWindow {
   })
   widgetWindow.setAlwaysOnTop(getConfig().behavior.alwaysOnTop, 'screen-saver')
   widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-  widgetWindow.setSkipTaskbar(true)
+  enforceSkipTaskbar(widgetWindow)
   if (isClickThrough()) widgetWindow.setFocusable(false)
   // 注意：这里不能设置鼠标穿透。窗口显示之前调用 setIgnoreMouseEvents 会让整窗变成
   // 不透光的浅色背板，必须等 showWidgetWindow 显示之后再应用（见 applyIgnoreMouse）。
@@ -240,6 +250,10 @@ export function createWidgetWindow(): BrowserWindow {
     widgetWindow = null
     cancelWidgetDrag()
     stopCursorWatch()
+    // 窗口没了，托盘菜单的「显示 / 隐藏倒数日」文案要跟着回到「显示」，
+    // 否则菜单会一直挂着「隐藏倒数日」，用户找不到把卡片叫回来的入口。
+    // 用回调而不是直接 import refreshTray：tray.ts 已经 import 了本模块，直接引会成环。
+    onWidgetWindowClosed?.()
   })
 
   // 组件窗口可能因「透明渲染开关」被重建，新渲染进程必须重新拿一次生效配置
@@ -513,8 +527,26 @@ function nudgeRepaint(win: BrowserWindow): void {
   }
 }
 
+/**
+ * 重申「不进任务栏」。
+ *
+ * `skipTaskbar: true` 只在创建时生效一次，实测偶发失效（任务栏里冒出组件窗口的图标）。
+ * 这里在窗口显示之后再补一次，并且在最前面**再延时补一次**：窗口刚显示时外壳可能还没
+ * 完成注册，紧接着的那次 setSkipTaskbar 会被丢掉，于是这一次丢失就持续整个会话。
+ * 多按一次的代价可以忽略，而漏掉的代价是任务栏多一个图标 —— 用户从那里关掉它还会连带
+ * 把卡片关掉（现在窗口被销毁后能重建回来，但那仍然不该发生）。
+ */
+function enforceSkipTaskbar(win: BrowserWindow): void {
+  if (win.isDestroyed()) return
+  win.setSkipTaskbar(true)
+  setTimeout(() => {
+    if (!win.isDestroyed()) win.setSkipTaskbar(true)
+  }, 300)
+}
+
 export function showWidgetWindow(win: BrowserWindow): void {
   applyPosition()
+  enforceSkipTaskbar(win)
   // 每次显示都把命中状态重置成「不接收」，避免沿用上一次隐藏前的残留判定
   widgetInteractive = false
   win.showInactive()
@@ -527,24 +559,60 @@ export function showWidgetWindow(win: BrowserWindow): void {
   nudgeRepaint(win)
 }
 
+/**
+ * 组件窗口当前是否活着（区别于 config.runtime.widgetVisible 那个「期望值」）。
+ * 托盘菜单的文案要用它判断，否则窗口没了之后菜单还写着「隐藏倒数日」，
+ * 点下去只会把期望值翻成 false，用户永远等不到卡片回来。
+ */
+export function isWidgetWindowAlive(): boolean {
+  return getWidgetWindow() !== null
+}
+
+export function showWidget(): boolean {
+  const win = getWidgetWindow() ?? createWidgetWindow()
+  if (!win) return false
+  showWidgetWindow(win)
+  return true
+}
+
+/**
+ * 设置组件窗口的显示状态。
+ *
+ * `getWidgetWindow()` 在窗口不存在或已销毁时返回 null —— 从前这里直接 `return visible`，
+ * 于是**窗口一旦被销毁，「显示」就永久失效**：点托盘、按快捷键、改配置全都只是把期望值
+ * 翻来翻去，卡片再也不会回来（用户从任务栏把组件窗口关掉之后就是这个现象）。
+ * 现在窗口缺失时先重建，再走统一的显示路径。
+ */
 export function setWidgetVisible(visible: boolean): boolean {
-  const win = getWidgetWindow()
   updateConfig({ runtime: { widgetVisible: visible } })
-  if (!win) return visible
   if (visible) {
-    showWidgetWindow(win)
-  } else {
-    cancelWidgetDrag()
-    win.hide()
-    setWidgetInteractive(false)
+    showWidget()
+    return true
   }
-  return visible
+  const win = getWidgetWindow()
+  if (!win) return false
+  cancelWidgetDrag()
+  win.hide()
+  setWidgetInteractive(false)
+  return false
 }
 
+/**
+ * 开关显示状态。
+ *
+ * 判断依据是**窗口当前是不是真的可见**，不是配置里的期望值：期望值可能与现实脱节
+ * （窗口被外部关掉、启动时用了 `--hidden`、透明模式重建窗口的中间态），
+ * 拿它当依据就会出现「第一次点击什么也没发生，要点两次」。
+ */
 export function toggleWidgetVisible(): boolean {
-  return setWidgetVisible(!getConfig().runtime.widgetVisible)
+  const win = getWidgetWindow()
+  const currentlyVisible = win ? win.isVisible() : false
+  if (currentlyVisible) return setWidgetVisible(false)
+  // 窗口不在了就直接重建并显示：这一条是「卡片消失后怎么都救不回来」的修复入口
+  if (!win) return showWidget()
+  setWidgetVisible(true)
+  return true
 }
-
 export function createSettingsWindow(): BrowserWindow {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.show()

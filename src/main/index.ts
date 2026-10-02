@@ -19,6 +19,7 @@ import {
   getWidgetWindow,
   pushWidgetConfig,
   recreateWidgetWindow,
+  setOnWidgetWindowClosed,
   setWidgetInteractive,
   setWidgetVisible,
   setSystemTransparency,
@@ -200,6 +201,10 @@ function bootstrap(): void {
   createWidgetWindow()
   createTray()
   registerHotkey()
+
+  // 组件窗口被外部销毁（用户从任务栏关掉它）时，托盘文案要跟着回到「显示倒数日」，
+  // 否则菜单一直写着「隐藏」，用户找不到把卡片叫回来的入口。
+  setOnWidgetWindowClosed(() => refreshTray())
 
   onConfigChange((next) => {
     broadcast('config:changed', next)

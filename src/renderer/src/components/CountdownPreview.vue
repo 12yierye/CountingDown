@@ -15,17 +15,26 @@ const props = withDefaults(
     sample?: boolean
     /** 预览时整体缩放比例；0 表示按字号自动缩放 */
     scale?: number
+    /** 覆盖样板标题（预设调参弹窗用它显示当前输入的预设名） */
+    title?: string
   }>(),
-  { sample: false, scale: 0 }
+  { sample: false, scale: 0, title: '' }
 )
 
 const card = useCountdownCard(() => props.config, {
   sample: true,
-  sampleTitle: '元旦',
+  /*
+   * 必须是取值函数，不能写成 `props.title || '元旦'`：
+   * 那样只在 setup 时求值一次，之后 props.title 再变也不会重新算 ——
+   * 表现为「预设调参弹窗里输入预设名，右侧预览标题纹丝不动」。
+   */
+  sampleTitle: () => props.title || '元旦',
   live: true
 })
 
-const titleText = computed(() => (props.sample ? '元旦' : card.resolved.value?.text.title ?? ''))
+const titleText = computed(() =>
+  props.sample ? props.title || '元旦' : card.resolved.value?.text.title ?? ''
+)
 
 /** 预览时按比例缩小，避免大字号撑爆面板 */
 const fitScale = computed(() => {

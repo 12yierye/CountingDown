@@ -4,6 +4,7 @@ import { getConfig, updateConfig } from './config-store'
 import {
   applyPosition,
   createSettingsWindow,
+  isWidgetWindowAlive,
   setWidgetVisible,
   toggleWidgetVisible
 } from './windows'
@@ -66,9 +67,13 @@ function buildMenu(): Menu {
   const tray = config.runtime.trayMenu
   const template: Electron.MenuItemConstructorOptions[] = []
 
-  // 「显示 / 隐藏倒数日」与「设置」是托盘最基本的两个入口，这里始终保留
+  const widgetAlive = isWidgetWindowAlive()
+
+  // 「显示 / 隐藏倒数日」与「设置」是托盘最基本的两个入口，这里始终保留。
+  // 文案看的是**窗口是不是还活着**，不是配置里的期望值：窗口被外部销毁时
+  // widgetVisible 还是 true，照它渲染出来的菜单会写着「隐藏」，用户点不到「显示」。
   template.push({
-    label: config.runtime.widgetVisible ? text.hide : text.show,
+    label: config.runtime.widgetVisible && widgetAlive ? text.hide : text.show,
     click: () => {
       toggleWidgetVisible()
       refreshTray()

@@ -50,7 +50,11 @@ export interface CountdownCardOptions {
    * 设置页的「实时预览」用它来当全局样式的样板。
    */
   sample?: boolean
-  sampleTitle?: string
+  /**
+   * 样板标题。**传取值函数而不是现成的字符串**：传字符串只在 setup 时求值一次，
+   * 外层 props 之后变化不会反映到卡片上（预设调参弹窗要跟着输入框实时变标题）。
+   */
+  sampleTitle?: string | (() => string)
   /** 示例模式固定用的日期；缺省为当年元旦 */
   sampleDate?: Date
   /** 是否每秒重算（预览与组件窗口都需要） */
@@ -95,18 +99,23 @@ export function useCountdownCard(
     })
   }
 
+  /** 样板标题每次都重新取值：调用方可以传函数，传字符串时行为与从前一致 */
+  const readSampleTitle = (): string =>
+    typeof options.sampleTitle === 'function' ? options.sampleTitle() : options.sampleTitle ?? ''
+
   const resolved = computed<ResolvedCountdown | null>(() => {
     const cfg = config()
     // 示例模式：标题与日期都固定，但外观与文案仍然来自全局设置
     if (sample) {
-      const item = createCountdownItem({ id: 'preview_sample', name: options.sampleTitle ?? '' })
+      const title = readSampleTitle()
+      const item = createCountdownItem({ id: 'preview_sample', name: title })
       const base = resolveCountdown(cfg, item)
       const month = options.sampleDate ? options.sampleDate.getMonth() + 1 : SAMPLE_MONTH
       const day = options.sampleDate ? options.sampleDate.getDate() : SAMPLE_DAY
       return {
         ...base,
         target: { mode: 'annual', date: '', month, day },
-        text: { ...base.text, title: options.sampleTitle ?? base.text.title },
+        text: { ...base.text, title: title || base.text.title },
         units: { ...cfg.behavior.units }
       }
     }

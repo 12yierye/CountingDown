@@ -20,7 +20,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: boolean): void
-  (event: 'confirm', appearance: AppearanceConfig): void
+  (event: 'confirm', payload: { name: string; appearance: AppearanceConfig }): void
 }>()
 
 const { t } = useI18n()
@@ -61,7 +61,7 @@ function submit(): void {
   const trimmed = name.value.trim()
   nameError.value = trimmed.length === 0
   if (!trimmed) return
-  emit('confirm', cloneAppearance(draft.value))
+  emit('confirm', { name: trimmed, appearance: cloneAppearance(draft.value) })
   visible.value = false
 }
 </script>
@@ -75,30 +75,43 @@ function submit(): void {
     top="5vh"
     destroy-on-close
   >
-    <p class="tune-dialog__note">{{ t('preset.tuneHint') }}</p>
+    <!--
+      整块内容包一层：高度上限与滚动落在这一层（见 settings.css），
+      这样弹窗外框始终被内容撑到合适高度，不需要给 .el-dialog 写任何 display/height hack。
+    -->
+    <div class="tune-dialog__inner">
+      <p class="tune-dialog__note">{{ t('preset.tuneNameFirst') }}</p>
 
-    <div class="tune-dialog__body">
-      <div class="tune-dialog__left">
-        <AppearanceFields v-model:appearance="draft" dense />
+      <div class="tune-dialog__body">
+        <div class="tune-dialog__left">
+          <AppearanceFields v-model:appearance="draft" dense />
+        </div>
+        <aside class="tune-dialog__preview">
+          <div class="tune-dialog__preview-label">{{ t('preset.tunePreview') }}</div>
+          <CountdownPreview
+            :config="previewConfig"
+            :title="name.trim() || t('preset.namePlaceholder')"
+          />
+        </aside>
       </div>
-      <aside class="tune-dialog__preview">
-        <div class="tune-dialog__preview-label">{{ t('preset.tunePreview') }}</div>
-        <CountdownPreview :config="previewConfig" sample />
-      </aside>
-    </div>
 
-    <el-form label-position="top" class="tune-dialog__name" @submit.prevent>
-      <el-form-item :label="t('preset.nameLabel')">
-        <el-input
-          v-model="name"
-          :placeholder="t('preset.namePlaceholder')"
-          maxlength="20"
-          show-word-limit
-          @keydown.enter="submit"
-        />
-      </el-form-item>
-      <p v-if="nameError" class="tune-dialog__error">{{ t('preset.nameRequired') }}</p>
-    </el-form>
+      <!--
+        名称放在**调完参数之后**问：进来先改外观，改满意了再起名保存。
+        之前是保存弹窗先问一次名字、这里又落回「保存预设」，等于同一件事问了两遍。
+      -->
+      <el-form label-position="top" class="tune-dialog__name" @submit.prevent>
+        <el-form-item :label="t('preset.nameLabel')">
+          <el-input
+            v-model="name"
+            :placeholder="t('preset.namePlaceholder')"
+            maxlength="20"
+            show-word-limit
+            @keydown.enter="submit"
+          />
+        </el-form-item>
+        <p v-if="nameError" class="tune-dialog__error">{{ t('preset.nameRequired') }}</p>
+      </el-form>
+    </div>
 
     <template #footer>
       <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
@@ -108,6 +121,14 @@ function submit(): void {
 </template>
 
 <style scoped>
+/*
+ * 高度与滚动都由 settings.css 里对 .el-dialog__body 的规则收口，
+ * 这一层只负责把三段内容按顺序排开，不再自己做任何限高（试过，会把 footer 顶出弹窗）。
+ */
+.tune-dialog__inner {
+  min-height: 0;
+}
+
 .tune-dialog__note {
   margin: -6px 0 12px;
   font-size: 12.5px;
@@ -121,20 +142,15 @@ function submit(): void {
   align-items: flex-start;
 }
 
-/* 左栏自己滚：表单很高，不能让底部按钮被顶出视口 */
 .tune-dialog__left {
   flex: 1;
   min-width: 0;
-  max-height: 62vh;
-  overflow-y: auto;
   padding-right: 6px;
 }
 
 .tune-dialog__preview {
   flex: none;
   width: 296px;
-  position: sticky;
-  top: 0;
   padding: 10px 12px 12px;
   border: 1px solid var(--el-border-color-light);
   border-radius: 10px;

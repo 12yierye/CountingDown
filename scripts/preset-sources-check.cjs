@@ -192,7 +192,7 @@ const CLICK_NAV_PRESET =
 
 const CLICK_ADD_PRESET =
   `(function(){var add=[].slice.call(document.querySelectorAll("button")).filter(function(x){` +
-  `return /保存当前外观为预设|Save current appearance/.test(x.textContent||"")})[0];` +
+  `return /新建预设|New preset/.test(x.textContent||"")})[0];` +
   `if(!add)return {found:false};add.click();return {found:true};})()`
 
 const NAME_INPUT = '.el-dialog input.el-input__inner[maxlength="20"]'
