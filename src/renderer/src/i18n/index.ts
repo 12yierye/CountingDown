@@ -14,13 +14,21 @@ export const messages = {
       appearance: '外观',
       layout: '布局',
       behavior: '行为',
-      integration: '系统集成',
+      integration: '系统',
       preset: '预设主题',
-      about: '关于'
+      about: '关于',
+      groupCountdown: '倒数日',
+      groupContent: '显示内容',
+      groupLook: '外观与风格',
+      groupSystem: '窗口与系统',
+      searchPlaceholder: '搜索设置…',
+      searchEmpty: '没有匹配的设置',
+      searchClear: '清除搜索'
     },
     common: {
       preview: '实时预览',
       resetAll: '恢复默认设置',
+      resetAllDone: '已恢复默认设置',
       saved: '已保存',
       reset: '重置',
       close: '关闭',
@@ -46,7 +54,22 @@ export const messages = {
       disabled: '已停用',
       none: '（无）',
       add: '新增',
-      alpha: '透明度'
+      alpha: '透明度',
+      undo: '撤销',
+      undoDone: '已撤销',
+      redoDone: '已重做',
+      undoEmpty: '没有可撤销的改动',
+      resetPage: '重置本页',
+      resetPageDone: '已重置本页',
+      resetGroup: '重置',
+      resetGroupDone: '已重置这一组',
+      previewToggle: '预览'
+    },
+    sample: {
+      title: '元旦',
+      hint: '1 月 1 日 · 周四',
+      status: '还有 128 天',
+      count: '128 天'
     },
     list: {
       title: '倒数日列表',
@@ -83,8 +106,15 @@ export const messages = {
       enabled: '在列表中启用',
       enabledHint: '停用后即使被选中，桌面也不显示它',
       targetSection: '目标日期',
-      targetFollow: '跟随全局日期设置',
+      targetFollow: '跟随默认日期',
       targetFollowHint: '关闭后可单独设置这一项的日期类型与日期',
+      displaySection: '显示',
+      displayModeHint:
+        '这一项单独用哪种格式显示；选「跟随全局」就跟着「行为」页里的默认值走',
+      followMode: '跟随全局（{value}）',
+      notifyOnToday: '当天提醒我',
+      notifyOnTodayHint:
+        '到当天弹一次系统通知。不跟随全局、默认关闭；还需要在「系统」里开启通知总开关',
       textSection: '文案',
       textFollow: '文案跟随全局',
       textFollowHint: '关闭后可单独覆盖这一项的文案；留空的字段仍然使用全局值',
@@ -94,11 +124,12 @@ export const messages = {
       appearanceReset: '全部恢复为跟随全局',
       appearanceActive: '此项已覆盖外观',
       liveOnDesktop: '桌面卡片实时预览',
+      previewHint: '预览跟随草稿变化；保存前不会写进配置',
       behaviorHint: '分隔符、显示模式等也可以在编辑页里按项覆盖',
       saved: '已保存'
     },
     target: {
-      title: '全局日期设置',
+      title: '默认日期',
       mode: '默认日期类型',
       modeAnnual: '每年重复的纪念日',
       modeOnce: '一次性日期 / 时刻',
@@ -110,6 +141,8 @@ export const messages = {
       datetimeHint: '选择带时刻的时间会按“精确倒计时”语义判断当天/已过',
       hintText: '默认副标题',
       hintPlaceholder: '留空则自动显示目标日期',
+      hintHint:
+        '留空时会自动显示「几月几日 · 星期几」。想自己写就用变量，例如「{month} 月 {day} 日 · {week}」，点下面的按钮可以直接插入',
       statusGroup: '默认状态文案',
       visibilityGroup: '显示项',
       showHint: '显示副标题',
@@ -119,17 +152,32 @@ export const messages = {
       followGlobal: '跟随全局',
       show: '显示',
       hide: '不显示',
-      futureText: '未来（可用 {days} 占位）',
-      todayText: '当天',
-      pastText: '已过去',
-      statusHint: '支持变量：{days} 剩余/已过天数',
+      futureText: '未到期时',
+      todayText: '当天时',
+      pastText: '过期后',
+      statusHint:
+        '这三行分别对应「还没到那天」「就是今天」「已经过去」三种情况，卡片上只显示其中一行。文案里可以写变量，例如「还有 {days} 天」；留空则用内置默认值',
+      futureHint:
+        '还没到目标日期时显示。「还有 {days} 天」里的 {days} 会换成相差的天数，也可以加 {week}、{month}、{day} 等变量',
+      todayTextHint: '目标日期就是今天时显示这一行',
+      pastTextHint: '目标日期已经过去之后显示这一行',
       showPastDays: '过期后显示',
       showPastDaysHint:
-        '开启后过期时会在「已过去」文案后面加上「过去 N 天」；如果文案里已经写了 {days}，就直接用剩余/已过天数替换它',
+        '开启后过期时会在文案后面补上「· N 天」；如果文案里已经写了 {days}，就直接替换，不再重复补',
       overrideUnits: '单独覆盖单位字',
       overrideUnitsHint: '开启后这一项用下面的单位字，不再跟随全局',
       inheritHint: '这些是全局默认值，可在每个倒数日的编辑页里单独覆盖',
       summary: '当前预览'
+    },
+    textVar: {
+      label: '可插入变量',
+      tip: '点一下插入到文案末尾',
+      days: '相差天数',
+      year: '年份',
+      month: '月份（数字）',
+      day: '日（数字）',
+      week: '星期几',
+      date: '完整日期'
     },
     appearance: {
       title: '外观',
@@ -169,10 +217,18 @@ export const messages = {
       weightBold: '粗',
       weightBlack: '特粗',
       overrideTip: '勾选左侧复选框的项才会覆盖全局，未勾选的继续跟随全局',
-      overrideNeedBackground: '先勾选上方的「背景色」，边框与阴影才能单独覆盖'
+      overrideNeedBackground: '先勾选上方的「背景色」，边框与阴影才能单独覆盖',
+      advanced: '高级参数',
+      advancedBarHint: '打开后多出：内边距、边框与阴影、字重、字距、单行透明度',
+      resetFont: '重置字体',
+      resetBackground: '重置背景',
+      resetBorder: '重置边框与阴影',
+      resetText: '重置文字样式'
     },
     layout: {
       title: '位置',
+      windowTitle: '窗口',
+      windowHint: '窗口与桌面的交互方式；这些开关在托盘右键菜单里也能找到',
       corner: '停靠角落',
       topLeft: '左上角',
       topRight: '右上角',
@@ -198,13 +254,14 @@ export const messages = {
         '正值表示离开所贴的那条边、朝屏幕内侧移动（贴右上角时正值即向左、向上），负值表示朝反方向',
       resetOffset: '偏移归零',
       anchorClamped: '已按屏幕范围修正坐标',
-      transparent: '使用透明窗口',
+      transparent: '窗口透明',
       transparentHint:
-        '关掉后组件改为「整窗即卡片」的不透明渲染：圆角与半透明背景仍生效，但不再有窗口级阴影。若桌面出现整块浅色背板，把它关掉即可',
+        '开启后卡片外围能透出桌面，圆角与阴影才是真实效果；关掉则整窗一块不透明。如果卡片后面出现一块浅色方块，关掉它即可',
       transparentUnsupported: '检测到系统未开启透明效果，已自动改用不透明渲染'
     },
     behavior: {
       title: '行为',
+      displayTitle: '显示格式',
       displayMode: '显示模式',
       days: '只显示天数',
       daysHours: '天 + 时',
@@ -231,6 +288,7 @@ export const messages = {
       trayToggleVisible: '显示 / 隐藏倒数日',
       trayResetPosition: '吸附到右上角',
       trayAllowDrag: '允许拖动',
+      trayClickThrough: '鼠标点击穿透',
       trayAlwaysOnTop: '总在最前',
       trayStartup: '开机自动启动',
       trayHotkey: '当前快捷键提示',
@@ -246,13 +304,23 @@ export const messages = {
       hotkeyOk: '快捷键已生效：{key}',
       startup: '开机自动启动',
       startupHint: '开机后自动运行并隐藏设置窗口（开发模式下不生效）',
-      quit: '退出程序',
-      quitHint: '退出后托盘图标消失，倒数日不再显示',
-      configFile: '打开配置文件位置'
+      configFile: '打开配置文件位置',
+      backup: '备份与恢复',
+      backupHint: '把全部设置导出成一个 JSON 文件；换机、重装或误删时可以再导入回来',
+      exportConfig: '导出设置…',
+      importConfig: '导入设置…',
+      exported: '已导出到 {path}',
+      imported: '已导入设置',
+      importFailed: '导入失败：{error}',
+      importInvalid: '这个文件不是有效的倒数日配置',
+      notify: '到期提醒',
+      notifyPermission: '系统通知',
+      notifyPermissionHint:
+        '总开关：关掉后所有倒数日都不再提醒。具体哪一项在当天提醒，去那一项的编辑页里打开'
     },
     preset: {
       title: '预设主题',
-      hint: '一键套用全局外观预设，套用后仍可继续微调；已单独覆盖外观的倒数日不受影响',
+      hint: '一键套用全局外观预设，套用后仍可继续微调；已单独覆盖外观的倒数日不受影响。按 Ctrl+Z 可撤销',
       apply: '套用',
       applied: '已套用「{name}」',
       custom: '我的预设',
@@ -273,12 +341,27 @@ export const messages = {
       saveModeTitle: '要保存哪些设置？',
       saveModeTarget: '保存来源',
       saveModeGlobal: '当前全局外观',
-      saveModeGlobalHint: '把全局外观整份存成预设，套用时覆盖全局',
+      saveModeGlobalHint: '只新增预设，当前外观保持不变',
       saveModeItem: '某个倒数日的外观覆盖',
-      saveModeItemHint: '把该倒数日已生效的外观（全局 + 它的覆盖）存成预设',
+      saveModeItemHint: '存成预设，同时把该倒数日的覆盖更新为这份外观',
       saveModeManual: '手动调整所有参数',
-      saveModeManualHint:
-        '先去弹窗里把外观参数改到满意，再给这个预设起名保存；只生成预设，不改动全局外观',
+      saveModeManualHint: '进入参数编辑器，调好后再起名保存；全程不碰全局外观',
+      applyAfter: '保存后立即套用到全局',
+      applyAfterHint: '不勾选时只新增预设，什么都不改',
+      nextStep: '下一步：手动调整参数…',
+      active: '使用中',
+      more: '更多',
+      copy: '复制为我的预设',
+      copySuffix: ' 副本',
+      rename: '重命名',
+      renameTitle: '重命名预设',
+      renamePlaceholder: '新的预设名称',
+      renamed: '已改名为「{name}」',
+      overwrite: '用当前外观更新',
+      overwriteConfirm: '用当前全局外观覆盖「{name}」吗？',
+      overwritten: '已更新「{name}」',
+      duplicated: '已复制为「{name}」',
+      onlyAppearance: '预设只保存外观，文案、显示模式与单位字不随预设切换',
       tuneTitle: '手动调整外观参数',
       tuneHint: '在弹窗里调整全部外观参数；确定后只保存为预设，不会改动全局外观',
       tuneNameFirst: '先调整下面这些参数，满意后再填上预设名称、点「保存预设」',
@@ -324,7 +407,14 @@ export const messages = {
       theme: '设置界面主题',
       dark: '深色',
       light: '浅色',
-      screens: '显示器'
+      screens: '显示器',
+      resetGroup: '重置设置',
+      resetHint:
+        '把所有设置恢复到出厂状态：外观、日期与文案、显示格式、窗口位置与系统集成都一起重置，倒数日列表会换回内置示例。这一步不能撤销，想留着就先到「系统 → 备份与恢复」导出一份',
+      quitGroup: '退出程序',
+      quit: '彻底退出',
+      quitHint:
+        '退出后托盘图标消失、桌面卡片不再显示，设置窗口也会一起关闭；下次使用需要重新打开程序。只是暂时不想看到卡片的话，用「显示倒数日」或托盘菜单隐藏即可'
     },
     tray: {
       show: '显示倒数日',
@@ -346,11 +436,19 @@ export const messages = {
       behavior: 'Behavior',
       integration: 'System',
       preset: 'Presets',
-      about: 'About'
+      about: 'About',
+      groupCountdown: 'Countdowns',
+      groupContent: 'Content',
+      groupLook: 'Look & feel',
+      groupSystem: 'Window & system',
+      searchPlaceholder: 'Search settings…',
+      searchEmpty: 'No matching setting',
+      searchClear: 'Clear search'
     },
     common: {
       preview: 'Live preview',
       resetAll: 'Restore defaults',
+      resetAllDone: 'Defaults restored',
       saved: 'Saved',
       reset: 'Reset',
       close: 'Close',
@@ -376,7 +474,22 @@ export const messages = {
       disabled: 'Disabled',
       none: '(none)',
       add: 'Add',
-      alpha: 'Alpha'
+      alpha: 'Alpha',
+      undo: 'Undo',
+      undoDone: 'Undone',
+      redoDone: 'Redone',
+      undoEmpty: 'Nothing to undo',
+      resetPage: 'Reset page',
+      resetPageDone: 'This page was reset',
+      resetGroup: 'Reset',
+      resetGroupDone: 'This group was reset',
+      previewToggle: 'Preview'
+    },
+    sample: {
+      title: 'New Year',
+      hint: 'Jan 1 · Thu',
+      status: 'in 128 days',
+      count: '128 d'
     },
     list: {
       title: 'Countdowns',
@@ -413,8 +526,15 @@ export const messages = {
       enabled: 'Enabled in list',
       enabledHint: 'When disabled it will not show even if selected',
       targetSection: 'Target date',
-      targetFollow: 'Follow global date settings',
+      targetFollow: 'Follow the default date',
       targetFollowHint: 'Turn off to set a date type and value for this item only',
+      displaySection: 'Display',
+      displayModeHint:
+        'The format used by this item only; "Follow global" uses the default from Behavior',
+      followMode: 'Follow global ({value})',
+      notifyOnToday: 'Remind me on the day',
+      notifyOnTodayHint:
+        'One system notification on the day. Off by default, not inherited; the master switch in System must be on',
       textSection: 'Texts',
       textFollow: 'Follow global texts',
       textFollowHint: 'Turn off to override texts; empty fields still use the global value',
@@ -424,11 +544,12 @@ export const messages = {
       appearanceReset: 'Reset all to global',
       appearanceActive: 'This item overrides the appearance',
       liveOnDesktop: 'Live on desktop',
+      previewHint: 'The preview follows your draft; nothing is written until you save',
       behaviorHint: 'Display mode and separators can also be overridden per item in the editor',
       saved: 'Saved'
     },
     target: {
-      title: 'Global date settings',
+      title: 'Default date',
       mode: 'Default date type',
       modeAnnual: 'Repeats every year',
       modeOnce: 'One-off date / moment',
@@ -440,6 +561,8 @@ export const messages = {
       datetimeHint: 'A value with time uses precise semantics for today/past',
       hintText: 'Default subtitle',
       hintPlaceholder: 'Leave empty to show the target date',
+      hintHint:
+        'Left empty it shows “month day · weekday”. To write your own, use the variables — e.g. “{month}/{day} · {week}”. Click a chip below to insert one',
       statusGroup: 'Default status texts',
       visibilityGroup: 'Visible rows',
       showHint: 'Show subtitle',
@@ -449,17 +572,32 @@ export const messages = {
       followGlobal: 'Follow global',
       show: 'Show',
       hide: 'Hide',
-      futureText: 'Upcoming ({days} placeholder)',
-      todayText: 'Today',
-      pastText: 'Passed',
-      statusHint: 'Available variable: {days}',
+      futureText: 'Before the date',
+      todayText: 'On the day',
+      pastText: 'After the date',
+      statusHint:
+        'These three lines cover “not yet”, “today” and “already passed”. Only one of them shows at a time. They accept variables, e.g. “{days} days to go”',
+      futureHint:
+        'Shown before the target date. In “{days} days to go”, {days} becomes the remaining days — {week}, {month}, {day} work too',
+      todayTextHint: 'Shown when the target date is today',
+      pastTextHint: 'Shown once the target date has passed',
       showPastDays: 'When passed',
       showPastDaysHint:
-        'When on, "N days ago" is appended to the passed text; if the text already contains {days}, that placeholder is replaced with the day count instead',
+        'When on, "· N" is appended to the passed text; if the text already contains {days}, that placeholder is replaced instead',
       overrideUnits: 'Override unit labels',
       overrideUnitsHint: 'When on, this item uses the labels below instead of the global ones',
       inheritHint: 'These are global defaults; each countdown can override them',
       summary: 'Preview'
+    },
+    textVar: {
+      label: 'Insert variable',
+      tip: 'Click to append',
+      days: 'Day difference',
+      year: 'Year',
+      month: 'Month (number)',
+      day: 'Day (number)',
+      week: 'Weekday',
+      date: 'Full date'
     },
     appearance: {
       title: 'Appearance',
@@ -499,10 +637,18 @@ export const messages = {
       weightBold: 'Bold',
       weightBlack: 'Black',
       overrideTip: 'Only ticked items override the global values',
-      overrideNeedBackground: 'Tick "Background" above to override the border and shadow'
+      overrideNeedBackground: 'Tick "Background" above to override the border and shadow',
+      advanced: 'Advanced',
+      advancedBarHint: 'Adds padding, border & shadow, weight, letter spacing and per-line opacity',
+      resetFont: 'Reset font',
+      resetBackground: 'Reset background',
+      resetBorder: 'Reset border & shadow',
+      resetText: 'Reset text styles'
     },
     layout: {
       title: 'Position',
+      windowTitle: 'Window',
+      windowHint: 'How the window behaves on the desktop; the same switches are in the tray menu',
       corner: 'Docked corner',
       topLeft: 'Top left',
       topRight: 'Top right',
@@ -530,14 +676,15 @@ export const messages = {
         'A positive value moves away from the docked edge, toward the screen centre (docked top-right, positive means left and up); negative moves the other way',
       resetOffset: 'Reset offset',
       anchorClamped: 'Coordinates clamped to the screen area',
-      transparent: 'Use a transparent window',
+      transparent: 'Window transparency',
       transparentHint:
-        'When off, the widget renders as an opaque card window: radius and translucent background still apply, but the window-level shadow is gone. Turn it off if you see a solid light panel behind the widget',
+        'On: the desktop shows around the card, so its rounded corners and shadow look right. Off: the whole window is opaque. Turn it off if a light block appears behind the card',
       transparentUnsupported:
         'System transparency is off, so opaque rendering is used automatically'
     },
     behavior: {
       title: 'Behavior',
+      displayTitle: 'Display format',
       displayMode: 'Display mode',
       days: 'Days only',
       daysHours: 'Days + hours',
@@ -567,6 +714,7 @@ export const messages = {
       trayToggleVisible: 'Show / hide countdown',
       trayResetPosition: 'Snap to top-right',
       trayAllowDrag: 'Allow dragging',
+      trayClickThrough: 'Click-through',
       trayAlwaysOnTop: 'Always on top',
       trayStartup: 'Launch at login',
       trayHotkey: 'Current hotkey hint',
@@ -582,13 +730,23 @@ export const messages = {
       hotkeyOk: 'Hotkey active: {key}',
       startup: 'Launch at login',
       startupHint: 'Start hidden in the background (no effect in dev mode)',
-      quit: 'Quit app',
-      quitHint: 'Removes the tray icon and stops showing the countdown',
-      configFile: 'Open config file location'
+      configFile: 'Open config file location',
+      backup: 'Backup & restore',
+      backupHint: 'Export every setting to a JSON file and import it back later',
+      exportConfig: 'Export settings…',
+      importConfig: 'Import settings…',
+      exported: 'Exported to {path}',
+      imported: 'Settings imported',
+      importFailed: 'Import failed: {error}',
+      importInvalid: 'That file is not a valid Countdown configuration',
+      notify: 'Due reminder',
+      notifyPermission: 'System notifications',
+      notifyPermissionHint:
+        'Master switch: off means no countdown ever notifies. Turn on "Remind me on the day" in the countdown you care about'
     },
     preset: {
       title: 'Theme presets',
-      hint: 'Apply a global look in one click; items with their own appearance are unaffected',
+      hint: 'Apply a global look in one click; items with their own appearance are unaffected. Press Ctrl+Z to undo',
       apply: 'Apply',
       applied: 'Applied "{name}"',
       custom: 'My presets',
@@ -609,12 +767,28 @@ export const messages = {
       saveModeTitle: 'What should be saved?',
       saveModeTarget: 'Source',
       saveModeGlobal: 'Current global appearance',
-      saveModeGlobalHint: 'Store the whole global appearance as a preset that overwrites the global look',
+      saveModeGlobalHint: 'Adds a preset only; your current look stays as it is',
       saveModeItem: 'Appearance override of one countdown',
-      saveModeItemHint: 'Store that countdown\u2019s effective look (global merged with its overrides)',
+      saveModeItemHint: 'Stores a preset and updates that countdown\u2019s override to this look',
       saveModeManual: 'Tune every value manually',
       saveModeManualHint:
-        'Tune the appearance in a dialog first, then name the preset and save it; the preset only is stored',
+        'Open the value editor, tune it, then name and save it; the global look is untouched',
+      applyAfter: 'Apply to global right after saving',
+      applyAfterHint: 'Leave unchecked to add the preset only',
+      nextStep: 'Next: Tune the values…',
+      active: 'In use',
+      more: 'More',
+      copy: 'Duplicate as my preset',
+      copySuffix: ' copy',
+      rename: 'Rename',
+      renameTitle: 'Rename preset',
+      renamePlaceholder: 'New preset name',
+      renamed: 'Renamed to "{name}"',
+      overwrite: 'Update with current look',
+      overwriteConfirm: 'Overwrite "{name}" with the current global appearance?',
+      overwritten: 'Updated "{name}"',
+      duplicated: 'Duplicated as "{name}"',
+      onlyAppearance: 'Presets store appearance only; texts, display mode and unit labels stay put',
       tuneTitle: 'Tune appearance values',
       tuneHint:
         'Tune every appearance value in this dialog. Confirming stores a preset only and leaves the global appearance untouched.',
@@ -661,7 +835,14 @@ export const messages = {
       theme: 'Settings theme',
       dark: 'Dark',
       light: 'Light',
-      screens: 'Displays'
+      screens: 'Displays',
+      resetGroup: 'Reset settings',
+      resetHint:
+        'Puts every setting back to factory defaults — appearance, dates & texts, display format, window position and system integration. The countdown list is replaced by the built-in sample. This cannot be undone; export a backup from System → Backup & restore first if you want to keep your data',
+      quitGroup: 'Quit',
+      quit: 'Quit completely',
+      quitHint:
+        'The tray icon disappears, the desktop card stops showing and this settings window closes with it. To hide the card temporarily, use "Show countdown" or the tray menu instead'
     },
     tray: {
       show: 'Show countdown',

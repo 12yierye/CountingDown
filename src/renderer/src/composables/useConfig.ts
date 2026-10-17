@@ -74,6 +74,15 @@ export function patchConfig(patch: unknown): Promise<AppConfig> {
   })
 }
 
+/** 整份替换：撤销 / 重做专用，能真正删掉 updateConfig 删不掉的字段 */
+export function replaceConfig(next: unknown): Promise<AppConfig> {
+  return window.cd.replaceConfig(toPlain(next)).then((value) => {
+    if (value) applyConfig(value)
+    emitSaved()
+    return value
+  })
+}
+
 export function patchConfigPartial(patch: DeepPartial<AppConfig>): Promise<AppConfig> {
   return patchConfig(patch)
 }

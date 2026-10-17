@@ -159,11 +159,10 @@ app.whenReady().then(async () => {
     ['倒数日列表', '02-list'],
     ['日期与文案', '03-target'],
     ['外观', '04-appearance'],
-    ['布局', '05-layout'],
-    ['行为', '06-behavior'],
-    ['预设主题', '07-preset'],
-    ['系统集成', '08-integration'],
-    ['关于', '09-about']
+    ['行为', '05-behavior'],
+    ['预设主题', '06-preset'],
+    ['系统', '07-system'],
+    ['关于', '08-about']
   ]
   for (const [label, name] of pages) {
     write('nav ' + label + ' -> ' + (await ev(s, navTo(label))))

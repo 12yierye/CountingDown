@@ -256,6 +256,26 @@ export function createWidgetWindow(): BrowserWindow {
     onWidgetWindowClosed?.()
   })
 
+  /**
+   * 组件窗口不是「可关闭的窗口」。
+   *
+   * 它本来就不该出现在任务栏（见 enforceSkipTaskbar），但万一系统外壳给了它一个按钮，
+   * 从那里关闭（或 Alt+F4）也不应该销毁窗口：销毁之后卡片消失、托盘文案错乱，
+   * 用户会以为程序崩了。这里把关闭改成「隐藏」，与本应用「关窗不退出」的语义一致。
+   */
+  widgetWindow.on('close', (event) => {
+    if ((app as unknown as { isQuitting?: boolean }).isQuitting) return
+    event.preventDefault()
+    widgetWindow?.hide()
+    setWidgetInteractive(false)
+    updateConfig({ runtime: { widgetVisible: false } })
+  })
+
+  /** 每次显示后再重申一次「不进任务栏」：外壳注册任务栏按钮发生在 show 之后 */
+  widgetWindow.on('show', () => {
+    if (widgetWindow && !widgetWindow.isDestroyed()) enforceSkipTaskbar(widgetWindow)
+  })
+
   // 组件窗口可能因「透明渲染开关」被重建，新渲染进程必须重新拿一次生效配置
   widgetWindow.webContents.on('did-finish-load', () => pushWidgetConfig())
 
@@ -620,10 +640,12 @@ export function createSettingsWindow(): BrowserWindow {
     return settingsWindow
   }
   settingsWindow = new BrowserWindow({
-    width: 1000,
-    height: 720,
-    minWidth: 880,
-    minHeight: 600,
+    // 默认宽度给足：1200 才能同时放下 208 侧栏 + 248 预览栏 + 两列外观表单
+    //（内容区还要扣掉 10px 滚动条与 40px 内边距，1180 会差 2px 掉回单列）
+    width: 1200,
+    height: 760,
+    minWidth: 960,
+    minHeight: 620,
     show: false,
     title: '倒数日 · 设置',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#17181d' : '#f5f6fa',

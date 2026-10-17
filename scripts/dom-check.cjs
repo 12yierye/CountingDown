@@ -330,7 +330,7 @@ app.whenReady().then(async () => {
   s.setBounds({ x: 60, y: 40, width: 1120, height: 820 })
   await wait(1200)
 
-  const pages = ['倒数日列表', '日期与文案', '外观', '布局', '行为', '预设主题', '系统集成', '关于']
+  const pages = ['倒数日列表', '日期与文案', '外观', '行为', '预设主题', '系统', '关于']
   for (const label of pages) {
     await ev(s, navTo(label))
     await wait(1000)

@@ -35,7 +35,6 @@ interface Row {
   dateLabel: string
   statusLabel: string
   state: 'future' | 'today' | 'past'
-  overridesAppearance: boolean
 }
 
 function toRow(item: CountdownItem): Row {
@@ -52,8 +51,7 @@ function toRow(item: CountdownItem): Row {
     item,
     dateLabel: formatDateLabel(target, result.effective, locale.value as unknown as string),
     statusLabel: status,
-    state: result.state,
-    overridesAppearance: Object.keys(item.appearance ?? {}).length > 0
+    state: result.state
   }
 }
 
@@ -248,9 +246,6 @@ function seedSample(): void {
                 >
                   {{ row.statusLabel }}
                 </el-tag>
-                <el-tag v-if="row.overridesAppearance" size="small" effect="plain" type="danger">
-                  {{ t('editor.appearanceActive') }}
-                </el-tag>
               </div>
               <div class="cd-row__sub">{{ row.dateLabel }}</div>
             </div>
@@ -286,9 +281,6 @@ function seedSample(): void {
                 <div class="cd-row__line">
                   <span class="cd-row__name">{{ row.item.name || t('editor.unnamed') }}</span>
                   <el-tag size="small" effect="plain" type="info">{{ t('common.disabled') }}</el-tag>
-                  <el-tag v-if="row.overridesAppearance" size="small" effect="plain" type="danger">
-                    {{ t('editor.appearanceActive') }}
-                  </el-tag>
                 </div>
                 <div class="cd-row__sub">{{ row.dateLabel }}</div>
               </div>

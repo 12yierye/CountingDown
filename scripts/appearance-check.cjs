@@ -151,6 +151,15 @@ const OPEN_APPEARANCE =
   `if(!nav)return {found:false,all:navs.map(function(x){return (x.textContent||"").trim()})};` +
   `nav.click();return {found:true};})()`
 
+/*
+ * 外观页默认按「常用 / 高级」分两层，边框、阴影、内边距、字重/字距/透明度是收起的。
+ * 这个脚本要数的是**全部**控件，所以先点开高级参数，再测量。
+ */
+const EXPAND_ADVANCED =
+  `(function(){var b=document.querySelector('[data-cd-advanced]');` +
+  `if(!b)return {found:false};` +
+  `b.click();return {found:true};})()`
+
 const APPEARANCE_STATE =
   '({cards:document.querySelectorAll(".settings-content .panel-card").length,' +
   ' sliders:document.querySelectorAll(".settings-content .slider-field__value").length,' +
@@ -164,12 +173,12 @@ const APPEARANCE_STATE =
   'var f=x.closest(".field-row");var e=x.closest(".text-style-editor");' +
   'return (f&&f.querySelector(".field-row__text")?f.querySelector(".field-row__text").textContent.trim():"")+' +
   '"/"+(e&&e.querySelector(".text-style-editor__title")?e.querySelector(".text-style-editor__title").textContent.trim():"")+' +
-  '"/"+(x.closest(".settings-preview")?"IN-PREVIEW":"main")}),' +
+  '"/"+(x.closest(".settings-rail")?"IN-PREVIEW":"main")}),' +
   ' colorDetail:[].slice.call(document.querySelectorAll(".settings-content .el-color-picker")).map(function(x){' +
   'var f=x.closest(".field-row");var e=x.closest(".text-style-editor");' +
   'return (f&&f.querySelector(".field-row__text")?f.querySelector(".field-row__text").textContent.trim():"")+' +
   '"/"+(e&&e.querySelector(".text-style-editor__title")?e.querySelector(".text-style-editor__title").textContent.trim():"")+' +
-  '"/"+(x.closest(".settings-preview")?"IN-PREVIEW":"main")})})'
+  '"/"+(x.closest(".settings-rail")?"IN-PREVIEW":"main")})})'
 
 /** 按百分比位置点一下滑块跑道（el-slider 用原生鼠标事件） */
 const SET_SLIDER = (index, ratio) =>
@@ -201,15 +210,20 @@ app.whenReady().then(async () => {
   write('radius before = ' + JSON.stringify(before.appearance.background.radius))
 
   const opened = await jsonIn(s, OPEN_APPEARANCE)
-  await wait(1200)
+  await wait(900)
+  const expanded = await jsonIn(s, EXPAND_ADVANCED)
+  await wait(700)
   const state = await jsonIn(s, APPEARANCE_STATE)
   write('open = ' + JSON.stringify(opened))
+  write('advanced = ' + JSON.stringify(expanded))
   write('state = ' + JSON.stringify(state))
   write('sliderDetail = ' + JSON.stringify(state.sliderDetail, null, 1))
   write('colorDetail = ' + JSON.stringify(state.colorDetail, null, 1))
 
   check('appearance-page-opened', opened.found === true, JSON.stringify(opened.all))
-  check('appearance-four-cards', state.cards === 4, JSON.stringify(state.cards))
+  check('appearance-advanced-opened', expanded.found === true, JSON.stringify(expanded))
+  // 预设 / 字体 / 背景 / 边框与阴影 / 文字样式
+  check('appearance-five-cards', state.cards === 5, JSON.stringify(state.cards))
   check('appearance-no-flat-groups', state.groups === 0, JSON.stringify(state.groups))
   check('appearance-text-styles-4', state.styles === 4, JSON.stringify(state.styles))
   check('appearance-width-input-1', state.widthInput === 1, JSON.stringify(state.widthInput))

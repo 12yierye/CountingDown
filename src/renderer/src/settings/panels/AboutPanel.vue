@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessageBox } from 'element-plus'
 import type { AppConfig, AppLanguage, HostInfo } from '@shared/types'
 import FieldRow from '@/components/FieldRow.vue'
 
 defineProps<{ config: AppConfig }>()
-const emit = defineEmits<{ (event: 'patch', patch: unknown): void }>()
+const emit = defineEmits<{
+  (event: 'patch', patch: unknown): void
+  /** 恢复默认设置：真正的重置逻辑在 SettingsApp（要一并清空撤销栈） */
+  (event: 'reset'): void
+}>()
 
 const { t } = useI18n()
 const host = ref<HostInfo | null>(null)
@@ -16,6 +21,24 @@ onMounted(async () => {
 
 function setLanguage(language: AppLanguage): void {
   emit('patch', { runtime: { language } })
+}
+
+/**
+ * 彻底退出。
+ * 从「系统」搬到这里：那是配置类开关，这是「结束整个进程」——
+ * 语义上属于「关于这个程序」，而且放远处才不容易手滑点到。
+ */
+async function quitApp(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(t('about.quitHint'), t('about.quit'), {
+      confirmButtonText: t('about.quit'),
+      cancelButtonText: t('common.cancel'),
+      type: 'warning'
+    })
+    await window.cd.quitApp()
+  } catch {
+    /* 用户取消 */
+  }
 }
 </script>
 
@@ -72,6 +95,38 @@ function setLanguage(language: AppLanguage): void {
       </div>
     </FieldRow>
   </el-card>
+
+  <!-- 恢复默认设置：低频重操作，收在「关于」里，别在导航栏上天天晾着 -->
+  <el-card shadow="never" class="panel-card">
+    <template #header>
+      <div class="panel-card__header">
+        <span class="panel-card__title">{{ t('about.resetGroup') }}</span>
+      </div>
+    </template>
+
+    <div class="danger-row">
+      <p class="danger-row__text">{{ t('about.resetHint') }}</p>
+      <el-button size="small" type="danger" plain @click="emit('reset')">
+        {{ t('common.resetAll') }}
+      </el-button>
+    </div>
+  </el-card>
+
+  <!-- 彻底退出：结束进程，不倒计时、不留托盘；放在「关于」里，离日常设置远一点 -->
+  <el-card shadow="never" class="panel-card">
+    <template #header>
+      <div class="panel-card__header">
+        <span class="panel-card__title">{{ t('about.quitGroup') }}</span>
+      </div>
+    </template>
+
+    <div class="danger-row">
+      <p class="danger-row__text">{{ t('about.quitHint') }}</p>
+      <el-button size="small" type="danger" plain @click="quitApp">
+        {{ t('about.quit') }}
+      </el-button>
+    </div>
+  </el-card>
 </template>
 
 <style scoped>
@@ -87,5 +142,28 @@ function setLanguage(language: AppLanguage): void {
   gap: 10px;
   font-size: 12.5px;
   color: var(--el-text-color-secondary);
+}
+
+/*
+ * 危险操作行：左边一句后果说明、右边一个按钮。
+ * 比 FieldRow 的「标签 + 问号 tooltip」更适合这种必须让人看清后果的操作 ——
+ * 说明直接摆出来，不用悬停才看见。
+ */
+.danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.danger-row__text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--el-text-color-secondary);
+}
+
+.danger-row .el-button {
+  flex: none;
 }
 </style>

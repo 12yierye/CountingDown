@@ -14,8 +14,13 @@ const props = withDefaults(
      * 里面再重复一次只会白占高度，所以那边会把它关掉。
      */
     showTitle?: boolean
+    /**
+     * 紧凑模式：只留字号与颜色两行，隐藏字重 / 字距 / 透明度。
+     * 外观页默认用它 —— 这三项属于「高级参数」，多数人不会为了调个颜色去滚三屏。
+     */
+    compact?: boolean
   }>(),
-  { sample: '', showTitle: true }
+  { sample: '', showTitle: true, compact: false }
 )
 
 const emit = defineEmits<{
@@ -46,7 +51,7 @@ function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
           opacity: String(modelValue.opacity ?? 1)
         }"
       >
-        {{ sample || '128 天' }}
+        {{ sample || t('sample.count') }}
       </span>
     </div>
 
@@ -74,7 +79,7 @@ function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
       </div>
     </div>
 
-    <div class="row">
+    <div v-if="!compact" class="row">
       <span class="row__label">{{ t('appearance.weight') }}</span>
       <div class="row__control">
         <el-radio-group
@@ -89,7 +94,7 @@ function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
       </div>
     </div>
 
-    <div class="row">
+    <div v-if="!compact" class="row">
       <span class="row__label">{{ t('appearance.letterSpacing') }}</span>
       <div class="row__control">
         <SliderField
@@ -104,7 +109,7 @@ function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
     </div>
 
     <!-- 透明度按「颜色 + 透明度」拆开：它只影响这一行文字，和背景透明度无关 -->
-    <div class="row">
+    <div v-if="!compact" class="row">
       <span class="row__label">{{ t('appearance.styleOpacity') }}</span>
       <div class="row__control">
         <SliderField
@@ -170,11 +175,5 @@ function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
 .row__control {
   flex: 1;
   min-width: 0;
-}
-
-/* 只有滑块需要裁掉内部 18px 溢出；标签按钮的边框要完整显示，不能裁 */
-.text-style-editor :deep(.slider-field),
-.text-style-editor :deep(.el-slider) {
-  overflow: hidden;
 }
 </style>

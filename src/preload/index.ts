@@ -6,8 +6,19 @@ type Unsubscribe = () => void
 const api = {
   getConfig: (): Promise<AppConfig> => ipcRenderer.invoke('config:get'),
   updateConfig: (patch: unknown): Promise<AppConfig> => ipcRenderer.invoke('config:update', patch),
+  /** 整份替换：撤销 / 重做用，和 updateConfig 的深合并语义不同 */
+  replaceConfig: (next: unknown): Promise<AppConfig> => ipcRenderer.invoke('config:replace', next),
   resetConfig: (): Promise<AppConfig> => ipcRenderer.invoke('config:reset'),
   getConfigPath: (): Promise<string> => ipcRenderer.invoke('config:path'),
+  exportConfig: (): Promise<{ ok: boolean; canceled: boolean; path: string; error?: string }> =>
+    ipcRenderer.invoke('config:export'),
+  importConfig: (): Promise<{
+    ok: boolean
+    canceled: boolean
+    path: string
+    error?: string
+    config?: AppConfig
+  }> => ipcRenderer.invoke('config:import'),
   onConfigChange: (handler: (config: AppConfig) => void): Unsubscribe => {
     const listener = (_event: unknown, config: AppConfig): void => handler(config)
     ipcRenderer.on('config:changed', listener)

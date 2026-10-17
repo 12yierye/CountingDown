@@ -147,7 +147,6 @@ app.whenReady().then(async () => {
 
   for (const [label, name] of [
     ['外观', 'appearance'],
-    ['布局', 'layout'],
     ['日期与文案', 'target'],
     ['倒数日列表', 'list']
   ]) {

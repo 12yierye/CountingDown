@@ -120,6 +120,25 @@ function onChange(value: number | number[]): void {
 .slider-field__slider {
   flex: 1;
   min-width: 0;
+  /*
+   * 抓手默认 20px，落在轨道最左/最右时会有半个圆伸到轨道外面。
+   * 容器一旦 overflow: hidden（以前文字样式编辑器就这么干过），抓手会被切成半个圆，
+   * 看起来像「缺了一块」。这里左右各留 8px 给它，并且显式允许溢出。
+   */
+  padding: 0 8px;
+  overflow: visible;
+  --el-slider-button-size: 14px;
+}
+
+/* 抓手本身也给一圈淡色晕影：压在轨道端点时轮廓依然清楚，不会被当成被裁掉 */
+.slider-field__slider :deep(.el-slider__button) {
+  border-width: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+}
+
+.slider-field__slider :deep(.el-slider__button:hover),
+.slider-field__slider :deep(.el-slider__button.dragging) {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-color-primary) 26%, transparent);
 }
 
 .slider-field__value,

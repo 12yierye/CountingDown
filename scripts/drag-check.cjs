@@ -237,7 +237,7 @@ app.whenReady().then(async () => {
   }
   s.setBounds({ x: 60, y: 40, width: 1120, height: 820 })
   await wait(1200)
-  await ev(s, navTo('布局'))
+  await ev(s, navTo('行为'))
   await wait(1200)
   write(
     'LAYOUT_PANEL ' +
@@ -409,7 +409,7 @@ app.whenReady().then(async () => {
   // ---- 5) 深色主题下的按钮配色 ----
   for (const [label, name] of [
     ['预设主题', 'preset'],
-    ['系统集成', 'integration']
+    ['系统', 'integration']
   ]) {
     await ev(s, navTo(label))
     await wait(1100)

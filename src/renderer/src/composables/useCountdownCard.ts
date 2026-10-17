@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref, type ComputedRef, type Ref } from 'vue'
-import type { AppConfig, PrecisionMode, ResolvedCountdown } from '@shared/types'
+import type { AppConfig, CountdownItem, PrecisionMode, ResolvedCountdown } from '@shared/types'
 import {
   applyTemplate,
   buildPrecisionParts,
@@ -8,6 +8,7 @@ import {
   findActiveItem,
   formatDateLabel,
   resolveCountdown,
+  textVariables,
   type CountdownResult,
   type PrecisionPart
 } from '@shared/defaults'
@@ -57,6 +58,11 @@ export interface CountdownCardOptions {
   sampleTitle?: string | (() => string)
   /** 示例模式固定用的日期；缺省为当年元旦 */
   sampleDate?: Date
+  /**
+   * 指定要渲染的倒数日：编辑页的实时预览用它，改哪一项就看哪一项。
+   * 传了它就不再走「当前桌面显示项」，也不受 sample 影响。
+   */
+  item?: () => CountdownItem | null
   /** 是否每秒重算（预览与组件窗口都需要） */
   live?: boolean
 }
@@ -105,6 +111,9 @@ export function useCountdownCard(
 
   const resolved = computed<ResolvedCountdown | null>(() => {
     const cfg = config()
+    // 指定项优先：编辑页改哪一项就看哪一项，不必先把它设成桌面显示项
+    const explicit = options.item?.() ?? null
+    if (explicit) return resolveCountdown(cfg, explicit)
     // 示例模式：标题与日期都固定，但外观与文案仍然来自全局设置
     if (sample) {
       const title = readSampleTitle()
@@ -158,12 +167,26 @@ export function useCountdownCard(
 
   const absDays = computed(() => (result.value ? Math.abs(result.value.days) : 0))
 
+  /**
+   * 文案变量的取值。
+   * 日期类变量跟着「实际生效的目标日期」走：annual 模式跨年后 `{year}` 自动变成新一年，
+   * 用户不用每年回来改一次文案。
+   */
+  function textVars(current: ResolvedCountdown, computedResult: CountdownResult): Record<string, string> {
+    return textVariables(
+      current.target,
+      computedResult.effective,
+      computedResult.days,
+      config().runtime.language
+    )
+  }
+
   const hintText = computed(() => {
     const current = resolved.value
     const computedResult = result.value
     if (!current || !computedResult) return ''
     const custom = current.text.hint.trim()
-    if (custom) return custom
+    if (custom) return applyTemplate(custom, textVars(current, computedResult))
     return formatDateLabel(current.target, computedResult.effective, config().runtime.language)
   })
 
@@ -172,21 +195,23 @@ export function useCountdownCard(
     const computedResult = result.value
     if (!current || !computedResult) return ''
     const text = current.text
+    const vars = textVars(current, computedResult)
     if (computedResult.state === 'future') {
-      return applyTemplate(text.futureText, { days: computedResult.days })
+      return applyTemplate(text.futureText, vars)
     }
     if (computedResult.state === 'today') {
-      return applyTemplate(text.todayText, { days: 0 })
+      return applyTemplate(text.todayText, { ...vars, days: '0' })
     }
     if (config().behavior.showPastDays && !text.pastText.includes('{days}')) {
-      return `${text.pastText} · ${absDays.value}`
+      return `${applyTemplate(text.pastText, vars)} · ${absDays.value}`
     }
-    return applyTemplate(text.pastText, { days: absDays.value })
+    return applyTemplate(text.pastText, vars)
   })
 
   /** 显示模式：'days' 走大数字 + 单位，其余三种走「数字 + 单位/分隔符」序列 */
   const precisionMode = computed<PrecisionMode | null>(() => {
-    const mode = config().behavior.displayMode
+    // 单项可以覆盖显示模式（编辑页里设），没设才用全局
+    const mode = resolved.value?.displayMode ?? config().behavior.displayMode
     return mode === 'days' ? null : mode
   })
 

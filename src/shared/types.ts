@@ -41,6 +41,10 @@ export interface CountdownItem {
   name: string
   /** 是否启用；停用后不能被选为桌面显示项，会被归入「已停用」分组 */
   enabled: boolean
+  /** 显示模式覆盖；空串表示跟随全局 */
+  displayMode: DisplayMode | ''
+  /** 当天是否弹系统通知；**不跟随全局**，默认关闭 */
+  notifyOnToday: boolean
   /** 单项日期；字段留空表示跟随全局 */
   target: TargetConfig
   /** 单项文案覆盖；空字符串表示跟随全局 */
@@ -205,6 +209,8 @@ export interface TrayMenuConfig {
   resetPosition: boolean
   /** 允许拖动 */
   allowDrag: boolean
+  /** 鼠标点击穿透 */
+  clickThrough: boolean
   /** 总在最前 */
   alwaysOnTop: boolean
   /** 开机自动启动 */
@@ -230,6 +236,8 @@ export interface RuntimeConfig {
   language: AppLanguage
   /** 主题模式：影响托盘与设置界面的明暗 */
   theme: 'light' | 'dark'
+  /** 系统通知总开关（相当于「是否允许本应用发通知」）；具体哪一项当天提醒由每个倒数日决定 */
+  notifications: boolean
   window: WindowConfig
   /** 托盘右键菜单显示哪些条目 */
   trayMenu: TrayMenuConfig
@@ -302,6 +310,8 @@ export interface ResolvedCountdown {
   showStatus: boolean
   /** 最终生效的单位字（单项覆盖优先于全局） */
   units: UnitLabelConfig
+  /** 最终生效的显示模式（单项覆盖优先于全局） */
+  displayMode: DisplayMode
   appearance: AppearanceConfig
 }
 

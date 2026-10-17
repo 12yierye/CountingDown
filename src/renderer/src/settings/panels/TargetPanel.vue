@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AppConfig } from '@shared/types'
+import type { AppConfig, UnitLabelConfig } from '@shared/types'
 import FieldRow from '@/components/FieldRow.vue'
+import UnitLabelField from '@/components/UnitLabelField.vue'
+import TextVariables from '@/components/TextVariables.vue'
+import { modeSlots } from '@/utils/preview'
 
 const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{ (event: 'patch', patch: unknown): void }>()
@@ -54,6 +57,19 @@ function onDateTypeChange(next: 'date' | 'datetime'): void {
 }
 
 const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value.month, 0).getDate())
+
+/* --------------------------- 单位字（全局默认） --------------------------- */
+
+const units = computed<UnitLabelConfig>(() => props.config.behavior.units)
+
+/** 当前显示模式下真正会渲染的分段；只用于标灰提示，不决定能否编辑 */
+const slots = computed(() =>
+  modeSlots(props.config.behavior.displayMode, props.config.behavior.showDaysInPrecise)
+)
+
+function patchUnits(patch: Partial<UnitLabelConfig>): void {
+  emit('patch', { behavior: { units: patch } })
+}
 </script>
 
 <template>
@@ -68,7 +84,6 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
             </span>
           </el-tooltip>
         </span>
-        <el-tag size="small" type="info" effect="plain">{{ t('common.followGlobal') }}</el-tag>
       </div>
     </template>
 
@@ -121,6 +136,42 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
     </FieldRow>
   </el-card>
 
+  <!--
+    单位字从「行为」搬到这里：它改的是每一段后面那个字（天/时/分/秒），
+    和文案、日期同属「显示什么内容」，放在一起才找得到。
+  -->
+  <el-card shadow="never" class="panel-card">
+    <template #header>
+      <div class="panel-card__header">
+        <span class="panel-card__title">
+          {{ t('behavior.unitsTitle') }}
+          <el-tooltip :content="t('behavior.unitsHint')" placement="top" :show-after="150">
+            <span class="panel-card__help" tabindex="0">
+              <el-icon :size="13"><QuestionFilled /></el-icon>
+            </span>
+          </el-tooltip>
+        </span>
+      </div>
+    </template>
+
+    <FieldRow stacked>
+      <UnitLabelField
+        :day="units.day"
+        :hour="units.hour"
+        :minute="units.minute"
+        :second="units.second"
+        :day-on="slots.days || config.behavior.displayMode === 'days'"
+        :hour-on="slots.hours"
+        :minute-on="slots.minutes"
+        :second-on="slots.seconds"
+        @update:day="(v: string) => patchUnits({ day: v })"
+        @update:hour="(v: string) => patchUnits({ hour: v })"
+        @update:minute="(v: string) => patchUnits({ minute: v })"
+        @update:second="(v: string) => patchUnits({ second: v })"
+      />
+    </FieldRow>
+  </el-card>
+
   <el-card shadow="never" class="panel-card">
     <template #header>
       <div class="panel-card__header">
@@ -170,7 +221,7 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
       </div>
     </template>
 
-    <FieldRow :label="t('target.hintText')">
+    <FieldRow :label="t('target.hintText')" :hint="t('target.hintHint')">
       <el-input
         :model-value="config.text.hint"
         :placeholder="t('target.hintPlaceholder')"
@@ -178,9 +229,15 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
         show-word-limit
         @update:model-value="(v: string) => patchText({ hint: v })"
       />
+      <template #note>
+        <TextVariables
+          :model-value="config.text.hint"
+          @update:model-value="(v: string) => patchText({ hint: v })"
+        />
+      </template>
     </FieldRow>
 
-    <FieldRow :label="t('target.futureText')">
+    <FieldRow :label="t('target.futureText')" :hint="t('target.futureHint')">
       <el-input
         :model-value="config.text.futureText"
         maxlength="40"
@@ -188,7 +245,7 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
       />
     </FieldRow>
 
-    <FieldRow :label="t('target.todayText')">
+    <FieldRow :label="t('target.todayText')" :hint="t('target.todayTextHint')">
       <el-input
         :model-value="config.text.todayText"
         maxlength="40"
@@ -196,7 +253,7 @@ const maxDay = computed(() => new Date(new Date().getFullYear(), targetRef.value
       />
     </FieldRow>
 
-    <FieldRow :label="t('target.pastText')">
+    <FieldRow :label="t('target.pastText')" :hint="t('target.pastTextHint')">
       <el-input
         :model-value="config.text.pastText"
         maxlength="40"

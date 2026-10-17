@@ -8,6 +8,9 @@
  *
  * dense = true 时外壳换成平铺分组（见 AppearanceGroup），供列宽只有 500px 出头的模态框使用；
  * 控件、标签、tooltip 两种变体完全一致。
+ *
+ * advanced = false（默认）时按使用频率分三层：一键配色 → 常用 6 项 → 高级参数折叠。
+ * 折叠只影响这一层渲染，**不影响数据**：隐藏的字段仍原样保留在 appearance 里。
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -23,11 +26,17 @@ const props = withDefaults(
   defineProps<{
     appearance: AppearanceConfig
     dense?: boolean
+    advanced?: boolean
   }>(),
-  { dense: false }
+  { dense: false, advanced: false }
 )
 
-const emit = defineEmits<{ (event: 'update:appearance', value: AppearanceConfig): void }>()
+/** 可被「重置本组」单独恢复的四个分区（与父组件共享同一套字面量） */
+const emit = defineEmits<{
+  (event: 'update:appearance', value: AppearanceConfig): void
+  (event: 'reset', key: 'font' | 'background' | 'border' | 'text'): void
+  (event: 'toggle-advanced', value: boolean): void
+}>()
 
 const { t } = useI18n()
 
@@ -46,11 +55,43 @@ function updateStyle(key: 'title' | 'count' | 'hint' | 'status', value: TextStyl
   patchAppearance({ [key]: value })
 }
 
+/** 文案样板跟随界面语言，避免英文界面里预览出「元旦」「128 天」 */
+const samples = computed(() => ({
+  title: t('sample.title'),
+  count: t('sample.count'),
+  hint: t('sample.hint'),
+  status: t('sample.status')
+}))
+
 const fontOptions = FONT_STACKS
 </script>
 
 <template>
+  <!--
+    高级参数的总开关放在表单最上面，一个入口、一个位置。
+    以前「展开」藏在边框分组里、「收起」又跑到文字分组，「高级」到底指什么谁也说不清；
+    现在开关固定在最上方，说明里直接列出它会带出哪些项。
+    （预设调参模态框 dense 模式下没有开关位，那边固定展开。）
+  -->
+  <div v-if="!dense" class="advanced-bar">
+    <div class="advanced-bar__text">
+      <span class="advanced-bar__title">{{ t('appearance.advanced') }}</span>
+      <span class="advanced-bar__hint">{{ t('appearance.advancedBarHint') }}</span>
+    </div>
+    <el-switch
+      :model-value="advanced"
+      data-cd-advanced
+      @update:model-value="(v: string | number | boolean) => emit('toggle-advanced', Boolean(v))"
+    />
+  </div>
+
   <AppearanceGroup :title="t('appearance.font')" :dense="dense">
+    <template #actions>
+      <el-button link size="small" :title="t('appearance.resetFont')" @click="emit('reset', 'font')">
+        {{ t('common.resetGroup') }}
+      </el-button>
+    </template>
+
     <FieldRow :label="t('appearance.fontFamily')" :hint="t('appearance.fontHint')">
       <el-select
         :model-value="appearance.fontFamily"
@@ -68,14 +109,36 @@ const fontOptions = FONT_STACKS
   </AppearanceGroup>
 
   <AppearanceGroup :title="t('appearance.background')" :dense="dense">
+    <template #actions>
+      <el-button
+        link
+        size="small"
+        :title="t('appearance.resetBackground')"
+        @click="emit('reset', 'background')"
+      >
+        {{ t('common.resetGroup') }}
+      </el-button>
+    </template>
+
     <div class="panel-grid-2">
       <FieldRow :label="t('appearance.bgColor')">
         <ColorField
           :model-value="bg.color"
-          :alpha="bg.alpha"
-          show-alpha
           @update:model-value="(v: string) => patchBackground({ color: v })"
-          @update:alpha="(v: number) => patchBackground({ alpha: v })"
+        />
+      </FieldRow>
+
+      <!--
+        透明度是「背景」这一级的独立设置，不是颜色的子项：
+        它嵌在取色器弹层里时，多数人根本不知道这个滑条存在。
+      -->
+      <FieldRow :label="t('appearance.bgAlpha')">
+        <SliderField
+          :model-value="bg.alpha"
+          :min="0"
+          :max="1"
+          :step="0.01"
+          @update:model-value="(v: number) => patchBackground({ alpha: v })"
         />
       </FieldRow>
 
@@ -101,7 +164,7 @@ const fontOptions = FONT_STACKS
         />
       </FieldRow>
 
-      <FieldRow :label="t('appearance.padding')">
+      <FieldRow v-if="advanced" :label="t('appearance.padding')">
         <SliderField
           :model-value="bg.padding"
           :min="0"
@@ -113,10 +176,18 @@ const fontOptions = FONT_STACKS
     </div>
   </AppearanceGroup>
 
+  <!-- 高级模式：边框与阴影整组出现；收起时整组不渲染，入口在上面那条总开关里 -->
   <AppearanceGroup
+    v-if="advanced"
     :title="`${t('appearance.border')} / ${t('appearance.shadow')}`"
     :dense="dense"
   >
+    <template #actions>
+      <el-button link size="small" :title="t('appearance.resetBorder')" @click="emit('reset', 'border')">
+        {{ t('common.resetGroup') }}
+      </el-button>
+    </template>
+
     <div class="panel-grid-2">
       <FieldRow :label="t('appearance.borderWidth')">
         <SliderField
@@ -154,6 +225,7 @@ const fontOptions = FONT_STACKS
     </div>
   </AppearanceGroup>
 
+  <!-- 收起状态下整组不渲染：入口只有顶部那一个开关，不再另留一块占位说明 -->
   <AppearanceGroup :title="t('appearance.textGroup')" :dense="dense">
     <template #help>
       <el-tooltip :content="t('appearance.textAlphaHint')" placement="top" :show-after="150">
@@ -161,6 +233,11 @@ const fontOptions = FONT_STACKS
           <el-icon :size="13"><QuestionFilled /></el-icon>
         </span>
       </el-tooltip>
+    </template>
+    <template #actions>
+      <el-button link size="small" :title="t('appearance.resetText')" @click="emit('reset', 'text')">
+        {{ t('common.resetGroup') }}
+      </el-button>
     </template>
 
     <!--
@@ -181,27 +258,63 @@ const fontOptions = FONT_STACKS
       <TextStyleEditor
         :title="t('appearance.titleStyle')"
         :model-value="appearance.title"
-        sample="元旦"
+        :sample="samples.title"
+        :compact="!advanced"
         @update:model-value="(v: TextStyle) => updateStyle('title', v)"
       />
       <TextStyleEditor
         :title="t('appearance.countStyle')"
         :model-value="appearance.count"
-        sample="128 天"
+        :sample="samples.count"
+        :compact="!advanced"
         @update:model-value="(v: TextStyle) => updateStyle('count', v)"
       />
       <TextStyleEditor
         :title="t('appearance.hintStyle')"
         :model-value="appearance.hint"
-        sample="2026 年 1 月 1 日 · 周四"
+        :sample="samples.hint"
+        :compact="!advanced"
         @update:model-value="(v: TextStyle) => updateStyle('hint', v)"
       />
       <TextStyleEditor
         :title="t('appearance.statusStyle')"
         :model-value="appearance.status"
-        sample="还有 128 天"
+        :sample="samples.status"
+        :compact="!advanced"
         @update:model-value="(v: TextStyle) => updateStyle('status', v)"
       />
     </div>
   </AppearanceGroup>
 </template>
+
+<style scoped>
+.advanced-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--cd-radius, 12px);
+  background: var(--el-fill-color-lighter);
+}
+
+.advanced-bar__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.advanced-bar__title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.advanced-bar__hint {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--el-text-color-secondary);
+}
+</style>

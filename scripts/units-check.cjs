@@ -1,5 +1,5 @@
 // 单位字「不受显示模式影响」验证：
-//   1) 行为页的四个单位字输入框在任何显示模式下都**可编辑**（一个都不能是 disabled）
+//   1) 日期与文案页的四个单位字输入框在任何显示模式下都**可编辑**（一个都不能是 disabled）
 //   2) 「只显示天数」模式下往「时」的单位字里打字能成功，并真的写进配置
 //   3) 切回「天 + 时」时那个值仍在（说明它一直是同一份数据，只是之前不让改）
 //
@@ -149,11 +149,11 @@ function persisted() {
   }
 }
 
-/** 打开设置窗口并切到「行为」页 */
+/** 打开设置窗口并切到「日期与文案」页 */
 const OPEN_BEHAVIOR =
   `(function(){` +
   `var navs=[].slice.call(document.querySelectorAll(".settings-nav__item"));` +
-  `var nav=navs.filter(function(x){return /行为|Behavior/.test(x.textContent||"")})[0];` +
+  `var nav=navs.filter(function(x){return /日期与文案|Dates & texts/.test(x.textContent||"")})[0];` +
   `if(!nav)return {found:false,all:navs.map(function(x){return (x.textContent||"").trim()})};` +
   `nav.click();return {found:true};})()`
 
@@ -176,12 +176,9 @@ const TYPE_UNIT = (index, text) =>
   `el.dispatchEvent(new Event("input",{bubbles:true}));` +
   `return {found:true,disabled:false,value:el.value};})()`
 
-/** 切换显示模式：按标签文字点那个分段按钮 */
-const CLICK_MODE = (pattern) =>
-  `(function(){var bs=[].slice.call(document.querySelectorAll(".el-radio-button__inner"));` +
-  `var b=bs.filter(function(x){return ${pattern}.test(x.textContent||"")})[0];` +
-  `if(!b)return {found:false,all:bs.map(function(x){return (x.textContent||"").trim()})};` +
-  `b.click();return {found:true,text:(b.textContent||"").trim()};})()`
+/** 切换显示模式：模式在「行为」页、单位字在「日期与文案」页，这里直接写配置 */
+const SET_MODE = (mode) =>
+  `window.cd.updateConfig({behavior:{displayMode:${JSON.stringify(mode)}}}).then(function(){return 'ok'})`
 
 app.whenReady().then(async () => {
   await wait(4000)
@@ -204,13 +201,10 @@ app.whenReady().then(async () => {
   const state = await jsonIn(s, UNITS_STATE)
   write('open = ' + JSON.stringify(opened) + ' units = ' + JSON.stringify(state))
 
-  check('behavior-page-opened', opened.found === true, JSON.stringify(opened.all))
+  check('units-page-opened', opened.found === true, JSON.stringify(opened.all))
   check('units-has-four-inputs', state.inputs === 4, JSON.stringify(state.inputs))
-  check(
-    'display-mode-is-days-only',
-    /只显示天数|Days only/.test(state.checkedMode || ''),
-    JSON.stringify(state.checkedMode)
-  )
+  const modeNow = await jsonIn(s, `window.cd.getConfig().then(function(c){return c.behavior.displayMode})`)
+  check('display-mode-is-days-only', modeNow === 'days', JSON.stringify(modeNow))
   // 这条就是本次修复的核心：以前「只显示天数」下会有 3 个 disabled
   check(
     'no-unit-input-disabled-in-days-mode',
@@ -238,7 +232,7 @@ app.whenReady().then(async () => {
   )
 
   // ------------------------------- 切到「天 + 时」，值应当仍在（一直是同一份数据）
-  const switched = await jsonIn(s, CLICK_MODE('/DD.*HH/'))
+  const switched = await jsonIn(s, SET_MODE('days-hours'))
   await wait(900)
   const afterSwitch = persisted()
   const switchedState = await jsonIn(s, UNITS_STATE)
@@ -248,7 +242,7 @@ app.whenReady().then(async () => {
       ' units = ' +
       JSON.stringify({ values: switchedState.values, off: switchedState.off, disabled: switchedState.disabled })
   )
-  check('mode-switched', switched.found === true, JSON.stringify(switched))
+  check('mode-switched', switched === 'ok', JSON.stringify(switched))
   check(
     'hour-unit-survives-mode-switch',
     afterSwitch.behavior.units.hour === 'h',

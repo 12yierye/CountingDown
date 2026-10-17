@@ -5,15 +5,16 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { AppearanceConfig, TextConfig } from '@shared/types'
-import { cardStyleFor, textStyle } from '@/utils/style'
+import type { AppConfig, AppearanceConfig } from '@shared/types'
+import CountdownPreview from '@/components/CountdownPreview.vue'
+import { textStyle } from '@/utils/style'
 
 const props = defineProps<{
   modelValue: boolean
   name: string
   appearance: AppearanceConfig | null
-  /** 文案不是预设的一部分，仅作为参考展示全局当前值 */
-  text?: TextConfig | null
+  /** 预览与文案都取自真实配置；预设只覆盖其中的 appearance */
+  config: AppConfig
 }>()
 
 const emit = defineEmits<{ (event: 'update:modelValue', value: boolean): void }>()
@@ -31,17 +32,21 @@ interface StyleRow {
   sample: string
 }
 
-const styleRows: StyleRow[] = [
-  { key: 'title', label: 'appearance.titleStyle', sample: '元旦' },
+const styleRows = computed<StyleRow[]>(() => [
+  { key: 'title', label: 'appearance.titleStyle', sample: t('sample.title') },
   { key: 'count', label: 'appearance.countStyle', sample: '128' },
-  { key: 'hint', label: 'appearance.hintStyle', sample: '1 月 1 日 · 周四' },
-  { key: 'status', label: 'appearance.statusStyle', sample: '还有 128 天' }
-]
+  { key: 'hint', label: 'appearance.hintStyle', sample: t('sample.hint') },
+  { key: 'status', label: 'appearance.statusStyle', sample: t('sample.status') }
+])
 
 const bg = computed(() => props.appearance?.background ?? null)
 
+const previewConfig = computed<AppConfig>(() =>
+  props.appearance ? { ...props.config, appearance: props.appearance } : props.config
+)
+
 const textRows = computed(() => {
-  const text = props.text
+  const text = props.config.text
   if (!text) return []
   return [
     { label: 'target.hintText', value: text.hint },
@@ -60,20 +65,6 @@ function percent(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return t('preset.detailEmpty')
   return `${Math.round(value * 100)}%`
 }
-
-/** 左上角那张小卡片：直接复用真实的外观样式函数，所见即所得 */
-const sampleStyle = computed(() =>
-  props.appearance ? cardStyleFor(props.appearance) : {}
-)
-const sampleTitle = computed(() =>
-  props.appearance ? textStyle(props.appearance.title, props.appearance.textAlpha) : {}
-)
-const sampleCount = computed(() =>
-  props.appearance ? textStyle(props.appearance.count, props.appearance.textAlpha) : {}
-)
-const sampleHintStyle = computed(() =>
-  props.appearance ? textStyle(props.appearance.hint, props.appearance.textAlpha) : {}
-)
 </script>
 
 <template>
@@ -81,11 +72,8 @@ const sampleHintStyle = computed(() =>
     <div v-if="appearance" class="detail">
       <div class="detail__head">
         <div class="detail__sample-wrap">
-          <div class="detail__sample" :style="sampleStyle">
-            <span :style="sampleTitle">元旦</span>
-            <span :style="sampleCount">128</span>
-            <span :style="sampleHintStyle">1 月 1 日 · 周四</span>
-          </div>
+          <!-- 真组件渲染，尺寸与比例和桌面卡片一致 -->
+          <CountdownPreview :config="previewConfig" sample still :scale="0.5" />
         </div>
         <div class="detail__name">
           <span class="detail__name-label">{{ t('preset.nameLabel') }}</span>
@@ -207,17 +195,8 @@ const sampleHintStyle = computed(() =>
   align-items: center;
   justify-content: center;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--el-fill-color-darker), var(--el-fill-color-light));
+  background: var(--el-fill-color-light);
   overflow: hidden;
-}
-
-.detail__sample {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  transform: scale(0.86);
-  min-width: 140px;
 }
 
 .detail__name {

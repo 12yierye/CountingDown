@@ -8,6 +8,7 @@ import type {
   BackgroundConfig,
   CountdownItem,
   DateMode,
+  DisplayMode,
   TextStyle
 } from '@shared/types'
 import {
@@ -17,6 +18,7 @@ import {
   resolveText
 } from '@shared/defaults'
 import { toPlain } from '@/composables/useConfig'
+import { useStickyStuck } from '@/composables/useStickyStuck'
 import { FONT_STACKS } from '@/utils/style'
 import { modeSlots } from '@/utils/preview'
 import FieldRow from '@/components/FieldRow.vue'
@@ -24,6 +26,8 @@ import ColorField from '@/components/ColorField.vue'
 import UnitLabelField from '@/components/UnitLabelField.vue'
 import TextStyleEditor from '@/components/TextStyleEditor.vue'
 import SliderField from '@/components/SliderField.vue'
+import CountdownPreview from '@/components/CountdownPreview.vue'
+import TextVariables from '@/components/TextVariables.vue'
 
 const props = defineProps<{ config: AppConfig; item: CountdownItem }>()
 const emit = defineEmits<{
@@ -46,6 +50,10 @@ const globalText = computed(() => resolveText(undefined, props.config.text))
 interface Draft {
   name: string
   enabled: boolean
+  /** 当天提醒；不跟随全局，默认关闭 */
+  notifyOnToday: boolean
+  /** 显示模式覆盖；'' = 跟随全局 */
+  displayMode: DisplayMode | ''
   mode: DateMode
   date: string
   month: number
@@ -63,6 +71,8 @@ interface Draft {
 const draft = reactive<Draft>({
   name: '',
   enabled: true,
+  notifyOnToday: false,
+  displayMode: '',
   mode: 'annual',
   date: '',
   month: 1,
@@ -78,6 +88,14 @@ const draft = reactive<Draft>({
 const appearance = ref<AppearanceOverride>({})
 const useAppearance = ref(false)
 
+/**
+ * 吸顶状态：吸顶后去掉上方圆角与上边框，左右下边框与下方圆角保留（见样式里的 .is-stuck）。
+ * 判定锚点是紧贴栏体前面的零高度元素，与 `top` 的具体数值无关。
+ */
+const stickyBar = ref<HTMLElement | null>(null)
+const stickyAnchor = ref<HTMLElement | null>(null)
+const { stuck } = useStickyStuck(stickyBar, stickyAnchor)
+
 /** 同步期间不要把手动标记当成用户编辑 */
 let syncing = false
 
@@ -86,6 +104,8 @@ function syncFromItem(item: CountdownItem): void {
   syncing = true
   draft.name = item.name
   draft.enabled = item.enabled
+  draft.notifyOnToday = item.notifyOnToday === true
+  draft.displayMode = item.displayMode ?? ''
   // 单项日期为空时，展示「实际上生效的值」（全局或内置默认），编辑后即写入单项
   const effective = resolveTarget(item.target, props.config.target) ?? props.config.target
   draft.targetCustom = !isTargetBlank(item.target)
@@ -133,6 +153,8 @@ function snapshotOf(item: CountdownItem): string {
   return JSON.stringify({
     name: item.name,
     enabled: item.enabled,
+    notifyOnToday: item.notifyOnToday === true,
+    displayMode: item.displayMode ?? '',
     targetBlank: isTargetBlank(item.target),
     target: item.target,
     text: item.text,
@@ -150,6 +172,8 @@ function computeItem(): CountdownItem {
     ...props.item,
     name: draft.name.trim(),
     enabled: draft.enabled,
+    notifyOnToday: draft.notifyOnToday,
+    displayMode: draft.displayMode,
     // 没动过日期就保持原样（留空即继续跟随全局），动过才写入具体日期
     target: draft.dateTouched
       ? { mode: draft.mode, date: draft.date, month: draft.month, day: draft.day }
@@ -189,6 +213,14 @@ function currentSnapshot(): string {
 }
 
 const dirty = computed(() => currentSnapshot() !== baseline.value)
+
+/**
+ * 编辑页自己的实时预览。
+ *
+ * 从前这里只有「编辑当前桌面显示项」才会在桌面上看到效果，改别的项等于盲调。
+ * 现在把草稿直接渲染成一张卡片 —— 不受 activeId 影响，标题/日期/文案/外观全看草稿。
+ */
+const previewItem = computed<CountdownItem>(() => computeItem())
 
 /** 正在编辑的就是桌面显示项：此时才需要提示「桌面卡片实时预览」 */
 const liveOnDesktop = computed(
@@ -272,9 +304,19 @@ function compact(source: AppearanceOverride): AppearanceOverride {
   return out
 }
 
+/**
+ * 本次编辑里是否至少保存过一次。
+ *
+ * 「保存」按钮现在不再顺手返回列表，于是会出现「新建项 → 保存 → 返回列表」这条路径。
+ * 列表那边把「没保存就离开的新建项」当空白项删掉，所以离开时必须把「已经存过了」
+ * 这件事告诉它，否则刚保存的项会在返回时被当成空白项删掉。
+ */
+let everSaved = false
+
 function save(): void {
   const item = computeItem()
   if (!item.name) item.name = t('editor.unnamed')
+  everSaved = true
   emit('save', item)
   baseline.value = currentSnapshot()
   savedFlash.value = true
@@ -291,7 +333,7 @@ function saveAndBack(): void {
 
 async function requestClose(): Promise<void> {
   if (!dirty.value) {
-    emit('close', { saved: false })
+    emit('close', { saved: everSaved })
     return
   }
   try {
@@ -303,7 +345,7 @@ async function requestClose(): Promise<void> {
     })
     saveAndBack()
   } catch (action) {
-    if (action === 'cancel') emit('close', { saved: false })
+    if (action === 'cancel') emit('close', { saved: everSaved })
   }
 }
 
@@ -396,6 +438,20 @@ function onDateTypeChange(next: 'date' | 'datetime'): void {
 
 const maxDay = computed(() => new Date(new Date().getFullYear(), draft.month, 0).getDate())
 
+/** 「跟随全局」选项里显示当前全局模式，省得用户还要去别的页面确认 */
+const globalModeLabel = computed(() => {
+  switch (props.config.behavior.displayMode) {
+    case 'days':
+      return t('behavior.days')
+    case 'days-hours':
+      return t('behavior.daysHours')
+    case 'days-hours-minutes':
+      return t('behavior.daysHoursMinutes')
+    default:
+      return t('behavior.precise')
+  }
+})
+
 /** 与全局外观面板共用同一份字体栈预设 */
 const fontOptions = FONT_STACKS
 
@@ -453,7 +509,9 @@ function toggleUnitsOverride(value: boolean): void {
     这里不再放实时预览 —— 全局设置页已经有一份统一的预览样板，
     而编辑页滚动时预览会一直占着屏幕上方，反而挡住了要改的字段。
   -->
-  <div class="editor-sticky">
+  <!-- 吸顶判定锚点：零高度、不可见，只用来提供「未吸顶时栏体应在的位置」 -->
+  <div ref="stickyAnchor" class="editor-anchor" aria-hidden="true"></div>
+  <div ref="stickyBar" class="editor-sticky" :class="{ 'is-stuck': stuck }">
     <div class="editor-head">
       <el-button size="small" text @click="requestClose">
         <el-icon><ArrowLeft /></el-icon>
@@ -472,14 +530,15 @@ function toggleUnitsOverride(value: boolean): void {
       <el-tag v-else-if="savedFlash" size="small" type="success" effect="plain">
         {{ t('common.savedOk') }}
       </el-tag>
-      <el-button type="primary" size="small" class="editor-head__save" @click="saveAndBack">
+      <el-button type="primary" size="small" class="editor-head__save" @click="save">
         <el-icon><Check /></el-icon>
         <span style="margin-left: 6px">{{ t('common.save') }}</span>
       </el-button>
     </div>
   </div>
 
-  <el-card shadow="never" class="panel-card">
+  <div class="editor-body">
+    <el-card shadow="never" class="panel-card">
     <el-divider content-position="left">{{ t('editor.basic') }}</el-divider>
     <FieldRow :label="t('editor.name')" :hint="t('editor.nameHint')">
       <el-input
@@ -491,6 +550,9 @@ function toggleUnitsOverride(value: boolean): void {
     </FieldRow>
     <FieldRow :label="t('editor.enabled')" :hint="t('editor.enabledHint')">
       <el-switch v-model="draft.enabled" />
+    </FieldRow>
+    <FieldRow :label="t('editor.notifyOnToday')" :hint="t('editor.notifyOnTodayHint')">
+      <el-switch v-model="draft.notifyOnToday" />
     </FieldRow>
 
     <el-divider content-position="left">
@@ -555,6 +617,26 @@ function toggleUnitsOverride(value: boolean): void {
 
     <el-divider content-position="left">
       <span class="divider-title">
+        {{ t('editor.displaySection') }}
+        <el-tooltip :content="t('editor.displayModeHint')" placement="top" :show-after="150">
+          <span class="panel-card__help" tabindex="0">
+            <el-icon :size="13"><QuestionFilled /></el-icon>
+          </span>
+        </el-tooltip>
+      </span>
+    </el-divider>
+    <FieldRow :label="t('behavior.displayMode')">
+      <el-radio-group v-model="draft.displayMode" class="is-compact">
+        <el-radio-button value="">{{ t('editor.followMode', { value: globalModeLabel }) }}</el-radio-button>
+        <el-radio-button value="days">{{ t('behavior.days') }}</el-radio-button>
+        <el-radio-button value="days-hours">{{ t('behavior.daysHours') }}</el-radio-button>
+        <el-radio-button value="days-hours-minutes">{{ t('behavior.daysHoursMinutes') }}</el-radio-button>
+        <el-radio-button value="precise">{{ t('behavior.precise') }}</el-radio-button>
+      </el-radio-group>
+    </FieldRow>
+
+    <el-divider content-position="left">
+      <span class="divider-title">
         {{ t('editor.textSection') }}
         <el-tooltip :content="t('common.followGlobalHint')" placement="top" :show-after="150">
           <span class="panel-card__help" tabindex="0">
@@ -577,8 +659,11 @@ function toggleUnitsOverride(value: boolean): void {
         <el-radio-button value="hide">{{ t('target.hide') }}</el-radio-button>
       </el-radio-group>
     </FieldRow>
-    <FieldRow :label="t('target.hintText')">
+    <FieldRow :label="t('target.hintText')" :hint="t('target.hintHint')">
       <el-input v-model="draft.text.hint" :placeholder="followPlaceholder('hint')" maxlength="60" />
+      <template #note>
+        <TextVariables v-model="draft.text.hint" />
+      </template>
     </FieldRow>
     <FieldRow :label="t('target.futureText')" :hint="t('target.statusHint')">
       <el-input
@@ -693,10 +778,22 @@ function toggleUnitsOverride(value: boolean): void {
             <ColorField
               v-if="appearance.background"
               :model-value="backgroundFields.color ?? config.appearance.background.color"
-              :alpha="backgroundFields.alpha ?? config.appearance.background.alpha"
-              show-alpha
               @update:model-value="(v: string) => patchBackground({ color: v })"
-              @update:alpha="(v: number) => patchBackground({ alpha: v })"
+            />
+            <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
+          </div>
+        </FieldRow>
+
+        <!-- 透明度与颜色同级：它属于「背景」，不是颜色的附属参数 -->
+        <FieldRow :label="t('appearance.bgAlpha')">
+          <div class="override-row">
+            <SliderField
+              v-if="appearance.background"
+              :model-value="backgroundFields.alpha ?? config.appearance.background.alpha"
+              :min="0"
+              :max="1"
+              :step="0.01"
+              @update:model-value="(v: number) => patchBackground({ alpha: v })"
             />
             <span v-else class="override-row__empty">{{ t('common.followGlobal') }}</span>
           </div>
@@ -798,10 +895,10 @@ function toggleUnitsOverride(value: boolean): void {
         -->
         <div
           v-for="entry in ([
-            { key: 'title', label: t('appearance.titleStyle'), sample: draft.name || '元旦' },
-            { key: 'count', label: t('appearance.countStyle'), sample: '128 天' },
-            { key: 'hint', label: t('appearance.hintStyle'), sample: '2026 年 1 月 1 日 · 周四' },
-            { key: 'status', label: t('appearance.statusStyle'), sample: '还有 128 天' }
+            { key: 'title', label: t('appearance.titleStyle'), sample: draft.name || t('sample.title') },
+            { key: 'count', label: t('appearance.countStyle'), sample: t('sample.count') },
+            { key: 'hint', label: t('appearance.hintStyle'), sample: t('sample.hint') },
+            { key: 'status', label: t('appearance.statusStyle'), sample: t('sample.status') }
           ] as const)"
           :key="entry.key"
           class="editor-style"
@@ -826,6 +923,15 @@ function toggleUnitsOverride(value: boolean): void {
       </div>
     </template>
   </el-card>
+
+    <aside class="editor-preview">
+      <div class="editor-preview__label">{{ t('common.preview') }}</div>
+      <div class="editor-preview__stage">
+        <CountdownPreview :config="config" :item="previewItem" />
+      </div>
+      <p class="editor-preview__hint">{{ t('editor.previewHint') }}</p>
+    </aside>
+  </div>
 </template>
 
 <style scoped>
@@ -850,6 +956,86 @@ function toggleUnitsOverride(value: boolean): void {
   border: 1px solid var(--el-border-color-light);
   border-radius: var(--cd-radius, 12px);
   background: var(--el-bg-color);
+}
+
+/*
+ * 吸顶后：只去掉**上方**的圆角与**上边**的边框，左右下三边与下方两个圆角原样保留。
+ *
+ * 吸顶时栏体贴住滚动视口顶端，顶上那道 1px 边框与两个圆角会变成「贴边又带一道横线」的怪样子；
+ * 去掉之后它就是一条贴顶、左右有竖边、下方仍收口的栏。离顶后 class 摘掉，全部原样恢复。
+ *
+ * 用 border-top-color: transparent 而不是 border-top: none —— 边框盒尺寸保持不变，
+ * 切换时不会因为少了 1px 边框让下面的内容上下跳一下。
+ */
+.editor-sticky.is-stuck {
+  border-top-color: transparent;
+  border-radius: 0 0 var(--cd-radius, 12px) var(--cd-radius, 12px);
+}
+
+/*
+ * 吸顶判定锚点：必须留在普通流里（不能用 display: none，那样量不到位置），
+ * 高度为 0，不占版面、不接收事件。
+ */
+.editor-anchor {
+  flex: none;
+  height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+/*
+ * 表单 + 右侧预览两列。
+ * 预览列在宽屏才出现：窄窗口下它会把表单挤成一列，反而更难填。
+ * 预览列宽度用百分比夹一个上下限，窗口拉宽/收窄时它自己跟着变，
+ * 免得固定 260px 在宽屏里显得空、在窄屏里把表单挤扁。
+ */
+.editor-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(240px, 30%, 360px);
+  gap: 20px;
+  align-items: start;
+}
+
+.editor-preview {
+  position: sticky;
+  /* 吸在编辑页吸顶栏下面：栏体高度 ≈ 54px，再留 8px 呼吸 */
+  top: 62px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: var(--cd-radius, 12px);
+  background: var(--el-bg-color);
+  /* 预览最多占半屏多一点，超出的高度由 CountdownPreview 自己等比缩下去 */
+  --cd-preview-max-height: min(52vh, 480px);
+}
+
+.editor-preview__label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+
+.editor-preview__stage {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-preview__hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--el-text-color-secondary);
+}
+
+@media (max-width: 1150px) {
+  .editor-body {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-preview {
+    display: none;
+  }
 }
 
 .editor-head {

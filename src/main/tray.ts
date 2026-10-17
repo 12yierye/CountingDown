@@ -21,6 +21,7 @@ const copy = {
     settings: '设置…',
     resetPosition: '吸附到右上角',
     allowDrag: '允许拖动',
+    clickThrough: '鼠标点击穿透',
     alwaysOnTop: '总在最前',
     startup: '开机自动启动',
     quit: '退出',
@@ -33,6 +34,7 @@ const copy = {
     settings: 'Settings…',
     resetPosition: 'Snap to top-right',
     allowDrag: 'Allow dragging',
+    clickThrough: 'Click-through',
     alwaysOnTop: 'Always on top',
     startup: 'Launch at login',
     quit: 'Quit',
@@ -72,13 +74,17 @@ function buildMenu(): Menu {
   // 「显示 / 隐藏倒数日」与「设置」是托盘最基本的两个入口，这里始终保留。
   // 文案看的是**窗口是不是还活着**，不是配置里的期望值：窗口被外部销毁时
   // widgetVisible 还是 true，照它渲染出来的菜单会写着「隐藏」，用户点不到「显示」。
-  template.push({
-    label: config.runtime.widgetVisible && widgetAlive ? text.hide : text.show,
-    click: () => {
-      toggleWidgetVisible()
-      refreshTray()
-    }
-  })
+  // 「显示 / 隐藏倒数日」也受 trayMenu.toggleVisible 控制。
+  // 从前这一项是无条件 push 的，于是设置里那个勾选框怎么点都没反应。
+  if (tray.toggleVisible !== false) {
+    template.push({
+      label: config.runtime.widgetVisible && widgetAlive ? text.hide : text.show,
+      click: () => {
+        toggleWidgetVisible()
+        refreshTray()
+      }
+    })
+  }
   template.push({
     label: text.settings,
     click: () => createSettingsWindow()
@@ -106,6 +112,17 @@ function buildMenu(): Menu {
       checked: config.runtime.window.allowDrag !== false,
       click: (item) => {
         updateConfig({ runtime: { window: { allowDrag: item.checked } } })
+        refreshTray()
+      }
+    })
+  }
+  if (tray.clickThrough !== false) {
+    extras.push({
+      label: text.clickThrough,
+      type: 'checkbox',
+      checked: config.runtime.window.clickThrough === true,
+      click: (item) => {
+        updateConfig({ runtime: { window: { clickThrough: item.checked } } })
         refreshTray()
       }
     })

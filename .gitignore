@@ -10,4 +10,5 @@ dist/
 .pnpm-cache/
 .probe-userdata/
 .verify/
-docs/
+docs/superpowers
+.workbuddy/

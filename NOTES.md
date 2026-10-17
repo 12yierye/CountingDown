@@ -44,6 +44,19 @@ src/
    重新执行一次 `pnpm install` 即可，Electron 会走 `ELECTRON_MIRROR` 镜像下载。
 3. 若手动清理过 `node_modules`，记得保留 `pnpm-workspace.yaml`，否则 `allowBuilds` 丢失会导致
    Electron 二进制不再自动下载。
+4. **`electron-vite dev` 报 `Error: Electron uninstall`** = `node_modules/electron/dist` 是空的
+   （postinstall 没跑，常见于拷贝来的 `node_modules` 或中断的安装）。补装：
+   ```powershell
+   $env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"
+   node node_modules/electron/install.js
+   ```
+   成功的标志：`node_modules/electron/path.txt` 内容为 `electron.exe`，
+   `node_modules/electron/dist/version` 与 `package.json` 里的版本一致（当前 33.4.11）。
+   注意 `electron.exe --version` 在 `ELECTRON_RUN_AS_NODE=1` 下打印的是 Node 版本，不能用来判断。
+5. **启动时报 `Cannot read properties of undefined (reading 'requestSingleInstanceLock')`**：
+   Electron 被当成纯 Node 跑了，进程里 `electron.app` 是 undefined。检查环境变量
+   **`ELECTRON_RUN_AS_NODE`** 是否为 `1`（部分 IDE / 自动化工具会注入），清掉再启动。
+   自动化脚本同理：`unset ELECTRON_RUN_AS_NODE` 后再运行 `electron.exe scripts/xxx.cjs`。
 
 ---
 
@@ -68,6 +81,32 @@ src/
 卡内 `position: sticky` **不会生效**。因此「返回 / 标题 / 状态标签 / 保存 + 紧凑预览」整块渲染在
 `el-card` **外面**，用 `.editor-sticky` 吸顶，并用 `::before` 在上方补一块同色背景，
 盖住滚动容器 padding 造成的缝隙（sticky 的 `top: 0` 相对 padding box 还是 content box 各版本并不一致）。
+
+> 实测补充（Chromium 130 / Electron 33）：`top: -18px` 最终**钉在滚动视口的顶边**（不会被再往上推 18px），
+> 所以栏体吸顶时是完整可见的，只是上方圆角与顶边那道 1px 边框会变成「贴边又带线」的怪样子。
+
+**吸顶后只去掉「上方」的圆角与边框**（`is-stuck`）：左/右/下三边边框与下方两个圆角**保留**，
+只把 `border-top-color` 置透明、`border-radius` 改成 `0 0 12px 12px`。
+
+- 判定写在 `composables/useStickyStuck.ts`：在栏体**紧前面**放一个零高度锚点（`.editor-anchor`），
+  它的 `top` 恒等于「栏体没吸顶时该在的位置」。往下滚时锚点跟着内容上移、栏体被钉住，
+  于是 `栏体 top > 锚点 top` 就是吸顶。**不要**改成 `栏体 top <= 滚动容器 top` ——
+  那等于把阈值写死成容器顶边，以后谁动一下 `top` 判定就整体偏。
+- 用 `border-top-color: transparent` 而不是 `border-top: none`：边框盒尺寸不变，
+  切换时不会因为少了 1px 边框让下面的内容上下跳一下（实测切换前后栏体高度都是 48px）。
+  像素实测（整窗截图按 CSS 坐标取样）：吸顶时上边=栏体底色、左/右/下=边框色、左上角=边框像素；
+  未吸顶时四边都是边框色、左上角=页面底色（圆角处露出来）。
+- 时序：`scroll` 走**同步测量**（scroll 事件在绘制前派发，Vue 在微任务里改 class，仍赶在同一帧），
+  窗口尺寸变化/栏体高度变化走 rAF。实测「一次滚 200px」后**第一帧**就已是 `is-stuck`，没有闪一帧圆角。
+- 监听用 `window.addEventListener('scroll', measure, true)`：scroll 不冒泡，但捕获阶段能收到
+  **任意**滚动容器的滚动，不必去找滚动父节点。
+- 另外补了 `focus` 与 `visibilitychange` 两处补测：窗口从后台回来时补一次，
+  因为后台期间渲染生命周期是停的，scroll 事件可能压根没派发。
+
+**保存按钮不再顺手返回列表**（只保存，留在编辑页）。这条改动带出一个必须一起处理的分支：
+「新建 → 保存 → 返回列表」时，列表那边会把「没保存就离开的新建项」当空白项删掉，
+所以编辑器内部记一个 `everSaved`，`emit('close', { saved: everSaved })` ——
+否则用户刚保存的新项会在点返回时凭空消失（`sticky-check.cjs` 专门守这条）。
 
 ### 草稿同步（打字不被回传覆盖）
 
@@ -287,6 +326,37 @@ Element Plus 的次要灰，暗到几乎看不见。现在深色主题下统一�
 全局仍是 18；取消后两个数字都不动。名称空着点「保存预设」原地报错、不新增预设。
 另有几何断言：预览不压表单（间距 16px）、表单无横向溢出、弹窗与底部按钮都收在视口内。
 
+### 预设系统的第二轮整理（2026-10）
+
+第一版能跑，但「潦草」在三个地方：**同一张卡片被手搓了三遍**（列表缩略图、详情弹窗、
+调参弹窗各一套），缩略图还是假的（硬编码 `128` / `5 月 20 日`，不渲染状态行与单位字）；
+**套用后没有任何「正在使用」的反馈**；**每张卡挤三个按钮，却不能重命名或覆盖**。
+
+现在的做法：
+
+- **缩略图直接用真组件**：`<CountdownPreview sample still :scale="thumbScale(...)" />`。
+  `still` 是新加的 prop，关掉每秒重算的 interval（一次渲染十几份，没必要各跑一个定时器）。
+  `thumbScale = min(0.52, 44 / count.fontSize)` —— 按「大数字不超过 44px」缩放，
+  超大字号不会撑破 118px 画布。`PresetDetailDialog` 里那张大图同样换成真组件。
+- **使用中标记**：逐字段比较（`sameAppearance`），**不要用 `JSON.stringify` 比较** ——
+  两份外观对象的键序不一定一致，会出现「明明是同一套却不打标」。
+- **操作收敛**：卡片只留「套用 / 查看参数 / ⋮」，重命名、用当前外观更新、复制、删除收进下拉。
+  内置预设也能「复制为我的预设」，得到一个可编辑的起点。
+- **保存弹窗**：三个来源从「三个单选 + 一段会变的灰字」改成三块可点击的说明卡；
+  新增显式的「保存后立即套用到全局」（默认不勾），保存动作不再偷偷改全局。
+  来源语义没动（`global` 仍写一次全局外观，实际是同值 no-op；`item` 仍把该项覆盖写成合并结果），
+  `preset-sources-check.cjs` 守住的那两条继续成立。
+- 预设仍然**只保存外观**，页面底部现在明说了「文案、显示模式与单位字不随预设切换」。
+
+> 与脚本的兼容点（改这块时别踩）：
+> 1. 保存弹窗底部那个按钮的文案必须**包含「手动调整参数」**（`bugs-check` / `preset-tune-check`
+>    按这个子串点它），所以写的是「下一步：手动调整参数…」而不是「下一步」。
+> 2. `.preset-footer__actions` 里必须仍有文字为「查看参数」的 `button`
+>    （`verify-1.1.0` 数它 ≥ 5），所以没有把它收进下拉。
+> 3. 详情弹窗仍要展示文案行（测试断言里有 `还有 {days} 天`）。
+
+---
+
 ### 三个踩过的坑（都已被 `scripts/bugs-check.cjs` 守住）
 
 **1. 「未保存的更改」误报 = JSON 键顺序不一致。**
@@ -381,6 +451,237 @@ Element Plus 默认**不是**每个标签各画一圈边框，而是靠 `margin-
 
 ---
 
+## 设置界面的信息架构（2026-10 重构）
+
+这一轮改的是「为什么设置看起来繁琐」，而不是加功能。根因有三条：**按代码模块分组、
+所有控件同时展开、预览固定占掉 240px 高度**。对应的改法如下。
+
+### 预览从固定顶条挪到右侧竖栏
+
+`.settings-preview` 从前是 `.settings-content` 的兄弟节点，在滚动容器**外面**，
+所以永远占着顶栏下方约 240px：默认 1000×720 窗口里表单可视高度只剩 **383px**，
+滚到「文字样式」时预览还在，但表单只剩一条缝。
+
+现在结构是 `.settings-body { display:flex }` + `.settings-content`（滚动）+ `.settings-rail`
+（248px，`border-left`）。默认窗口同步放大到 **1200×760**（最小 960×620），
+1200 下侧栏与两列外观表单能同时放下（内容区要扣掉 10px 滚动条 + 40px 内边距，
+1180 会差 2px 掉回单列）。窄于 1100px 时侧栏和它的开关一起隐藏 ——
+窗口已经够窄了，再把宽度分给预览只会更难填。
+
+- 侧栏显隐状态存 `localStorage['cd.settings.preview']`，**不写进配置**（这是界面偏好，不是应用设置）。
+- 顶栏的预览按钮只在 `showPreview` 的页面出现（日期与文案 / 外观 / 布局 / 行为）。
+
+### 外观页按使用频率分两层
+
+`AppearanceFields` 的 `advanced` prop（默认 false）只决定次要参数的显隐：
+
+| 层 | 内容 | 默认 |
+| --- | --- | --- |
+| 常用 | 字体族、背景色、背景透明度、圆角、卡片宽度、文字透明度、四段字号/颜色 | 显示 |
+| 高级 | 内边距、边框宽度/颜色、阴影强度/颜色、字重、字距、单段透明度 | 折叠 |
+
+- 折叠只影响渲染，**不影响数据**：隐藏字段原样留在 `appearance` 里。
+- 入口只有一个：表单最上方 `.advanced-bar` 里的开关（`[data-cd-advanced]`，给脚本用）。
+  以前「展开」藏在边框分区、「收起」又跑到文字分区标题右侧 —— 同一个概念两个位置两套文案；
+  现在收起时边框分区整组不渲染，说明写在开关旁边（列清楚它会带出哪几项）。
+- 背景透明度是「背景」这一级的独立一行，**不**再嵌进取色器弹层：
+  `ColorField` 已把 alpha 能力整个删掉，透明度统一由 `SliderField` 承担。嵌在弹层里时
+  多数人根本不知道有这根滑条。
+- `PresetTuneDialog` 传 `advanced`（静态 true）：那个弹窗的语义就是「手动调整所有参数」，
+  `preset-tune-check.cjs` 的 17 个滑块断言因此不受影响。
+- 预设条与「预设主题」页的区别：这里只套用、不管理（改名 / 删除 / 存新预设仍在预设页）。
+  套用后按 Ctrl+Z 可退回 —— 这是敢把「一键换肤」放在首屏的前提。
+
+### 分组重置
+
+`AppearanceGroup` 增加了 `#actions` 插槽，每个分组标题右侧有「重置」。
+重置映射在 `AppearancePanel.resetGroup()`：字体 / 背景（色 + 透明度 + 圆角 + 内边距 + 宽度）/
+边框与阴影 / 文字（textAlpha + 四段样式）。比「恢复默认设置」温和，且同样可撤销。
+
+### 侧栏：折叠分组 + 搜索
+
+8 个平级入口收成 4 组（倒数日 / 外观与风格 / 窗口与系统 / 关于），当前组自动展开。
+
+- 子项用 **`v-show` 而不是 `v-if`**：所有自动化脚本都靠 `.settings-nav__item` 的文字定位，
+  `v-if` 会让折叠组里的「布局」「行为」直接不在 DOM 里。
+- 组标题是 `.settings-nav__head`，刻意不复用 `.settings-nav__item`，免得脚本把它当成页面入口。
+- 搜索框按 `label + keywords` 过滤；keywords 写在 `SettingsApp.groups` 里（中英文都覆盖），
+  搜索时强制展开所有匹配项。组标题在搜索态不可折叠。
+
+### 撤销 / 重做（Ctrl+Z / Ctrl+Shift+Z）
+
+全局设置是「改一下立刻落盘」，从前改坏了只能点「恢复默认设置」。
+
+- 快照是**整份配置**，恢复走新增的 `config:replace` → `replaceConfig()`。
+  不能复用 `updateConfig`：它是深合并，取消某个外观覆盖后删掉的字段会在撤销时「复活」。
+  `replaceConfig` 以 `createDefaultConfig()` 为底重新合并，旧结构里多出来的键会被丢掉。
+- **500ms 内的连续改动合并成一步**。拖一次滑块会触发几十次 patch，不合并的话按一次 Ctrl+Z
+  只退一个像素。
+- 输入框内的 Ctrl+Z 不拦截（`isTextTarget` 判断 INPUT/TEXTAREA/SELECT/contentEditable），
+  交还给 Chromium 的原生文本撤销。
+- **主进程的应用菜单去掉了 `role: 'undo' / 'redo'`**：菜单快捷键会抢在渲染层之前处理，
+  留着的话设置页永远收不到 Ctrl+Z。剪切/复制/粘贴不受影响。
+
+### 顶栏「重置本页」
+
+`重置本页` 只恢复当前页面的配置片段（日期与文案 / 外观 / 布局 / 行为 / 系统集成），
+列表页、预设页、关于页不显示。布局页若 `transparent` 变了，会额外调
+`window.cd.setTransparency()` 重建组件窗口 —— 直接 patch 那个字段不会重建窗口。
+
+### 编辑页常驻预览
+
+从前只有「正在编辑桌面显示项」时才能通过桌面卡片看到效果，改别的项等于盲调。
+`useCountdownCard` 新增 `item?: () => CountdownItem | null` 选项，
+`CountdownPreview` 新增 `item` prop：传了它就完全按这一项的解析结果渲染（标题/日期/文案/外观），
+不再走 `activeId`。
+
+编辑页布局是 `.editor-body { grid-template-columns: minmax(0,1fr) clamp(240px,30%,360px) }`，
+预览列 `position: sticky; top: 62px`（吸在 `.editor-sticky` 下面），窄于 1150px 时隐藏。
+列宽用百分比夹上下限：固定 260px 在宽屏里空、在窄屏里把表单挤扁。
+
+### 预览自动缩放（内容不出格）
+
+卡片宽度可以设到 680、字号可以拉到 140，而预览列只有两百多像素 —— 不处理就直接溢出栏外。
+
+`CountdownPreview` 的做法是量**未经变换**的布局尺寸再等比缩：
+
+- `.preview__content` 用 `width: max-content` + `offsetWidth/offsetHeight`（不受 transform 影响）量自然尺寸；
+- 可用宽 = `clientWidth - padding`，可用高 = **`max-height` 的解析值 - padding**。
+  高度这里千万不能读 `clientHeight`：外层盒子高度是按缩放结果回填的，拿它当输入会
+  「缩一点 → 盒子变矮 → 再缩一点」来回震荡。`max-height` 是外部常量，天然稳定。
+- 缩放后把盒子高度设成 `contentHeight * scale`（`.preview__box`），下面那行说明文字不会被空白推走；
+  不这么做会看到卡片缩在上半截、下面空一大块。
+- `scale` prop > 0（预设缩略图）时整条自动逻辑关掉，仍按固定比例、从中心缩放，和以前一致。
+
+`.preview--fit` 的 `max-height` 由使用方给：编辑页 `min(52vh, 480px)`，设置页右侧竖栏 `min(56vh, 460px)`。
+
+### 文案变量
+
+`defaults.ts` 导出 `TEXT_VARIABLES` / `textVariables()`，`useCountdownCard` 里对
+副标题与三条状态文案统一走 `applyTemplate`：
+
+| 变量 | 值 |
+| --- | --- |
+| `{days}` | 相差天数（绝对值） |
+| `{year}` `{month}` `{day}` | 实际生效日期的年 / 月 / 日（数字） |
+| `{week}` | 星期几，跟随界面语言（周五 / Fri） |
+| `{date}` | 完整日期（带时刻的目标会附上 HH:mm） |
+
+日期类变量取的是 `ComputedResult.effective`（annual 模式会自动滚到下一次），
+不是用户填的原始字段 —— 否则 `{year}` 在跨年后会停在去年。
+界面上用 `TextVariables.vue` 把这份清单渲染成一排按钮，点一下追加到文案末尾，
+用户不用记语法也不会拼错；副标题与状态文案共用同一套。
+
+### 滑动条抓手
+
+`el-slider` 的抓手 20px、轨道 6px，值落在最左/最右时抓手有半个圆伸到轨道外。
+以前 `TextStyleEditor` 给 `.slider-field` 和 `.el-slider` 加了 `overflow: hidden` 去压内部溢出，
+结果抓手在两端被切成半个圆。现在：
+
+- 去掉那两条 `overflow: hidden`；
+- `.slider-field__slider` 左右各留 8px padding、`overflow: visible`，抓手缩到 14px；
+- 抓手加一圈 `color-mix()` 的淡色晕影，压在端点时轮廓依然完整。
+
+`ui-check.cjs` 会顺着抓手往上遍历所有祖先，只要有一个 `overflow != visible` 且抓手越界就判失败。
+
+### 设置界面的信息架构（这一轮的调整）
+
+- 「日期与文案」从「倒数日」组挪到「外观与风格」组，紧挨「外观」—— 它改的是卡片上显示什么。
+- 页面标题「全局日期设置」→「默认日期」，编辑页里的「跟随全局日期设置」→「跟随默认日期」。
+- 全局页卡片头上那些「跟随全局」标签全部删掉：那是**全局**设置页，没有比它更「全局」的东西可跟。
+- 列表行不再显示「此项已覆盖外观」—— 属于调试信息，用户不需要在列表里看到。
+- 侧栏左下角只留「关于」：关闭按钮删掉（窗口右上角和 Esc 都能关，再摆一个纯占位），
+  「关于」从导航组里搬到这儿，少一个只有一项的分组；「恢复默认设置」也搬进「关于」页。
+  `AboutPanel` 仍是 `v-else` 兜底分支，所以 `currentLabel` 单独给 `section === 'about'` 补了标题。
+- 「关于」页尾部两张卡片：重置设置（恢复默认设置）与退出程序（彻底退出），
+  都用 `.danger-row`：左边一句后果说明、右边一个按钮。这类操作必须把后果摆在明面上，
+  不该藏在 FieldRow 的问号 tooltip 里。恢复默认设置的重置逻辑仍在 `SettingsApp`
+  （要一并清空撤销栈），AboutPanel 只 `emit('reset')`。
+- 「彻底退出」从「系统」搬到「关于」并改名（原来叫「退出程序」）：
+  系统页放的是配置类开关，而这是结束整个进程 —— 语义上属于「关于这个程序」，
+  放远一点也免得手滑。
+
+
+### 备份 / 恢复与到期提醒
+
+- `config:export` / `config:import`：主进程走 `dialog` + `src/main/backup.ts`。
+  备份文件带 `app / version / exportedAt / config` 外壳；导入兼容「只有 config」和「直接是配置」，
+  只校验 `countdowns` 是数组，其余字段交给 `mergeConfig` 兜底。导入后重建组件窗口并重排托盘。
+- `src/main/reminders.ts`：每 15 分钟检查一次，`computeCountdown` 结果为 `today` 的启用项弹一次
+  系统通知，`notified` 记录 `id → 日期`，同一天不重复。`runtime.notifyOnToday` 是开关（默认 true）。
+  内存记录在重启后清空是有意的：否则关掉应用再打开就永远收不到当天提醒。
+
+### 这一轮改到的验证脚本
+
+- `appearance-check.cjs`：卡片数 4 → 5（多了「一键配色」），并先点 `[data-cd-advanced]`
+  再数控件；`.settings-preview` → `.settings-rail`。
+- 其余脚本仍按 `.settings-nav__item` 文字定位，折叠不影响它们（`v-show` 保证节点在 DOM 里）。
+
+> **本轮未能实跑 GUI 脚本**：本机 `node_modules/electron/dist/electron.exe` 不存在
+> （Electron 二进制未下载），只完成了 `tsc` / `vue-tsc` / `electron-vite build` 三道静态验证。
+> 复跑前先 `pnpm install` 让 Electron 走镜像补下二进制，再按下面的「验证脚本」逐条执行。
+
+---
+
+## 1.2.0 的结构调整
+
+### 顶栏动作区统一
+
+四个动作固定为「图标 + 文字 + plain」，顺序 **撤销 / 重置本页 / 预览 / 显示倒数日**。
+不再按页面出现或消失 —— 不适用时置灰（重置本页在列表/预设/关于页、预览在无预览的页面），
+避免同一个位置时而只有图标、时而带文字。撤销栈空时按钮也置灰。
+
+### 显示模式下放到单项
+
+- `CountdownItem.displayMode: DisplayMode | ''`（空串 = 跟随全局），
+  `ResolvedCountdown.displayMode` 是解析后的结果。
+- `useCountdownCard` 的 `precisionMode` 改从 `resolved` 取，不再直接读 `config.behavior`。
+- 编辑页新增「显示」分区，选项里有「跟随全局（当前：…）」；`computeItem` 与 `snapshotOf` 都要带上它，
+  否则脏标记会误报。
+- **单位字的全局设置搬到了「日期与文案」**（行为页只留显示格式）；编辑页的单项单位字覆盖不动。
+
+### 布局并入行为，「系统集成」改名「系统」
+
+- 侧栏删掉「布局」，`SectionId` 里也删掉 `'layout'`；行为页渲染 `BehaviorPanel` + `LayoutPanel`，
+  外面包一层 `.panel-stack`（`.settings-content > *` 是 `flex: none`，包一层不影响布局）。
+- 窗口类开关收进 LayoutPanel 的「窗口」卡片：**始终显示在最前 / 允许拖动 / 鼠标点击穿透 / 窗口透明**。
+  「置顶」从此和窗口类设置待在一起，不再孤零零躺在行为页。
+- 行为页的「重置本页」同时重置 `behavior` 与 `runtime.window`；透明值变了还要走
+  `setTransparency()` 重建窗口，直接 patch 那个字段不会重建。
+
+### 通知拆成两层
+
+- `runtime.notifications`：总开关（相当于通知权限），默认 `true`。
+- `CountdownItem.notifyOnToday`：**默认 false，不跟随全局**，在编辑页里逐项打开。
+- `reminders.ts` 先看总开关，再看单项开关；旧的 `runtime.notifyOnToday` 不再读取。
+
+### 托盘菜单
+
+- **真 bug**：`buildMenu` 里「显示 / 隐藏倒数日」是无条件 `push` 的，`trayMenu.toggleVisible`
+  从来没人读 —— 所以在设置里取消勾选毫无反应。现在包在 `if (tray.toggleVisible !== false)` 里。
+- 新增 `TrayMenuConfig.clickThrough`：托盘右键多一个「鼠标点击穿透」勾选项，
+  「系统」页也有对应的「这个菜单项要不要显示」开关（和其它菜单项一致）。
+
+### 组件窗口不进任务栏
+
+- `createWidgetWindow` 里拦截 `close`：非退出流程时 `preventDefault()` + `hide()` + `widgetVisible=false`。
+  即使外壳给了它任务栏按钮，从那里关掉也只会隐藏，不会销毁窗口（销毁后托盘文案会错乱）。
+- `show` 事件里再补一次 `enforceSkipTaskbar()`：任务栏按钮的注册发生在 show 之后，
+  只在创建时设一次并不可靠。
+
+### 其它
+
+- **移除外观页顶部的一键配色**：与「预设主题」页职责重复，入口只留在预设页；相关 i18n 与 CSS 一并删掉。
+- **透明窗口文案改写**成因果句：「开启后卡片外围能透出桌面……如果卡片后面出现一块浅色方块，关掉它即可」。
+- 预设缩略图/详情全部走真组件（`CountdownPreview` 的 `still` + `scale`），不再手搓假卡片。
+- 脚本同步：`布局` / `系统集成` 的导航目标改为 `行为` / `系统`；`units-check` 的单位字目标页改为
+  `日期与文案`，显示模式改由 `updateConfig` 写入；`visual-audit` 的页面表同步。
+
+> 本轮同样只过了 `tsc` / `vue-tsc` / `electron-vite build`，GUI 脚本需要在本机跑
+> （沙箱拦 `reg.exe`，且注入了 `ELECTRON_RUN_AS_NODE=1`）。
+
+---
+
 ## 配置文件
 
 由 `electron-store` 持久化在 `%APPDATA%\countingdown\config.json`
@@ -465,6 +766,19 @@ Element Plus 默认**不是**每个标签各画一圈边框，而是靠 `margin-
 | **单项外观覆盖实时生效**：草稿 `background.color=#ff0055 / radius=30` 立刻反映到卡片，清空覆盖层后回到全局 | ✅ `preview-check.cjs` |
 | **编辑非当前显示项不影响桌面**：只在编辑页预览里变化 | ✅ `preview-check.cjs` |
 | **吸顶预览**：表单滚到底（`scrollTop=533`）后编辑页预览仍在视口内（`top=112`），保存按钮同样可见 | ✅ DOM 几何测量 |
+| **吸顶栏只去掉上方圆角与上边框**：未吸顶 `12px` 四角 + 四边 `1px` 实色；`scrollTop=80` 时 `0 0 12px 12px` + `border-top-color: transparent`（左/右/下仍是实色），栏体贴住滚动视口顶边、切换前后高度都是 48px；回顶后原样恢复 | ✅ `sticky-check.cjs`（深/浅两套主题）+ 像素取样 |
+| **滚动第一帧就是吸顶态**：一次滚 200px 后读第一帧的 class / 圆角 / 边框色，已是 `is-stuck` / `0px` / `rgba(0,0,0,0)` | ✅ `sticky-check.cjs` |
+| **列表滚到中途再进编辑页**：一挂载就判定为吸顶（`barTop == 滚动容器顶边`），不需要用户再滚一下 | ✅ `sticky-check.cjs` |
+| **保存按钮不再返回列表**：点保存后编辑页仍在、不渲染列表、草稿已落盘、脏标记变「已保存」；新建项「保存→返回」不会被当空白项删掉 | ✅ `sticky-check.cjs` |
+| **文案变量**：副标题写 `{month} 月 {day} 日 · {week}` 渲染成 `1 月 1 日 · 周五`（与 Node 侧独立算出的星期一致）；点变量按钮能追加到输入框 | ✅ `ui-check.cjs` |
+| **预览不越界**：卡片宽度 680 + 字号 120 时自动缩到 0.31，`overflowLeft/Right/Bottom` 全为 0；默认设置下缩放 0.99（几乎 1:1） | ✅ `ui-check.cjs` |
+| **高级参数只有一处入口**：默认收起（无边框/字重/字距），开关打开后三者一起出现 | ✅ `ui-check.cjs` |
+| **背景透明度与背景颜色同级且相邻** | ✅ `ui-check.cjs` |
+| **滑动条抓手不被裁**：抓手 14px，沿祖先链检查所有 `overflow != visible` 的盒子都没切到它 | ✅ `ui-check.cjs` |
+| **导航与文案**：日期与文案在「外观与风格」组；标题为「默认日期」；全局页无「跟随全局」标签；列表无「已覆盖外观」 | ✅ `ui-check.cjs` |
+| **左下角**：只剩「关于」一个入口（无「关闭」、无「恢复默认设置」；导航组里不再有关于分组，点它顶栏标题变「关于」） | ✅ `ui-check.cjs` |
+| **关于页承载两个重操作**：恢复默认设置（点开确认框、取消后设置项数量不变）与彻底退出 | ✅ `ui-check.cjs` |
+| **彻底退出只在关于页**：关于页有「彻底退出」按钮，系统页没有任何退出入口 | ✅ `ui-check.cjs` |
 | **新建项放弃编辑即删除**：项数 2 → 3 → 2，磁盘不残留空白项；空列表新建时 `activeId` 也回退 | ✅ `preview-check.cjs` |
 | **隐藏设置窗口会丢弃草稿覆盖层** | ✅ `preview-check.cjs` |
 | **应用图标**：`resources/icon.ico` 含 16/24/32/48/64/128/256 七层且结构合法 | ✅ ICO 目录解析 |
@@ -491,6 +805,8 @@ node_modules\electron\dist\electron.exe scripts\preset-tune-check.cjs   # 手动
 node_modules\electron\dist\electron.exe scripts\preset-sources-check.cjs # 另外两个保存来源仍写全局 / 仍写该项覆盖
 node_modules\electron\dist\electron.exe scripts\bugs-check.cjs          # 脏标记误报 / 组件窗口销毁后能否叫回来 / 名称只问一次
 node_modules\electron\dist\electron.exe scripts\tunefit-check.cjs       # 调参弹窗在 3 种窗口高度下的版面（按钮不外溢、取消后确实隐藏）
+node_modules\electron\dist\electron.exe scripts\sticky-check.cjs        # 吸顶栏：吸顶后上方圆角/边框消失、保存不返回列表（DOM 级，不需主进程）
+node_modules\electron\dist\electron.exe scripts\ui-check.cjs            # 导航归组 / 默认日期 / 高级参数入口 / 透明度同级 / 预览缩放 / 文案变量 / 抓手不被裁
 node_modules\electron\dist\electron.exe scripts\capture-readme.cjs # 重新生成 assets/screenshots/ 里的 README 配图
 ```
 

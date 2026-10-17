@@ -22,6 +22,9 @@ defineProps<{
           {{ title }}
           <slot name="help" />
         </span>
+        <span class="panel-card__actions">
+          <slot name="actions" />
+        </span>
       </div>
     </template>
     <slot />

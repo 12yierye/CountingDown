@@ -300,6 +300,69 @@ body {
   overflow: auto;
 }
 
+/* 搜索框固定贴在导航上方，不随导航滚动 */
+.settings-search {
+  padding: 0 2px 10px;
+}
+
+.settings-nav__section + .settings-nav__section {
+  margin-top: 4px;
+}
+
+/* 组标题：可点击折叠。它刻意不是 .settings-nav__item —— 自动化脚本按文字定位的是子项 */
+.settings-nav__head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.settings-nav__head:hover {
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
+}
+
+.settings-nav__head.is-current {
+  color: var(--el-text-color-primary);
+}
+
+.settings-nav__chevron {
+  flex: none;
+  transition: transform 0.15s ease;
+}
+
+.settings-nav__head.is-open .settings-nav__chevron {
+  transform: rotate(90deg);
+}
+
+.settings-nav__items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 6px;
+}
+
+.settings-nav__empty {
+  margin: 8px 12px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
 /* 分组小标题：与上方分组留出间距，避免贴在上一项下面 */
 .settings-nav__group {
   margin: 14px 0 6px;
@@ -352,10 +415,9 @@ body {
   border-top: 1px solid var(--el-border-color-extra-light);
 }
 
-.settings-side__footer .el-button {
-  margin-left: 0;
+/* 左下角的「关于」与导航子项同一套观感，但它是 footer 的固定成员 */
+.settings-side__about {
   width: 100%;
-  justify-content: center;
 }
 
 /* 深色主题下文字按钮（图标）对比度偏低，单独提到可读亮度 */
@@ -405,14 +467,56 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
   gap: 8px;
 }
 
+/* 内容区与预览侧栏并排。
+   预览从前固定在顶栏下方、永远占掉 240px 高度，表单可视区只剩 383px；
+   挪到右侧竖栏后，纵向空间全部还给表单。 */
+.settings-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.settings-rail {
+  width: 248px;
+  flex: none;
+  padding: 16px 16px 24px;
+  border-left: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  overflow: auto;
+  /* 预览最多占半屏多一点，超出部分由 CountdownPreview 等比缩下去 */
+  --cd-preview-max-height: min(56vh, 460px);
+}
+
 .settings-content {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   padding: 18px 20px 40px;
   display: flex;
   flex-direction: column;
   align-content: flex-start;
+}
+
+/* 窄窗口下侧栏没有容身之地：直接藏掉，把宽度还给表单 */
+@media (max-width: 1099px) {
+  .settings-rail,
+  .settings-topbar__preview {
+    display: none;
+  }
+}
+
+/* 面板标题右侧的操作区（重置本组 / 展开高级参数） */
+.panel-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
+.panel-card__actions .el-button {
+  margin-left: 0;
 }
 
 /* 面板在内容不足时贴顶，不要被 flex 拉伸/居中 */
@@ -422,11 +526,6 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
 
 .settings-content .panel-card:last-child {
   margin-bottom: 0;
-}
-
-/* 实时预览与顶部标题栏之间留出间距 */
-.settings-preview {
-  padding: 16px 20px 14px;
 }
 
 .panel-card {

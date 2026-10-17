@@ -83,6 +83,8 @@ export function createCountdownItem(partial: Partial<CountdownItem> = {}): Count
     id: partial.id ?? createItemId(),
     name: partial.name ?? '',
     enabled: partial.enabled ?? true,
+    displayMode: partial.displayMode ?? '',
+    notifyOnToday: partial.notifyOnToday ?? false,
     target: partial.target ?? emptyTarget(),
     text: { ...emptyTextOverride(), ...(partial.text ?? {}) },
     units: { ...emptyUnitOverride(), ...(partial.units ?? {}) },
@@ -255,6 +257,7 @@ export function createDefaultConfig(): AppConfig {
       startAtLogin: false,
       language: 'zh-CN',
       theme: 'dark',
+      notifications: true,
       window: {
         corner: 'top-right',
         cornerPreset: 'top-right',
@@ -271,6 +274,7 @@ export function createDefaultConfig(): AppConfig {
         toggleVisible: true,
         resetPosition: true,
         allowDrag: true,
+        clickThrough: true,
         alwaysOnTop: true,
         startAtLogin: true,
         hotkey: true
@@ -340,6 +344,10 @@ function normalizeItem(item: CountdownItem): CountdownItem {
     id: item.id || createItemId(),
     name: item.name ?? '',
     enabled: item.enabled !== false,
+    displayMode: DISPLAY_MODES.includes(item.displayMode as DisplayMode)
+      ? (item.displayMode as DisplayMode)
+      : '',
+    notifyOnToday: item.notifyOnToday === true,
     target: item.target ?? emptyTarget(),
     text: { ...emptyTextOverride(), ...(item.text ?? {}) },
     units: enabled
@@ -420,6 +428,7 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     behavior: normalizeBehavior(config.behavior),
     runtime: {
       ...config.runtime,
+      notifications: config.runtime?.notifications !== false,
       window,
       trayMenu: normalizeTrayMenu(config.runtime?.trayMenu)
     },
@@ -610,6 +619,7 @@ export function resolveCountdown(config: AppConfig, item: CountdownItem): Resolv
     showHint: resolveVisibility(item.text?.showHint, config.text.showHint).show,
     showStatus: resolveVisibility(item.text?.showStatus, config.text.showStatus).show,
     units: resolveUnits(item.units, config.behavior.units),
+    displayMode: item.displayMode || config.behavior.displayMode,
     appearance: mergeAppearance(config.appearance, item.appearance)
   }
 }
@@ -677,9 +687,7 @@ export function resolveEffectiveTarget(target: TargetConfig, now: Date = new Dat
 export function formatDateLabel(target: TargetConfig, effective: Date, language: string): string {
   if (Number.isNaN(effective.getTime())) return '—'
   const zh = language !== 'en-US'
-  const weekZh = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  const weekEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const week = zh ? weekZh[effective.getDay()] : weekEn[effective.getDay()]
+  const week = weekdayLabel(effective, language)
   const time = targetHasTime(target)
     ? ` ${pad2(effective.getHours())}:${pad2(effective.getMinutes())}`
     : ''
@@ -692,6 +700,51 @@ export function formatDateLabel(target: TargetConfig, effective: Date, language:
     ? `${effective.getFullYear()} 年 ${effective.getMonth() + 1} 月 ${effective.getDate()} 日 · ${week}${time}`
     : `${effective.toLocaleString('en-US', { month: 'short' })} ${effective.getDate()}, ${effective.getFullYear()} · ${week}${time}`
 }
+
+/** 星期几的短写法，跟随界面语言 */
+export function weekdayLabel(date: Date, language: string): string {
+  if (Number.isNaN(date.getTime())) return ''
+  const zh = language !== 'en-US'
+  const weekZh = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  const weekEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  return zh ? weekZh[date.getDay()] : weekEn[date.getDay()]
+}
+
+/** 文案里可以用的变量名；界面上的说明直接用这份清单生成，不会两处对不上 */
+export const TEXT_VARIABLES = ['days', 'year', 'month', 'day', 'week', 'date'] as const
+export type TextVariable = (typeof TEXT_VARIABLES)[number]
+
+/**
+ * 变量取值。
+ *
+ * 日期类变量取的是**实际生效的目标日期**（annual 模式会自动滚到下一次），
+ * 而不是用户填的原始字段 —— 否则写 `{year}` 的人在跨年后会看到去年的年份。
+ */
+export function textVariables(
+  target: TargetConfig,
+  effective: Date,
+  days: number,
+  language: string
+): Record<TextVariable, string> {
+  const valid = !Number.isNaN(effective.getTime())
+  const zh = language !== 'en-US'
+  const dateLabel = valid
+    ? zh
+      ? `${effective.getFullYear()} 年 ${effective.getMonth() + 1} 月 ${effective.getDate()} 日`
+      : `${effective.toLocaleString('en-US', { month: 'short' })} ${effective.getDate()}, ${effective.getFullYear()}`
+    : ''
+  return {
+    days: String(Math.abs(days)),
+    year: valid ? String(effective.getFullYear()) : '',
+    month: valid ? String(effective.getMonth() + 1) : '',
+    day: valid ? String(effective.getDate()) : '',
+    week: valid ? weekdayLabel(effective, language) : '',
+    date: targetHasTime(target) && valid
+      ? `${dateLabel} ${pad2(effective.getHours())}:${pad2(effective.getMinutes())}`
+      : dateLabel
+  }
+}
+
 
 export type CountdownState = 'future' | 'today' | 'past'
 

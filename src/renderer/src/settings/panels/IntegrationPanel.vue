@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import type { AppConfig, TrayMenuConfig } from '@shared/types'
 import FieldRow from '@/components/FieldRow.vue'
 
@@ -16,6 +16,7 @@ const trayItems = computed<Array<{ key: keyof TrayMenuConfig; label: string }>>(
   { key: 'toggleVisible', label: t('integration.trayToggleVisible') },
   { key: 'resetPosition', label: t('integration.trayResetPosition') },
   { key: 'allowDrag', label: t('integration.trayAllowDrag') },
+  { key: 'clickThrough', label: t('integration.trayClickThrough') },
   { key: 'alwaysOnTop', label: t('integration.trayAlwaysOnTop') },
   { key: 'startAtLogin', label: t('integration.trayStartup') },
   { key: 'hotkey', label: t('integration.trayHotkey') }
@@ -110,22 +111,34 @@ async function onStartupChange(value: boolean): Promise<void> {
   }
 }
 
-async function quitApp(): Promise<void> {
-  try {
-    await ElMessageBox.confirm(t('integration.quitHint'), t('integration.quit'), {
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
-      type: 'warning'
-    })
-    await window.cd.quitApp()
-  } catch {
-    /* 用户取消 */
-  }
-}
-
 async function openConfigFolder(): Promise<void> {
   const path = await window.cd.openConfigFile()
   if (path) ElMessage.warning(path)
+}
+
+/** 导出/导入整份配置：换机、重装、误删时的唯一逃生口 */
+async function exportSettings(): Promise<void> {
+  const result = await window.cd.exportConfig()
+  if (result.ok) ElMessage.success(t('integration.exported', { path: result.path }))
+  else if (!result.canceled) ElMessage.error(result.error ?? '')
+}
+
+async function importSettings(): Promise<void> {
+  const result = await window.cd.importConfig()
+  if (result.ok) {
+    ElMessage.success(t('integration.imported'))
+    return
+  }
+  if (result.canceled) return
+  ElMessage.error(
+    result.error === 'INVALID_CONFIG'
+      ? t('integration.importInvalid')
+      : t('integration.importFailed', { error: result.error ?? '' })
+  )
+}
+
+function setNotifyEnabled(value: boolean): void {
+  emit('patch', { runtime: { notifications: value } })
 }
 </script>
 
@@ -211,9 +224,43 @@ async function openConfigFolder(): Promise<void> {
   <el-card shadow="never" class="panel-card">
     <template #header>
       <div class="panel-card__header">
+        <span class="panel-card__title">
+          {{ t('integration.backup') }}
+          <el-tooltip :content="t('integration.backupHint')" placement="top" :show-after="150">
+            <span class="panel-card__help" tabindex="0">
+              <el-icon :size="13"><QuestionFilled /></el-icon>
+            </span>
+          </el-tooltip>
+        </span>
+      </div>
+    </template>
+
+    <FieldRow stacked>
+      <div class="inline-group">
+        <el-button size="small" plain @click="exportSettings">
+          {{ t('integration.exportConfig') }}
+        </el-button>
+        <el-button size="small" plain @click="importSettings">
+          {{ t('integration.importConfig') }}
+        </el-button>
+      </div>
+    </FieldRow>
+  </el-card>
+
+  <el-card shadow="never" class="panel-card">
+    <template #header>
+      <div class="panel-card__header">
         <span>{{ t('nav.integration') }}</span>
       </div>
     </template>
+
+    <!-- 通知是「权限」层面的总开关；具体哪一项在当天提醒，是每个倒数日自己的事 -->
+    <FieldRow :label="t('integration.notifyPermission')" :hint="t('integration.notifyPermissionHint')">
+      <el-switch
+        :model-value="config.runtime.notifications !== false"
+        @update:model-value="(v: string | number | boolean) => setNotifyEnabled(Boolean(v))"
+      />
+    </FieldRow>
 
     <FieldRow :label="t('integration.startup')" :hint="t('integration.startupHint')">
       <el-switch
@@ -227,12 +274,6 @@ async function openConfigFolder(): Promise<void> {
         {{ t('integration.configFile') }}
       </el-button>
     </FieldRow>
-
-    <FieldRow :label="t('integration.quit')" :hint="t('integration.quitHint')">
-      <el-button size="small" type="danger" plain @click="quitApp">
-        {{ t('integration.quit') }}
-      </el-button>
-    </FieldRow>
   </el-card>
 </template>
 
@@ -243,8 +284,7 @@ async function openConfigFolder(): Promise<void> {
   gap: 6px;
 }
 
-.tray-menu-grid {
-  display: grid;
+.tray-menu-grid {  display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 2px 20px;
 }
@@ -272,6 +312,13 @@ async function openConfigFolder(): Promise<void> {
   background: var(--el-color-success);
   margin-top: 5px;
   flex: none;
+}
+
+.inline-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .hotkey {

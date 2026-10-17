@@ -639,14 +639,17 @@ app.whenReady().then(async () => {
         !/95|天 \+ 时/.test(behaviorOptions),
       String(behaviorOptions)
     )
-    const behaviorText = await ev(s, `document.querySelector('.settings-content').innerText`)
+    // 单位字已移到「日期与文案」页：那里应当出现「单位字」，且不是旧的「分隔符」
+    await nav('日期与文案')
+    const unitPageText = await ev(s, `document.querySelector('.settings-content').innerText`)
     check(
-      '行为页的单位字设置用的是「天/时/分/秒」而不是「分隔符」',
-      typeof behaviorText === 'string' &&
-        behaviorText.includes('单位字') &&
-        !behaviorText.includes('分隔符'),
+      '单位字设置位于「日期与文案」页，且用的是「天/时/分/秒」而不是「分隔符」',
+      typeof unitPageText === 'string' &&
+        unitPageText.includes('单位字') &&
+        !unitPageText.includes('分隔符'),
       'checked settings-content text'
     )
+    await nav('行为')
 
     // 切到「天+时+分+秒」：四个单位字输入框都要出现，且初值就是 天/时/分/秒
     await ev(
@@ -660,6 +663,9 @@ app.whenReady().then(async () => {
        })()`
     )
     await wait(1200)
+    // 单位字在「日期与文案」页，切过去读输入框
+    await nav('日期与文案')
+    await wait(700)
     const unitInputs = await ev(
       s,
       `JSON.stringify(Array.prototype.map.call(document.querySelectorAll('.units__input'), function(e){return {tag:e.tagName, value:e.value, disabled:e.disabled};}))`
@@ -701,6 +707,9 @@ app.whenReady().then(async () => {
        })()`
     )
     await wait(1200)
+    // 显示模式的选项文字在「行为」页，切回去比对
+    await nav('行为')
+    await wait(700)
     const optionsAfterRename = await ev(
       s,
       `Array.prototype.map.call(document.querySelectorAll('.el-radio-button__inner'), function(e){return e.textContent.trim();}).join(' | ')`
@@ -730,8 +739,8 @@ app.whenReady().then(async () => {
     )
     await wait(900)
 
-    // 布局页：偏移量标签方向、鼠标点击穿透
-    await nav('布局')
+    // 行为页（含原布局内容）：偏移量标签方向、鼠标点击穿透
+    await nav('行为')
     const layoutLabels = await ev(
       s,
       `JSON.stringify(Array.prototype.map.call(document.querySelectorAll('.settings-content .field-row__text'), function(e){return e.textContent.trim()}))`
@@ -746,26 +755,26 @@ app.whenReady().then(async () => {
     }
     const layoutHtml = await ev(s, `document.querySelector('.settings-content').innerText`)
     check(
-      '布局页有「鼠标点击穿透」开关',
+      '行为页有「鼠标点击穿透」开关',
       typeof layoutHtml === 'string' && layoutHtml.includes('鼠标点击穿透'),
       'checked settings-content text'
     )
 
-    // 系统集成页：托盘菜单内容 + 没有预览
-    await nav('系统集成')
+    // 系统页：托盘菜单内容 + 没有预览
+    await nav('系统')
     const integrationText = await ev(s, `document.querySelector('.settings-content').innerText`)
     check(
-      '系统集成页可以配置右键菜单内容',
+      '系统页可以配置右键菜单内容',
       typeof integrationText === 'string' && integrationText.includes('右键菜单内容'),
       'checked settings-content text'
     )
     check(
-      '系统集成页的快捷键标题不再写「（显示 / 隐藏）」',
+      '系统页的快捷键标题不再写「（显示 / 隐藏）」',
       typeof integrationText === 'string' && integrationText.includes('全局快捷键'),
       'checked settings-content text'
     )
     const previewOnIntegration = await ev(s, `!!document.querySelector('.settings-preview')`)
-    check('系统集成页不再显示预览', previewOnIntegration === false, String(previewOnIntegration))
+    check('系统页不再显示预览', previewOnIntegration === false, String(previewOnIntegration))
 
     await nav('关于')
     const previewOnAbout = await ev(s, `!!document.querySelector('.settings-preview')`)

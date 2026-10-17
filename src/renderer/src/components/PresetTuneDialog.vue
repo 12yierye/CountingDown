@@ -84,7 +84,8 @@ function submit(): void {
 
       <div class="tune-dialog__body">
         <div class="tune-dialog__left">
-          <AppearanceFields v-model:appearance="draft" dense />
+          <!-- 这个弹窗的语义就是「手动调整所有参数」，因此强制展开高级项 -->
+          <AppearanceFields v-model:appearance="draft" dense advanced />
         </div>
         <aside class="tune-dialog__preview">
           <div class="tune-dialog__preview-label">{{ t('preset.tunePreview') }}</div>

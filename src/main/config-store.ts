@@ -28,6 +28,21 @@ export function getConfig(): AppConfig {
 /** 深度合并式更新，返回最新完整配置并广播给所有窗口 */
 export function updateConfig(patch: unknown): AppConfig {
   const next = mergeConfig(cache, patch)
+  return commit(next)
+}
+
+/**
+ * 整份替换：撤销、重做、导入配置都走这里。
+ *
+ * 不能复用 updateConfig —— 它是深合并，删掉的字段（例如取消某个外观覆盖）
+ * 会原样留在旧值里，撤销就变成「看起来没变」。这里以**默认配置**为底重新合并，
+ * 旧结构里多出来的字段自然被丢掉。
+ */
+export function replaceConfig(next: unknown): AppConfig {
+  return commit(mergeConfig(createDefaultConfig(), next))
+}
+
+function commit(next: AppConfig): AppConfig {
   cache = next
   store?.set('config', next)
   for (const listener of listeners) {

@@ -1,10 +1,11 @@
-import { BrowserWindow, Menu, app, ipcMain, screen, session, shell } from 'electron'
+import { BrowserWindow, Menu, app, dialog, ipcMain, screen, session, shell } from 'electron'
 import {
   configPath,
   getConfig,
   initConfig,
   isDev,
   onConfigChange,
+  replaceConfig,
   resetConfig,
   updateConfig
 } from './config-store'
@@ -33,6 +34,8 @@ import {
 import { applyHotkey, isHotkeyRegistered, registerHotkey, unregisterHotkey } from './hotkey'
 import { createTray, destroyTray, refreshTray } from './tray'
 import { setPreviewItem } from './preview'
+import { exportConfigTo, importConfigFrom } from './backup'
+import { startReminders, stopReminders } from './reminders'
 import type { AppConfig, CountdownItem, HostInfo } from '../shared/types'
 
 export { trayMenuSnapshot } from './tray'
@@ -77,6 +80,52 @@ function registerIpc(): void {
   ipcMain.handle('config:update', (_event, patch: unknown) => updateConfig(patch))
   ipcMain.handle('config:reset', () => resetConfig())
   ipcMain.handle('config:path', () => configPath())
+  /** 整份替换：撤销 / 重做 / 导入配置 */
+  ipcMain.handle('config:replace', (_event, next: unknown) => replaceConfig(next))
+
+  ipcMain.handle('config:export', async () => {
+    const parent = getSettingsWindow()
+    const options: Electron.SaveDialogOptions = {
+      title: '导出设置',
+      defaultPath: `countingdown-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    }
+    const result = parent
+      ? await dialog.showSaveDialog(parent, options)
+      : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return { ok: false, canceled: true, path: '' }
+    try {
+      await exportConfigTo(result.filePath)
+      return { ok: true, canceled: false, path: result.filePath }
+    } catch (error) {
+      return { ok: false, canceled: false, path: '', error: String(error) }
+    }
+  })
+
+  ipcMain.handle('config:import', async () => {
+    const parent = getSettingsWindow()
+    const options: Electron.OpenDialogOptions = {
+      title: '导入设置',
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    }
+    const result = parent
+      ? await dialog.showOpenDialog(parent, options)
+      : await dialog.showOpenDialog(options)
+    const filePath = result.filePaths?.[0]
+    if (result.canceled || !filePath) return { ok: false, canceled: true, path: '' }
+    try {
+      const config = await importConfigFrom(filePath)
+      // 导入会改变窗口位置、托盘菜单与透明开关，重建一次组件窗口最省心
+      recreateWidgetWindow()
+      applyPosition()
+      refreshTray()
+      return { ok: true, canceled: false, path: filePath, config }
+    } catch (error) {
+      const message = String(error instanceof Error ? error.message : error)
+      return { ok: false, canceled: false, path: filePath, error: message }
+    }
+  })
 
   ipcMain.handle('host:info', () => hostInfo())
   ipcMain.handle('host:openConfigFile', () => shell.openPath(configPath()))
@@ -201,6 +250,7 @@ function bootstrap(): void {
   createWidgetWindow()
   createTray()
   registerHotkey()
+  startReminders()
 
   // 组件窗口被外部销毁（用户从任务栏关掉它）时，托盘文案要跟着回到「显示倒数日」，
   // 否则菜单一直写着「隐藏」，用户找不到把卡片叫回来的入口。
@@ -238,9 +288,9 @@ app.whenReady().then(() => {
       {
         label: '编辑',
         submenu: [
-          { role: 'undo', label: '撤销' },
-          { role: 'redo', label: '重做' },
-          { type: 'separator' },
+          // 不注册 undo / redo：菜单快捷键会抢在渲染层之前处理 Ctrl+Z，
+          // 导致设置页自己的「撤销上一次改动」永远收不到按键。
+          // 输入框内的原生文本撤销由 Chromium 自己处理，不受影响。
           { role: 'cut', label: '剪切' },
           { role: 'copy', label: '复制' },
           { role: 'paste', label: '粘贴' },
@@ -281,6 +331,7 @@ app.on('before-quit', () => {
 })
 
 app.on('will-quit', () => {
+  stopReminders()
   unregisterHotkey()
   destroyTray()
 })

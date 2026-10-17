@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * 位置 + 窗口。
+ *
+ * 这一页原来叫「布局」，单独挂在侧栏；现在并入「行为」页，和显示格式放在一起 ——
+ * 两者都是「组件长什么样、怎么待在桌面上」的问题。窗口类开关（置顶 / 拖动 / 穿透 /
+ * 透明）也从「行为」和「布局」两个地方收进同一张卡片，不再让用户跨页找。
+ */
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AppConfig, Corner, HostInfo, ScreenInfo } from '@shared/types'
@@ -50,6 +57,10 @@ const win = computed(() => props.config.runtime.window)
 
 function patchWindow(patch: Record<string, unknown>): void {
   emit('patch', { runtime: { window: patch } })
+}
+
+function setAlwaysOnTop(value: boolean): void {
+  emit('patch', { behavior: { alwaysOnTop: value } })
 }
 
 /** 切换参考基准：四角预设同时决定卡片贴哪条边 */
@@ -113,7 +124,6 @@ const offsetYLabel = computed(() =>
 const clickThrough = computed(() => win.value.clickThrough === true)
 const allowDrag = computed(() => win.value.allowDrag !== false)
 
-/** 拖动和点击穿透互斥：开着穿透就点不到组件，拖动无从谈起 */
 function setClickThrough(value: boolean): void {
   patchWindow({ clickThrough: value })
 }
@@ -135,6 +145,9 @@ function setAllowDrag(value: boolean): void {
             </span>
           </el-tooltip>
         </span>
+        <el-button size="small" plain @click="resetOffset">
+          {{ t('layout.resetOffset') }}
+        </el-button>
       </div>
     </template>
 
@@ -177,24 +190,6 @@ function setAllowDrag(value: boolean): void {
         <span class="units-note">{{ area.width }} × {{ area.height }}</span>
       </div>
     </FieldRow>
-  </el-card>
-
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <span class="panel-card__title">
-          {{ t('layout.offsetTitle') }}
-          <el-tooltip :content="t('layout.offsetHint')" placement="top" :show-after="150">
-            <span class="panel-card__help" tabindex="0">
-              <el-icon :size="13"><QuestionFilled /></el-icon>
-            </span>
-          </el-tooltip>
-        </span>
-        <el-button size="small" plain @click="resetOffset">
-          {{ t('layout.resetOffset') }}
-        </el-button>
-      </div>
-    </template>
 
     <div class="panel-grid-2">
       <FieldRow :label="offsetXLabel">
@@ -218,15 +213,28 @@ function setAllowDrag(value: boolean): void {
         />
       </FieldRow>
     </div>
+  </el-card>
 
-    <el-alert
-      v-if="clickThrough"
-      class="panel-tip"
-      type="info"
-      :closable="false"
-      show-icon
-      :title="t('layout.clickThroughHint')"
-    />
+  <el-card shadow="never" class="panel-card">
+    <template #header>
+      <div class="panel-card__header">
+        <span class="panel-card__title">
+          {{ t('layout.windowTitle') }}
+          <el-tooltip :content="t('layout.windowHint')" placement="top" :show-after="150">
+            <span class="panel-card__help" tabindex="0">
+              <el-icon :size="13"><QuestionFilled /></el-icon>
+            </span>
+          </el-tooltip>
+        </span>
+      </div>
+    </template>
+
+    <FieldRow :label="t('behavior.alwaysOnTop')" :hint="t('behavior.alwaysOnTopHint')">
+      <el-switch
+        :model-value="config.behavior.alwaysOnTop"
+        @update:model-value="(v: string | number | boolean) => setAlwaysOnTop(Boolean(v))"
+      />
+    </FieldRow>
 
     <FieldRow :label="t('layout.allowDrag')" :hint="t('layout.allowDragHint')">
       <el-switch
@@ -241,22 +249,14 @@ function setAllowDrag(value: boolean): void {
         @update:model-value="(v: string | number | boolean) => setClickThrough(Boolean(v))"
       />
     </FieldRow>
-  </el-card>
-
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <span>{{ t('layout.transparent') }}</span>
-      </div>
-    </template>
 
     <el-alert
-      v-if="!host?.systemTransparency"
+      v-if="clickThrough"
       class="panel-tip"
-      type="warning"
+      type="info"
       :closable="false"
       show-icon
-      :title="t('layout.transparentUnsupported')"
+      :title="t('layout.clickThroughHint')"
     />
 
     <FieldRow :label="t('layout.transparent')" :hint="t('layout.transparentHint')">
@@ -266,6 +266,15 @@ function setAllowDrag(value: boolean): void {
         @update:model-value="(v: string | number | boolean) => setTransparency(Boolean(v))"
       />
     </FieldRow>
+
+    <el-alert
+      v-if="!host?.systemTransparency"
+      class="panel-tip"
+      type="warning"
+      :closable="false"
+      show-icon
+      :title="t('layout.transparentUnsupported')"
+    />
   </el-card>
 </template>
 
