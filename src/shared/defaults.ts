@@ -19,6 +19,7 @@ import type {
   VisibilityOverride,
   VisibilityResolution
 } from './types'
+import { DEFAULT_UPDATE_FEED } from './update'
 
 /** 可覆盖的文案字段（不含两个显示开关） */
 type TextFieldKey = 'hint' | 'futureText' | 'todayText' | 'pastText'
@@ -278,6 +279,11 @@ export function createDefaultConfig(): AppConfig {
         alwaysOnTop: true,
         startAtLogin: true,
         hotkey: true
+      },
+      update: {
+        feedUrl: DEFAULT_UPDATE_FEED,
+        proxy: '',
+        autoCheck: true
       }
     },
     customPresets: []
@@ -430,7 +436,15 @@ export function normalizeConfig(config: AppConfig): AppConfig {
       ...config.runtime,
       notifications: config.runtime?.notifications !== false,
       window,
-      trayMenu: normalizeTrayMenu(config.runtime?.trayMenu)
+      trayMenu: normalizeTrayMenu(config.runtime?.trayMenu),
+      update: {
+        feedUrl:
+          typeof config.runtime?.update?.feedUrl === 'string'
+            ? config.runtime.update.feedUrl
+            : DEFAULT_UPDATE_FEED,
+        proxy: typeof config.runtime?.update?.proxy === 'string' ? config.runtime.update.proxy : '',
+        autoCheck: config.runtime?.update?.autoCheck !== false
+      }
     },
     customPresets: Array.isArray(config.customPresets) ? config.customPresets : []
   }

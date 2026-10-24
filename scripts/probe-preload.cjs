@@ -25,6 +25,28 @@ const listeners = new Set()
 const resolved = () => Promise.resolve(true)
 const noopUnsubscribe = () => () => {}
 
+/**
+ * 内存版更新状态机：
+ * 默认「发现新版本」，方便断言 available / downloading / ready / error 四种界面。
+ * `window.__setUpdate` 是给验证脚本用的推进按钮（只有探针里有，真 preload 没有）。
+ */
+let updateState = {
+  phase: 'available',
+  current: '1.2.1',
+  feedUrl: 'https://example.com/latest.yml',
+  latest: '1.3.0',
+  size: 82639328,
+  releaseDate: '2026-10-20T00:00:00.000Z',
+  notes: '修了 A\n加了 B'
+}
+const updateListeners = new Set()
+
+function emitUpdate(next) {
+  updateState = { ...updateState, ...next }
+  for (const handler of updateListeners) handler(updateState)
+  return updateState
+}
+
 contextBridge.exposeInMainWorld('cd', {
   platform: process.platform,
   getConfig: () => Promise.resolve(current),
@@ -58,6 +80,17 @@ contextBridge.exposeInMainWorld('cd', {
       isDev: true,
       systemTransparency: true
     }),
+
+  getUpdateState: () => Promise.resolve(updateState),
+  checkForUpdate: () => Promise.resolve(emitUpdate({ phase: 'available', error: undefined })),
+  downloadUpdate: () =>
+    Promise.resolve(emitUpdate({ phase: 'ready', progress: 1, error: undefined })),
+  installUpdate: () => Promise.resolve(true),
+  openUpdatePage: () => Promise.resolve(true),
+  onUpdateState: (handler) => {
+    updateListeners.add(handler)
+    return () => updateListeners.delete(handler)
+  },
   openConfigFile: resolved,
   toggleWidget: resolved,
   setWidgetVisible: resolved,
@@ -82,3 +115,6 @@ contextBridge.exposeInMainWorld('cd', {
   quitApp: resolved,
   hideAll: resolved
 })
+
+// 验证脚本专用：把更新状态推到某个阶段
+contextBridge.exposeInMainWorld('__setUpdate', (patch) => emitUpdate(patch))

@@ -227,6 +227,51 @@ export interface CustomPreset {
   appearance: AppearanceConfig
 }
 
+/** 在线更新设置 */
+export interface UpdateConfig {
+  /** 更新源直链（latest.yml 或 JSON）；留空表示关闭在线更新 */
+  feedUrl: string
+  /**
+   * 更新专用的代理，例如 `http://127.0.0.1:7890`（Clash 默认端口）。
+   * 留空 = 跟随系统代理；`direct` = 直连。只作用于更新请求，不影响别处。
+   */
+  proxy: string
+  /** 启动后静默检查一次（发现新版本只提示，不自动下载） */
+  autoCheck: boolean
+}
+
+/**
+ * 更新流程的当前状态。
+ * 主进程持有唯一一份，通过 `update:state` 推给设置窗口，
+ * 界面只负责把 phase 画成文案与按钮。
+ */
+export type UpdatePhase =
+  | 'idle'
+  | 'checking'
+  | 'latest'
+  | 'available'
+  | 'downloading'
+  | 'ready'
+  | 'error'
+  | 'disabled'
+
+export interface UpdateState {
+  phase: UpdatePhase
+  /** 当前运行版本 */
+  current: string
+  feedUrl: string
+  /** 更新源里的版本号 */
+  latest?: string
+  notes?: string
+  releaseDate?: string
+  size?: number
+  /** 下载进度 0~1 */
+  progress?: number
+  /** 上次检查时间（毫秒时间戳） */
+  checkedAt?: number
+  error?: string
+}
+
 export interface RuntimeConfig {
   /** 组件窗口是否显示 */
   widgetVisible: boolean
@@ -241,6 +286,8 @@ export interface RuntimeConfig {
   window: WindowConfig
   /** 托盘右键菜单显示哪些条目 */
   trayMenu: TrayMenuConfig
+  /** 在线更新 */
+  update: UpdateConfig
 }
 
 export interface AppConfig {

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppConfig, Corner, CountdownItem, HostInfo } from '../shared/types'
+import type { AppConfig, Corner, CountdownItem, HostInfo, UpdateState } from '../shared/types'
 
 type Unsubscribe = () => void
 
@@ -29,6 +29,21 @@ const api = {
 
   getHostInfo: (): Promise<HostInfo> => ipcRenderer.invoke('host:info'),
   openConfigFile: (): Promise<string> => ipcRenderer.invoke('host:openConfigFile'),
+
+  /* ------------------------------ 在线更新 ------------------------------ */
+  getUpdateState: (): Promise<UpdateState> => ipcRenderer.invoke('update:state'),
+  checkForUpdate: (): Promise<UpdateState> => ipcRenderer.invoke('update:check'),
+  downloadUpdate: (): Promise<UpdateState> => ipcRenderer.invoke('update:download'),
+  installUpdate: (): Promise<boolean> => ipcRenderer.invoke('update:install'),
+  /** 检查/下载失败时的兜底：打开发布页自己下 */
+  openUpdatePage: (): Promise<boolean> => ipcRenderer.invoke('update:openPage'),
+  onUpdateState: (handler: (state: UpdateState) => void): Unsubscribe => {
+    const listener = (_event: unknown, state: UpdateState): void => handler(state)
+    ipcRenderer.on('update:state', listener)
+    return () => {
+      ipcRenderer.removeListener('update:state', listener)
+    }
+  },
 
   toggleWidget: (): Promise<boolean> => ipcRenderer.invoke('widget:toggle'),
   setWidgetVisible: (visible: boolean): Promise<boolean> =>

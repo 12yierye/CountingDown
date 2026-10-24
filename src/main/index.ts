@@ -36,6 +36,16 @@ import { createTray, destroyTray, refreshTray } from './tray'
 import { setPreviewItem } from './preview'
 import { exportConfigTo, importConfigFrom } from './backup'
 import { startReminders, stopReminders } from './reminders'
+import {
+  checkForUpdate,
+  downloadUpdate,
+  getUpdateState,
+  installUpdate,
+  onUpdateChange,
+  openDownloadPage,
+  scheduleAutoCheck,
+  watchUpdateConfig
+} from './updater'
 import type { AppConfig, CountdownItem, HostInfo } from '../shared/types'
 
 export { trayMenuSnapshot } from './tray'
@@ -189,6 +199,13 @@ function registerIpc(): void {
     return true
   })
 
+  /** 在线更新：状态由主进程唯一持有，界面只发指令、收推送 */
+  ipcMain.handle('update:state', () => getUpdateState())
+  ipcMain.handle('update:check', () => checkForUpdate(true))
+  ipcMain.handle('update:download', () => downloadUpdate())
+  ipcMain.handle('update:install', () => installUpdate())
+  ipcMain.handle('update:openPage', () => openDownloadPage())
+
   /**
    * 编辑草稿：只推给组件窗口，既不写盘也不广播给设置窗口，
    * 因此编辑器自己依赖的 props.config 不会被草稿污染。
@@ -251,6 +268,9 @@ function bootstrap(): void {
   createTray()
   registerHotkey()
   startReminders()
+  // 更新：启动后静默查一次（只提示、不下载），并盯住更新源有没有被改
+  watchUpdateConfig()
+  scheduleAutoCheck()
 
   // 组件窗口被外部销毁（用户从任务栏关掉它）时，托盘文案要跟着回到「显示倒数日」，
   // 否则菜单一直写着「隐藏」，用户找不到把卡片叫回来的入口。
@@ -316,6 +336,11 @@ app.whenReady().then(() => {
   })
 
   bootstrap()
+})
+
+/** 把更新状态推给设置窗口；窗口没开就丢掉，下次打开自己会拉一次 */
+onUpdateChange((state) => {
+  getSettingsWindow()?.webContents.send('update:state', state)
 })
 
 app.on('window-all-closed', () => {

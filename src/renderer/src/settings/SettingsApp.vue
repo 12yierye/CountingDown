@@ -18,6 +18,7 @@ import CountdownPreview from '@/components/CountdownPreview.vue'
 import PresetGallery from '@/components/PresetGallery.vue'
 import type { PresetSaveMode } from '@/components/PresetGallery.vue'
 import CountdownList from '@/list/CountdownList.vue'
+import appIconUrl from '../../../../resources/icon.png'
 import TargetPanel from '@/settings/panels/TargetPanel.vue'
 import AppearancePanel from '@/settings/panels/AppearancePanel.vue'
 import LayoutPanel from '@/settings/panels/LayoutPanel.vue'
@@ -460,7 +461,11 @@ watch(
     <div class="settings-shell">
       <aside class="settings-side">
         <div class="settings-brand">
-          <span class="settings-brand__logo">CD</span>
+          <!--
+            用真实的应用图标，不再是一块写着「CD」的色块：
+            任务栏、开始菜单、安装包和设置界面里的标识必须是同一个。
+          -->
+          <img class="settings-brand__logo" :src="appIconUrl" alt="" draggable="false" />
           <span class="settings-brand__text">
             <span class="settings-brand__name">{{ t('app.name') }}</span>
             <span class="settings-brand__sub">{{ t('app.subtitle') }}</span>

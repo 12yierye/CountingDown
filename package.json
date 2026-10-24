@@ -1,6 +1,6 @@
 {
   "name": "countingdown",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "倒数日 CountingDown",
   "main": "./out/main/index.js",
@@ -14,8 +14,11 @@
     "typecheck:web": "vue-tsc -p tsconfig.web.json --noEmit",
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "icon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-icons.ps1",
-    "dist": "electron-vite build && electron-builder --win --x64",
-    "dist:dir": "electron-vite build && electron-builder --win --x64 --dir"
+    "art": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-installer-art.ps1",
+    "dist": "electron-vite build && electron-builder --win --x64 --dir && node scripts/build-installer.cjs",
+    "dist:dir": "electron-vite build && electron-builder --win --x64 --dir",
+    "dist:nsis": "electron-vite build && electron-builder --win --x64",
+    "installer": "node scripts/build-installer.cjs"
   },
   "dependencies": {
     "electron-store": "^8.2.0"
@@ -43,6 +46,7 @@
   "build": {
     "appId": "com.countingdown.widget",
     "productName": "倒数日",
+    "copyright": "Copyright © 2026 CountingDown",
     "directories": {
       "output": "release",
       "buildResources": "resources"
@@ -62,18 +66,31 @@
         }
       ],
       "icon": "resources/icon.ico",
-      "executableName": "CountingDown"
+      "executableName": "CountingDown",
+      "legalTrademarks": "CountingDown"
     },
     "nsis": {
       "artifactName": "CountingDown_Setup_${version}.${ext}",
       "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
+      "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
       "shortcutName": "倒数日",
+      "menuCategory": false,
+      "uninstallDisplayName": "倒数日",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "differentialPackage": true,
       "installerIcon": "resources/icon.ico",
       "uninstallerIcon": "resources/icon.ico",
-      "installerHeaderIcon": "resources/icon.ico"
+      "installerHeaderIcon": "resources/icon.ico",
+      "installerHeader": "resources/installerHeader.bmp",
+      "installerSidebar": "resources/installerSidebar.bmp",
+      "uninstallerSidebar": "resources/installerSidebar.bmp",
+      "include": "installer.nsh",
+      "language": "2052"
     }
   }
 }

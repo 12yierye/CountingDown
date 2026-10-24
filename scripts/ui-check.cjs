@@ -258,6 +258,19 @@ app.whenReady().then(async () => {
   )
 
   // ------------------------------------------------- 1b) 侧栏左下角 / 关于入口
+  // 侧栏左上角的标识必须是真图标（img 且加载成功），不能是一块写着字的色块
+  const brand = await jsonIn(
+    `(function(){var i=document.querySelector(".settings-brand__logo");if(!i)return {found:false};` +
+      `return {found:true,tag:i.tagName,src:i.getAttribute("src")||"",` +
+      `w:i.naturalWidth||0,h:i.naturalHeight||0};})()`
+  )
+  write('brand = ' + JSON.stringify(brand))
+  check(
+    'brand-uses-app-icon',
+    brand.found === true && brand.tag === 'IMG' && brand.w > 0 && brand.h > 0,
+    JSON.stringify(brand)
+  )
+
   const footer = await jsonIn(
     `(function(){var f=document.querySelector(".settings-side__footer");if(!f)return {found:false};` +
       `return {found:true,text:(f.innerText||"").trim(),` +
@@ -298,6 +311,67 @@ app.whenReady().then(async () => {
   check('about-shows-version', aboutPage.hasVersion === true, 'version block')
   check('about-hosts-quit', aboutPage.hasQuit === true, 'quit button')
   check('about-hosts-reset', aboutPage.hasReset === true, 'reset button')
+
+  /* ------------------------- 更新卡片：四种状态的按钮与进度 ------------------------- */
+  const updateProbe = `(function(){
+    var status=document.querySelector(".update-row__status");
+    var bar=document.querySelector(".el-progress-bar__inner");
+    return {text:status?(status.textContent||"").trim():"",
+            barWidth:bar?bar.style.width:"",
+            feed:(document.querySelector(".update-row__feed")||{}).textContent||"",
+            buttons:[].slice.call(document.querySelectorAll(".update-row__actions button"))
+              .map(function(b){return (b.textContent||"").trim()})};
+  })()`
+
+  const updateAvailable = await jsonIn(updateProbe)
+  write('update available = ' + JSON.stringify(updateAvailable))
+  check(
+    'update-shows-available',
+    /1\.3\.0/.test(updateAvailable.text) &&
+      updateAvailable.buttons.some((text) => /下载更新|Download/.test(text)),
+    JSON.stringify(updateAvailable)
+  )
+
+  await evalIn(`window.__setUpdate({ phase: 'downloading', progress: 0.42 })`)
+  await wait(350)
+  const updateDownloading = await jsonIn(updateProbe)
+  write('update downloading = ' + JSON.stringify(updateDownloading))
+  check(
+    'update-shows-progress',
+    /42%/.test(updateDownloading.text) && updateDownloading.barWidth === '42%',
+    JSON.stringify(updateDownloading)
+  )
+
+  await evalIn(`window.__setUpdate({ phase: 'ready', progress: 1 })`)
+  await wait(350)
+  const updateReady = await jsonIn(updateProbe)
+  write('update ready = ' + JSON.stringify(updateReady))
+  check(
+    'update-shows-install',
+    updateReady.buttons.some((text) => /重启并安装|Restart/.test(text)),
+    JSON.stringify(updateReady)
+  )
+
+  await evalIn(`window.__setUpdate({ phase: 'error', error: '网络不可用' })`)
+  await wait(350)
+  const updateError = await jsonIn(updateProbe)
+  write('update error = ' + JSON.stringify(updateError))
+  check(
+    'update-shows-error',
+    /网络不可用/.test(updateError.text) && /example\.com/.test(updateError.feed),
+    JSON.stringify(updateError)
+  )
+  // 失败时必须给出口：重试（检查更新）+ 手动下载
+  check(
+    'update-error-offers-manual-download',
+    updateError.buttons.some((text) => /手动下载|Download manually/.test(text)) &&
+      updateError.buttons.some((text) => /检查更新|Check/.test(text)),
+    JSON.stringify(updateError.buttons)
+  )
+  // 复位，别影响后续断言
+  await evalIn(`window.__setUpdate({ phase: 'available', error: undefined })`)
+  await shoot('about')
+
 
   // 点「恢复默认设置」应当先弹确认框；这里只验证弹窗出现并取消（真确认会把后续数据清掉）
   const resetClick = await jsonIn(

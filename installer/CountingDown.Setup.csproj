@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    自写安装器：net48 + WinForms。
+    选 net48 而不是 net8，是因为 Windows 10/11 自带 .NET Framework 4.8，
+    用户不用先装运行时；编出来只有几百 KB，比带一套 Electron 省 90MB。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>cd-setup</AssemblyName>
+    <RootNamespace>CountingDown.Setup</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\resources\icon.ico</ApplicationIcon>
+    <Platforms>AnyCPU</Platforms>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <DebugType>none</DebugType>
+    <Nullable>disable</Nullable>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>倒数日 安装程序</Product>
+    <Company>CountingDown</Company>
+    <Version>1.0.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
+    <!-- 创建快捷方式走 WScript.Shell 的 COM 晚期绑定，dynamic 需要这个 -->
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+</Project>

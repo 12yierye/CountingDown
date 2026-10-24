@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
-import type { AppConfig, AppLanguage, HostInfo } from '@shared/types'
+import type { AppConfig, AppLanguage, HostInfo, UpdateState } from '@shared/types'
+import { formatBytes } from '@shared/update'
 import FieldRow from '@/components/FieldRow.vue'
 
 defineProps<{ config: AppConfig }>()
@@ -15,8 +16,82 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const host = ref<HostInfo | null>(null)
 
+/* ------------------------------ 在线更新 ------------------------------ */
+
+/**
+ * 更新状态全部由主进程持有，这里只镜像一份：
+ * 关掉设置窗口再打开，看到的仍然是「上次检查的结果」，不会退回「还没检查过」。
+ */
+const update = ref<UpdateState>({ phase: 'idle', current: '', feedUrl: '' })
+let stopUpdate: (() => void) | null = null
+
+const statusText = computed(() => {
+  const state = update.value
+  switch (state.phase) {
+    case 'disabled':
+      return t('about.updateDisabled')
+    case 'checking':
+      return t('about.updateChecking')
+    case 'latest':
+      return t('about.updateLatest', { version: state.latest ?? state.current })
+    case 'available':
+      return t('about.updateAvailable', { version: state.latest ?? '' })
+    case 'downloading':
+      return t('about.updateDownloading', {
+        percent: Math.round((state.progress ?? 0) * 100)
+      })
+    case 'ready':
+      return t('about.updateReady', { version: state.latest ?? '' })
+    case 'error':
+      return t('about.updateFailed', { error: state.error ?? '' })
+    default:
+      // 静默检查失败不会把 phase 推进 error，这里补一句软提示
+      return state.error
+        ? t('about.updateIdleFailed', { error: state.error })
+        : t('about.updateIdle')
+  }
+})
+
+/** 「2026-10-17 发布 · 82.6 MB」，两段都可能缺，缺了就不显示 */
+const metaText = computed(() => {
+  const state = update.value
+  const date = state.releaseDate ? String(state.releaseDate).slice(0, 10) : ''
+  const size = formatBytes(state.size)
+  if (!date && !size) return ''
+  if (date && size) return t('about.updateMeta', { date, size })
+  return date || size
+})
+
+const percent = computed(() => Math.round((update.value.progress ?? 0) * 100))
+
+async function checkUpdate(): Promise<void> {
+  update.value = await window.cd.checkForUpdate()
+}
+
+async function downloadUpdate(): Promise<void> {
+  update.value = await window.cd.downloadUpdate()
+}
+
+async function installUpdate(): Promise<void> {
+  await window.cd.installUpdate()
+}
+
+/** 检查/下载都不通时的兜底：打开发布页，用户自己下 */
+async function openReleasePage(): Promise<void> {
+  await window.cd.openUpdatePage()
+}
+
 onMounted(async () => {
   host.value = await window.cd.getHostInfo()
+  update.value = await window.cd.getUpdateState()
+  stopUpdate = window.cd.onUpdateState((state) => {
+    update.value = state
+  })
+})
+
+onBeforeUnmount(() => {
+  stopUpdate?.()
+  stopUpdate = null
 })
 
 function setLanguage(language: AppLanguage): void {
@@ -43,10 +118,91 @@ async function quitApp(): Promise<void> {
 </script>
 
 <template>
+  <!--
+    软件更新放在第一张卡：进来「关于」的人，除了看版本号，最可能就是想更新。
+    文案按 phase 一条条改，不用弹窗 —— 更新是「看着它走完」的过程，不是一次性提示。
+  -->
   <el-card shadow="never" class="panel-card">
     <template #header>
       <div class="panel-card__header">
-        <span>{{ t('about.title') }}</span>
+        <span class="panel-card__title">{{ t('about.updateGroup') }}</span>
+        <el-tag v-if="update.phase === 'available'" size="small" type="warning" effect="plain">
+          {{ t('about.updateBadge') }}
+        </el-tag>
+        <el-tag v-else-if="update.phase === 'ready'" size="small" type="success" effect="plain">
+          {{ t('about.updateBadgeReady') }}
+        </el-tag>
+      </div>
+    </template>
+
+    <div class="update-row">
+      <div class="update-row__main">
+        <div class="update-row__version">
+          <span>{{ t('about.currentVersion') }}</span>
+          <span class="mono">{{ update.current || host?.appVersion || '—' }}</span>
+        </div>
+        <p class="update-row__status" :class="{ 'is-error': update.phase === 'error' }">
+          {{ statusText }}
+        </p>
+        <p v-if="metaText" class="update-row__meta">{{ metaText }}</p>
+        <el-progress
+          v-if="update.phase === 'downloading'"
+          class="update-row__progress"
+          :percentage="percent"
+          :stroke-width="6"
+          :show-text="false"
+        />
+        <p v-if="update.notes" class="update-row__notes">{{ update.notes }}</p>
+        <!-- 出错或没配更新源时才把地址露出来：平时它只是噪音，排查时它才是线索 -->
+        <p
+          v-if="(update.phase === 'error' || update.phase === 'disabled') && update.feedUrl"
+          class="update-row__feed mono"
+        >
+          {{ update.feedUrl }}
+        </p>
+        <p v-if="update.phase === 'error'" class="update-row__hint">
+          {{ t('about.updateFailHint') }}
+        </p>
+      </div>
+
+      <div class="update-row__actions">
+        <el-button
+          size="small"
+          plain
+          :loading="update.phase === 'checking'"
+          :disabled="update.phase === 'downloading'"
+          @click="checkUpdate"
+        >
+          {{ t('about.checkUpdate') }}
+        </el-button>
+        <el-button
+          v-if="update.phase === 'available'"
+          size="small"
+          type="primary"
+          @click="downloadUpdate"
+        >
+          {{ t('about.downloadUpdate') }}
+        </el-button>
+        <el-button
+          v-else-if="update.phase === 'ready'"
+          size="small"
+          type="success"
+          @click="installUpdate"
+        >
+          {{ t('about.installUpdate') }}
+        </el-button>
+        <!-- 检查不通时的兜底出口：让用户自己去发布页下，而不是卡在错误提示上 -->
+        <el-button v-else-if="update.phase === 'error'" size="small" @click="openReleasePage">
+          {{ t('about.openReleasePage') }}
+        </el-button>
+      </div>
+    </div>
+  </el-card>
+
+  <el-card shadow="never" class="panel-card">
+    <template #header>
+      <div class="panel-card__header">
+        <span class="panel-card__title">{{ t('about.title') }}</span>
       </div>
     </template>
 
@@ -130,6 +286,94 @@ async function quitApp(): Promise<void> {
 </template>
 
 <style scoped>
+/*
+ * 更新卡片：左边说明、右边按钮，进度条铺在说明下面。
+ * 不用弹窗是因为「检查 → 下载 → 安装」是一条有中间态的链，弹窗一关就看不到进度了。
+ */
+.update-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.update-row__main {
+  min-width: 0;
+  flex: 1;
+}
+
+.update-row__version {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+
+.update-row__status {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--el-text-color-secondary);
+  word-break: break-word;
+}
+
+.update-row__status.is-error {
+  color: var(--el-color-danger);
+}
+
+.update-row__meta {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--el-text-color-secondary);
+  opacity: 0.8;
+}
+
+.update-row__progress {
+  margin-top: 8px;
+  max-width: 360px;
+}
+
+/* 发布说明最多露三行，长了给省略号：这里不是阅读器 */
+.update-row__notes {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--el-text-color-secondary);
+  white-space: pre-line;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.update-row__feed {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  word-break: break-all;
+}
+
+/* 失败时给一条「怎么自救」的提示，比只报错有用 */
+.update-row__hint {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--el-text-color-secondary);
+}
+
+.update-row__actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.update-row__actions .el-button + .el-button {
+  margin-left: 0;
+}
+
 .screens {
   display: flex;
   flex-direction: column;
