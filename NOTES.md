@@ -621,6 +621,31 @@ Element Plus 默认**不是**每个标签各画一圈边框，而是靠 `margin-
 - 关于页第一张卡就是「软件更新」：`phase` 直接映射成文案与按钮，进度条铺在说明下面。
   弹窗干不了这件事——检查/下载/安装是有中间态的链，弹窗一关就看不到进度了。
 
+#### 排查「检查更新总是失败」：`npm run doctor`
+
+`scripts/update-doctor.cjs` 分三层给结论，每层都能单独定位：
+
+1. **DNS**：域名是否被解析到 `127.0.0.1`（hosts 屏蔽的典型症状，`dns.lookup` 读的就是 hosts）；
+2. **HTTP**：更新源能不能取到，404 直接指向「latest.yml 没传」；
+3. **资产**：`latest.yml` 里那个安装包在不在、`content-length` 与 `size` 是否一致（只发 HEAD，不下 110MB）。
+
+用法：`npm run doctor`（读配置文件里的源，没有就用默认）或
+`npm run doctor -- <url>`（临时指定，多个用空格/逗号分隔）。判定按「最坏的一层」出，不让用户自己拼结论。
+
+2026-10 实测到两类真实原因，**都不是程序 bug**：
+
+| 现象 | 真实原因 | 证据 |
+| --- | --- | --- |
+| 立刻失败，Electron 报 `Fetch Failed` | 本机 hosts 把 `github.com` 等 23 个域名写到 `127.0.0.1` | 同一个 `net.request`，加 `--host-resolver-rules` 指到 `20.205.243.166` 后拿到 GitHub 的真实 HTTP 响应 |
+| 网络通了仍然失败，提示「更新源不存在」 | Release 里只有 `.exe`，没传 `latest.yml` | `.../releases/download/v1.2.1/CountingDown_Setup_1.2.1.exe` → 200（116102692 字节，与本地一致）；`.../latest.yml` → 404 |
+
+**发布清单**（少一个都白搭）：`CountingDown_Setup_x.y.z.exe`、`latest.yml`、（可选）`.blockmap`。
+文件名不能改——`latest.yml` 的 `path` / `files[].url` 必须与实际资产同名，否则装完解析不到地址。
+
+排查顺序建议：先 `npm run doctor`，再看是不是 404（发布问题）而不是超时（网络问题）。
+两者混在一起时，人很容易把「文件没传」误判成「被墙」。
+
+
 ### 安装包（NSIS）界面重构
 
 默认的 NSIS 界面是灰白空页，跟应用的视觉完全两回事。现在四页全是自己的东西：

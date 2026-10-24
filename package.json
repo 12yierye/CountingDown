@@ -18,7 +18,8 @@
     "dist": "electron-vite build && electron-builder --win --x64 --dir && node scripts/build-installer.cjs",
     "dist:dir": "electron-vite build && electron-builder --win --x64 --dir",
     "dist:nsis": "electron-vite build && electron-builder --win --x64",
-    "installer": "node scripts/build-installer.cjs"
+    "installer": "node scripts/build-installer.cjs",
+    "doctor": "node scripts/update-doctor.cjs"
   },
   "dependencies": {
     "electron-store": "^8.2.0"
