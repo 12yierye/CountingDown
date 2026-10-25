@@ -23,71 +23,9 @@ for (const file of fs.readdirSync(outDir)) {
 }
 fs.mkdirSync(userData, { recursive: true })
 
-const demoConfig = {
-  config: {
-    /**
-     * 桌面卡片用**应用默认外观**（午夜蓝深色卡）。
-     * 卡片在真实桌面上要看得清，靠的是它与壁纸的对比：本机壁纸是浅蓝灰
-     * （实测 #a8b4ca 一带），默认深色卡内部 #191d27 对它的对比度约 7.9:1，很清楚。
-     * 反过来浅色卡在浅色壁纸上只有 1.8:1 左右，会糊成一片。
-     * 注意壁纸可能是轮播的——换机器/换壁纸后重跑本脚本，记得复核 01 这张图。
-     */
-    countdowns: [
-      {
-        id: 'demo_new_year',
-        name: '元旦',
-        enabled: true,
-        target: { mode: 'annual', date: '2027-01-01T00:00', month: 1, day: 1 },
-        text: { hint: '', futureText: '', todayText: '', pastText: '', unit: '' },
-        appearance: {}
-      },
-      {
-        id: 'demo_trip',
-        name: '跨年旅行',
-        enabled: true,
-        target: { mode: 'once', date: '2026-12-24T09:00', month: 12, day: 24 },
-        text: {
-          hint: '2026 年 12 月 24 日 · 周四',
-          futureText: '',
-          todayText: '',
-          pastText: '',
-          unit: ''
-        },
-        appearance: {}
-      },
-      {
-        id: 'demo_birthday',
-        name: '妈妈生日',
-        enabled: true,
-        target: { mode: 'annual', date: '', month: 5, day: 20 },
-        text: { hint: '', futureText: '', todayText: '', pastText: '', unit: '' },
-        appearance: {}
-      },
-      {
-        id: 'demo_launch',
-        name: '项目上线',
-        enabled: false,
-        target: { mode: 'once', date: '2026-11-15T00:00', month: 11, day: 15 },
-        text: { hint: '', futureText: '', todayText: '', pastText: '', unit: '' },
-        appearance: {}
-      }
-    ],
-    activeId: 'demo_new_year',
-    runtime: {
-      widgetVisible: true,
-      toggleHotkey: '',
-      startAtLogin: false,
-      language: 'zh-CN',
-      theme: 'dark',
-      window: {
-        corner: 'top-right',
-        cornerPreset: 'top-right',
-        offsetX: 0,
-        offsetY: 0
-      }
-    }
-  }
-}
+// 演示数据统一放在 demo-config.cjs，和首图脚本共用一份，避免两边漂移
+const { buildDemoConfig } = require('./demo-config.cjs')
+const demoConfig = { config: buildDemoConfig() }
 
 fs.writeFileSync(
   path.join(userData, 'config.json'),
