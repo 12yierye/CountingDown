@@ -8,8 +8,7 @@ out/
 dist/
 .vite/
 *.tsbuildinfo
-release/*
-!release/latest.yml
+release/
 
 # ---------------------------------------------------------------- 自写安装器（C#）
 # bin/ 是 dotnet build 的输出（cd-setup.exe 在这里），obj/ 是还原与中间缓存，

@@ -20,12 +20,16 @@ require('esbuild').buildSync({
 })
 
 const {
+  UPDATE_FEED_PRESETS,
+  looksLikeHtml,
+  presetIdOf,
   compareVersions,
   parseUpdateFeed,
   resolveFeedUrl,
   formatBytes,
   releasePageOf,
-  parseFeedUrls
+  parseFeedUrls,
+  DEFAULT_UPDATE_FEED
 } = require(outFile)
 
 let failures = 0
@@ -128,6 +132,40 @@ check(
   releasePageOf('https://cdn.example.com/app/latest.yml')
 )
 check('page-empty', releasePageOf('') === '', 'empty')
+
+// ------------------------------------------------------------ 更新源预设
+check('preset-count', UPDATE_FEED_PRESETS.length === 5, String(UPDATE_FEED_PRESETS.length))
+check(
+  'preset-mirror-prefixes',
+  ['gh-proxy.com', 'gh-proxy.net', 'gitproxy.click', 'ghproxy.link'].every((host) =>
+    UPDATE_FEED_PRESETS.some((item) => item.url.endsWith(DEFAULT_UPDATE_FEED) && item.url.includes(host + '/'))
+  ),
+  UPDATE_FEED_PRESETS.map((item) => item.id).join(',')
+)
+check('preset-github-id', presetIdOf(DEFAULT_UPDATE_FEED) === 'github', presetIdOf(DEFAULT_UPDATE_FEED))
+check(
+  'preset-ghproxy-url',
+  UPDATE_FEED_PRESETS.find((item) => item.id === 'ghproxy').url ===
+    'https://gh-proxy.com/' + DEFAULT_UPDATE_FEED,
+  UPDATE_FEED_PRESETS.find((item) => item.id === 'ghproxy').url
+)
+check(
+  'preset-mirror-id',
+  presetIdOf('https://gh-proxy.com/' + DEFAULT_UPDATE_FEED) === 'ghproxy',
+  presetIdOf('https://gh-proxy.com/' + DEFAULT_UPDATE_FEED)
+)
+check(
+  'preset-mirror-alt-id',
+  presetIdOf('https://gh-proxy.net/' + DEFAULT_UPDATE_FEED) === 'ghproxyNet',
+  presetIdOf('https://gh-proxy.net/' + DEFAULT_UPDATE_FEED)
+)
+check('preset-custom', presetIdOf('https://cdn.example.com/app/latest.yml') === 'custom', 'custom')
+check('preset-off', presetIdOf('') === 'off' && presetIdOf('   ') === 'off', 'off')
+
+// ------------------------------------------------------------ HTML 误返回（镜像常见）
+check('html-doctype', looksLikeHtml('<!DOCTYPE html><html></html>') === true, 'doctype')
+check('html-lowercase', looksLikeHtml('  <html><head></head></html>') === true, 'leading spaces')
+check('html-yaml', looksLikeHtml('version: 1.2.2\nfiles: []') === false, 'yaml')
 
 // ------------------------------------------------------------ 多更新源
 check(

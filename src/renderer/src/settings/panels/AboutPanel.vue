@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
 import type { AppConfig, AppLanguage, HostInfo, UpdateState } from '@shared/types'
-import { formatBytes } from '@shared/update'
+import { formatBytes, presetIdOf, UPDATE_FEED_PRESETS } from '@shared/update'
 import FieldRow from '@/components/FieldRow.vue'
 
-defineProps<{ config: AppConfig }>()
+const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{
   (event: 'patch', patch: unknown): void
   /** 恢复默认设置：真正的重置逻辑在 SettingsApp（要一并清空撤销栈） */
@@ -66,6 +66,57 @@ const percent = computed(() => Math.round((update.value.progress ?? 0) * 100))
 
 async function checkUpdate(): Promise<void> {
   update.value = await window.cd.checkForUpdate()
+}
+
+/* ------------------------------ 更新源 ------------------------------ */
+
+/**
+ * 更新源直接写 `runtime.update.feedUrl`，主进程监听到变化会把上一次的检查结果清空，
+ * 所以换源之后不需要（也不应该）自动开查 —— 用户自己点「检查更新」再走一遍。
+ */
+const feedUrl = computed(() => String(props.config.runtime.update?.feedUrl ?? '').trim())
+const feedChoice = computed(() => presetIdOf(feedUrl.value))
+/** 输入框的草稿值：只在失焦 / 回车时落盘，否则每敲一个字符都会重置一次更新状态 */
+const feedDraft = ref(feedUrl.value)
+const feedInput = ref<{ focus: () => void } | null>(null)
+
+/** 下拉项由预设表生成：以后加镜像只改 shared/update.ts，不用再动模板 */
+const feedOptions = computed(() => [
+  ...UPDATE_FEED_PRESETS.map((preset) => ({
+    value: preset.id as string,
+    label: t(`about.feedPresets.${preset.id}`)
+  })),
+  { value: 'custom', label: t('about.feedCustom') },
+  { value: 'off', label: t('about.feedOff') }
+])
+
+/** 除官方源以外，预设里的每一项都是第三方转发 */
+const mirrorSelected = computed(
+  () => feedChoice.value !== 'github' && feedChoice.value !== 'custom' && feedChoice.value !== 'off'
+)
+
+watch(feedUrl, (value) => {
+  feedDraft.value = value
+})
+
+function applyFeed(value: string): void {
+  const next = String(value ?? '').trim()
+  if (next === feedUrl.value) return
+  emit('patch', { runtime: { update: { feedUrl: next } } })
+}
+
+function chooseFeed(id: string): void {
+  if (id === 'custom') {
+    // 「自定义」不是一种源，只是让你接着编辑输入框里那一行
+    feedInput.value?.focus()
+    return
+  }
+  const preset = UPDATE_FEED_PRESETS.find((item) => item.id === id)
+  if (preset) {
+    applyFeed(preset.url)
+    return
+  }
+  applyFeed('')
 }
 
 async function downloadUpdate(): Promise<void> {
@@ -153,13 +204,6 @@ async function quitApp(): Promise<void> {
           :show-text="false"
         />
         <p v-if="update.notes" class="update-row__notes">{{ update.notes }}</p>
-        <!-- 出错或没配更新源时才把地址露出来：平时它只是噪音，排查时它才是线索 -->
-        <p
-          v-if="(update.phase === 'error' || update.phase === 'disabled') && update.feedUrl"
-          class="update-row__feed mono"
-        >
-          {{ update.feedUrl }}
-        </p>
         <p v-if="update.phase === 'error'" class="update-row__hint">
           {{ t('about.updateFailHint') }}
         </p>
@@ -196,6 +240,51 @@ async function quitApp(): Promise<void> {
           {{ t('about.openReleasePage') }}
         </el-button>
       </div>
+    </div>
+
+    <!--
+      更新源放在状态下面：它是「检查不通时才需要动」的东西，不该跟主按钮抢注意力。
+      写死的地址在错误提示里露出来不够用 —— 用户没法自己换一条路。
+    -->
+    <div class="update-source">
+      <div class="update-source__head">
+        <span class="update-source__label">{{ t('about.feedLabel') }}</span>
+        <el-select
+          :model-value="feedChoice"
+          size="small"
+          class="update-source__select"
+          @update:model-value="(v: string | number | boolean | undefined) => chooseFeed(String(v))"
+        >
+          <el-option
+            v-for="option in feedOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
+      </div>
+
+      <el-input
+        v-if="feedChoice !== 'off'"
+        ref="feedInput"
+        v-model="feedDraft"
+        size="small"
+        class="update-source__url"
+        :placeholder="t('about.feedPlaceholder')"
+        @change="applyFeed(feedDraft)"
+        @keyup.enter="applyFeed(feedDraft)"
+      />
+
+      <p v-if="mirrorSelected" class="update-source__warn">
+        {{ t('about.feedMirrorWarning') }}
+      </p>
+      <p v-else-if="feedChoice === 'custom'" class="update-source__note">
+        {{ t('about.feedCustomHint') }}
+      </p>
+      <p v-else-if="feedChoice === 'off'" class="update-source__note">
+        {{ t('about.feedOffHint') }}
+      </p>
+      <p v-else class="update-source__note">{{ t('about.feedHint') }}</p>
     </div>
   </el-card>
 
@@ -347,13 +436,6 @@ async function quitApp(): Promise<void> {
   overflow: hidden;
 }
 
-.update-row__feed {
-  margin: 6px 0 0;
-  font-size: 11px;
-  color: var(--el-text-color-placeholder);
-  word-break: break-all;
-}
-
 /* 失败时给一条「怎么自救」的提示，比只报错有用 */
 .update-row__hint {
   margin: 6px 0 0;
@@ -372,6 +454,54 @@ async function quitApp(): Promise<void> {
 
 .update-row__actions .el-button + .el-button {
   margin-left: 0;
+}
+
+/* 更新源：主行下面的一条，用分隔线压住，别和状态文字混成一片 */
+.update-source {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter);
+}
+
+.update-source__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.update-source__label {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--el-text-color-regular);
+}
+
+.update-source__select {
+  width: 190px;
+}
+
+.update-source__url {
+  margin-top: 8px;
+  max-width: 520px;
+}
+
+.update-source__url :deep(.el-input__inner) {
+  font-family: var(--cd-font-mono, ui-monospace, 'Cascadia Mono', Consolas, monospace);
+  font-size: 11.5px;
+}
+
+.update-source__note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--el-text-color-secondary);
+}
+
+/* 第三方镜像不是「更快的官方源」，它拿得到你的全部信任，得说清楚 */
+.update-source__warn {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--el-color-warning-dark-2);
 }
 
 .screens {

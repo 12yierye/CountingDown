@@ -14,6 +14,48 @@
 export const DEFAULT_UPDATE_FEED =
   'https://github.com/12yierye/CountingDown/releases/latest/download/latest.yml'
 
+/**
+ * 设置界面里可选的更新源。
+ *
+ * 镜像全是第三方转发（国内直连 GitHub 不稳时的常用手段），但要说清代价：
+ * **清单和安装包都从同一个第三方端点来**，对方完全可以同时伪造 latest.yml 里的
+ * sha512 和安装包本身，校验在这条链路上等于没有。它们的价值是「能更新」，
+ * 不是「安全地更新」——在意这一点就自己托管，或用官方源。
+ *
+ * 列在这里的地址都在 2026-10 实测过：既能转发版本化资产，也支持
+ * `/releases/latest/download/` 这个别名（后者要先 302 到真实资产）。
+ * 镜像会挂，挂了就让用户换一个 —— 所以给的是「一串」，不是「一个」。
+ */
+export const UPDATE_FEED_PRESETS = [
+  { id: 'github', url: DEFAULT_UPDATE_FEED },
+  { id: 'ghproxy', url: `https://gh-proxy.com/${DEFAULT_UPDATE_FEED}` },
+  { id: 'ghproxyNet', url: `https://gh-proxy.net/${DEFAULT_UPDATE_FEED}` },
+  { id: 'gitproxy', url: `https://gitproxy.click/${DEFAULT_UPDATE_FEED}` },
+  { id: 'ghproxyLink', url: `https://ghproxy.link/${DEFAULT_UPDATE_FEED}` }
+] as const
+
+export type UpdateFeedPresetId = (typeof UPDATE_FEED_PRESETS)[number]['id']
+
+/** 当前地址对应哪个预设；对不上就是用户自定义的（空串另算「关闭」） */
+export function presetIdOf(url: string): UpdateFeedPresetId | 'custom' | 'off' {
+  const value = String(url ?? '').trim()
+  if (!value) return 'off'
+  const found = UPDATE_FEED_PRESETS.find((preset) => preset.url === value)
+  return found ? found.id : 'custom'
+}
+
+/**
+ * 响应体是不是一个网页。
+ *
+ * 镜像站在「目标文件不存在」时经常不回 404，而是把**自己的首页**（HTTP 200 + HTML）
+ * 吐回来。这时说「内容不是有效的 latest.yml」会让人以为清单格式写错了，
+ * 其实多半是文件根本没传上去。先认出 HTML，才能给出对的提示。
+ */
+export function looksLikeHtml(text: string): boolean {
+  const head = String(text ?? '').trimStart().slice(0, 200).toLowerCase()
+  return head.startsWith('<!doctype') || head.startsWith('<html') || head.includes('<head>')
+}
+
 export interface UpdateFeed {
   version: string
   /** 安装包直链（相对地址会按更新源所在目录补全） */

@@ -17,6 +17,7 @@ import { Transform, pipeline } from 'node:stream'
 import { Notification, app, net, session, shell, type Session } from 'electron'
 import {
   compareVersions,
+  looksLikeHtml,
   parseFeedUrls,
   parseUpdateFeed,
   releasePageOf,
@@ -219,7 +220,13 @@ export async function checkForUpdate(manual = false): Promise<UpdateState> {
       try {
         const text = await requestFeed(candidate, candidates.length > 1 ? 1 : 2)
         const parsed = parseUpdateFeed(text, candidate)
-        if (!parsed) throw new Error('更新源内容不是有效的 latest.yml / JSON')
+        if (!parsed) {
+          throw new Error(
+            looksLikeHtml(text)
+              ? '更新源返回的是网页而不是清单：镜像多半没取到文件，先去官方源确认 latest.yml 已经上传'
+              : '更新源内容不是有效的 latest.yml / JSON'
+          )
+        }
         feed = parsed
         usedUrl = candidate
         break

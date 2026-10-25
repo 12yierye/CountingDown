@@ -358,7 +358,8 @@ app.whenReady().then(async () => {
   write('update error = ' + JSON.stringify(updateError))
   check(
     'update-shows-error',
-    /网络不可用/.test(updateError.text) && /example\.com/.test(updateError.feed),
+    /网络不可用/.test(updateError.text) &&
+      updateError.buttons.some((text) => /手动下载|Download manually/.test(text)),
     JSON.stringify(updateError)
   )
   // 失败时必须给出口：重试（检查更新）+ 手动下载
@@ -368,6 +369,96 @@ app.whenReady().then(async () => {
       updateError.buttons.some((text) => /检查更新|Check/.test(text)),
     JSON.stringify(updateError.buttons)
   )
+  /* ------------------------- 更新源选择：选项 / 落盘 / 警告文案 ------------------------- */
+  const feedInitial = await jsonIn(
+    `({label:((document.querySelector(".update-source__select")||{}).innerText||"").trim(),` +
+      `input:((document.querySelector(".update-source__url input")||{}).value)||"",` +
+      `hasWarn:!!document.querySelector(".update-source__warn"),` +
+      `hasNote:!!document.querySelector(".update-source__note")})`
+  )
+  write('feed initial = ' + JSON.stringify(feedInitial))
+  check(
+    'feed-default-is-github',
+    /官方 GitHub|GitHub \(official\)/.test(feedInitial.label) && /github\.com/.test(feedInitial.input),
+    JSON.stringify(feedInitial)
+  )
+
+  const openFeedSelect = `(function(){` +
+    `var s=document.querySelector(".update-source__select .el-select__wrapper")||document.querySelector(".update-source__select");` +
+    `if(!s)return {found:false};s.click();return {found:true};})()`
+  const pickFeedOption = (pattern) =>
+    `(function(){var items=[].slice.call(document.querySelectorAll(".el-select-dropdown__item"));` +
+    `var target=items.filter(function(x){return ${pattern}.test(x.textContent||"")})[0];` +
+    `if(!target)return {found:false,labels:items.map(function(x){return (x.textContent||"").trim()})};` +
+    `target.click();return {found:true,count:items.length};})()`
+
+  const feedOpen = await jsonIn(openFeedSelect)
+  await wait(400)
+  const feedOptions = await jsonIn(
+    `({count:document.querySelectorAll(".el-select-dropdown__item").length,` +
+      `labels:[].slice.call(document.querySelectorAll(".el-select-dropdown__item")).map(function(x){return (x.textContent||"").trim()})})`
+  )
+  write('feed options = ' + JSON.stringify({ open: feedOpen, ...feedOptions }))
+  check(
+    'feed-offers-all-sources',
+    feedOptions.count === 7 &&
+      feedOptions.labels.some((text) => /gh-proxy/.test(text)) &&
+      feedOptions.labels.some((text) => /自定义|Custom/.test(text)),
+    JSON.stringify(feedOptions.labels)
+  )
+
+  await jsonIn(pickFeedOption('/gh-proxy/'))
+  await wait(600)
+  const feedMirror = await jsonIn(
+    `({label:((document.querySelector(".update-source__select")||{}).innerText||"").trim(),` +
+      `input:((document.querySelector(".update-source__url input")||{}).value)||"",` +
+      `warn:((document.querySelector(".update-source__warn")||{}).textContent||"").trim()})`
+  )
+  const feedMirrorConfig = await evalIn(
+    'window.cd.getConfig().then(function(c){return c.runtime.update.feedUrl})'
+  )
+  write('feed mirror = ' + JSON.stringify({ ...feedMirror, config: feedMirrorConfig }))
+  check(
+    'feed-mirror-writes-config',
+    String(feedMirrorConfig).startsWith('https://gh-proxy.com/https://github.com/'),
+    String(feedMirrorConfig)
+  )
+  check(
+    'feed-mirror-warns',
+    /第三方|third-party/i.test(feedMirror.warn) && /sha512/i.test(feedMirror.warn),
+    feedMirror.warn
+  )
+
+  // 选「不使用在线更新」→ 地址栏收起，配置写成空串
+  await jsonIn(openFeedSelect)
+  await wait(400)
+  await jsonIn(pickFeedOption('/不使用|\\bOff\\b/'))
+  await wait(600)
+  const feedOff = await jsonIn(
+    `({hasInput:!!document.querySelector(".update-source__url"),` +
+      `note:((document.querySelector(".update-source__note")||{}).textContent||"").trim()})`
+  )
+  const feedOffConfig = await evalIn(
+    'window.cd.getConfig().then(function(c){return c.runtime.update.feedUrl})'
+  )
+  write('feed off = ' + JSON.stringify({ ...feedOff, config: feedOffConfig }))
+  check('feed-off-clears-url', feedOffConfig === '' && feedOff.hasInput === false, JSON.stringify(feedOff))
+
+  // 还原成官方源，别影响后面的重置断言
+  await jsonIn(openFeedSelect)
+  await wait(400)
+  await jsonIn(pickFeedOption('/官方|official/'))
+  await wait(500)
+  const feedRestored = await evalIn(
+    'window.cd.getConfig().then(function(c){return c.runtime.update.feedUrl})'
+  )
+  write('feed restored = ' + feedRestored)
+  check(
+    'feed-restore-github',
+    /^https:\/\/github\.com\//.test(String(feedRestored)),
+    String(feedRestored)
+  )
+
   // 复位，别影响后续断言
   await evalIn(`window.__setUpdate({ phase: 'available', error: undefined })`)
   await shoot('about')

@@ -618,6 +618,17 @@ Element Plus 默认**不是**每个标签各画一圈边框，而是靠 `margin-
   校验不过直接删包 —— 这东西是要被执行（run）的，不能只信 content-length。
 - 启动 12s 后静默查一次（`autoCheck` 为真、非开发模式）；发现新版本只发一条系统通知，
   不代替用户点下载。
+- **更新源能在界面上换**（关于页「软件更新」卡片底部一行）：官方 GitHub +
+  4 个第三方镜像（gh-proxy.com / gh-proxy.net / gitproxy.click / ghproxy.link）+ 自定义 + 不使用。
+  发布流程见 `docs/release-checklist.md`。选预设直接写 `runtime.update.feedUrl`；「自定义」只是把地址栏交给你，
+  输入框在**失焦或回车**时才落盘 —— 每敲一个字符都 patch 一次的话，主进程会跟着重置一遍更新状态。
+  - `UPDATE_FEED_PRESETS` 与 `presetIdOf()` 在 `src/shared/update.ts`：当前地址对得上哪个预设、
+    对不上算 custom、空串算 off，都是纯函数，`updater-check.cjs` 覆盖到每一个镜像。
+  - 下拉项由预设表 `v-for` 生成，加镜像只改 `shared/update.ts` 一处 + 一条 i18n 文案。
+  - **镜像的代价写在界面上**，不藏在文档里：清单和安装包同源，第三方可以同时伪造两者，
+    sha512 在这条链路上等于没有。它解决的是「连不上」，不是「不安全」。
+  - 换源后主进程的 `watchUpdateConfig` 会把上次结果清空（phase → idle），所以不自动重查，
+    由用户点「检查更新」再走一遍。
 - 关于页第一张卡就是「软件更新」：`phase` 直接映射成文案与按钮，进度条铺在说明下面。
   弹窗干不了这件事——检查/下载/安装是有中间态的链，弹窗一关就看不到进度了。
 

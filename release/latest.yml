@@ -1,8 +1,8 @@
-version: 1.2.1
+version: 1.2.2
 files:
-  - url: CountingDown_Setup_1.2.1.exe
-    sha512: bxYsXkGulO6TWsWvB2/g2thch+WO1HY8C9jC7t6rx8c0ygyGjEBYrzo14ritaagd5v69pazC8zxv3fazUIjWlA==
-    size: 116102692
-path: CountingDown_Setup_1.2.1.exe
-sha512: bxYsXkGulO6TWsWvB2/g2thch+WO1HY8C9jC7t6rx8c0ygyGjEBYrzo14ritaagd5v69pazC8zxv3fazUIjWlA==
-releaseDate: '2026-10-24T04:22:29.438Z'
+  - url: CountingDown_Setup_1.2.2.exe
+    sha512: K2OkHg0oRHdZXtmZDMWnBaPVR8Ctb3fZJ3GWPk0E5HQFNyha/VHtlFBKcsLAeFXYLvfG9S75Lh+oMAV6KcJSqA==
+    size: 116104826
+path: CountingDown_Setup_1.2.2.exe
+sha512: K2OkHg0oRHdZXtmZDMWnBaPVR8Ctb3fZJ3GWPk0E5HQFNyha/VHtlFBKcsLAeFXYLvfG9S75Lh+oMAV6KcJSqA==
+releaseDate: '2026-10-25T03:27:16.787Z'

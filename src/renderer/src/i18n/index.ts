@@ -411,10 +411,28 @@ export const messages = {
       updateGroup: '软件更新',
       currentVersion: '当前版本',
       checkUpdate: '检查更新',
+      feedLabel: '更新源',
+      feedPresets: {
+        github: '官方 GitHub',
+        ghproxy: 'gh-proxy.com',
+        ghproxyNet: 'gh-proxy.net',
+        gitproxy: 'gitproxy.click',
+        ghproxyLink: 'ghproxy.link'
+      },
+      feedCustom: '自定义',
+      feedOff: '不使用在线更新',
+      feedPlaceholder: 'https://…/latest.yml',
+      feedHint:
+        '换源后点「检查更新」重新检测。想更稳可以直接在地址里写多个，用空格或逗号隔开，按顺序试（前一个不通再试下一个）。',
+      feedMirrorWarning:
+        '镜像是第三方转发：清单和安装包都从它那里来，对方可以同时伪造两者，sha512 校验在这条链路上不提供保护。它解决的是「连不上」，不是「不安全」。',
+      feedCustomHint:
+        '只填你能控制的静态直链（对象存储 / 自己的服务器）。清单里的 sha512 只能证明「文件和清单一致」，证明不了「清单本身可信」。',
+      feedOffHint: '已关闭在线更新，「检查更新」不会再发任何请求。',
       updateIdle: '还没检查过更新',
       updateIdleFailed: '上次自动检查失败：{error}',
       updateFailHint:
-        '可以先点「检查更新」重试。一直失败的话，多半是连不上更新源：给 `runtime.update.proxy` 配一个代理（例如 http://127.0.0.1:7890），或者直接用「手动下载」去发布页自己装',
+        '先点「检查更新」重试；一直失败就换上面的「更新源」，或给更新单独配代理（设置项 `runtime.update.proxy`，例如 http://127.0.0.1:7890）。都不行再用「手动下载」直接装。',
       updateChecking: '正在检查更新…',
       updateLatest: '已是最新版本（{version}）',
       updateAvailable: '发现新版本 {version}，可以下载安装',
@@ -859,10 +877,28 @@ export const messages = {
       updateGroup: 'Software update',
       currentVersion: 'Current version',
       checkUpdate: 'Check for updates',
+      feedLabel: 'Update source',
+      feedPresets: {
+        github: 'GitHub (official)',
+        ghproxy: 'gh-proxy.com',
+        ghproxyNet: 'gh-proxy.net',
+        gitproxy: 'gitproxy.click',
+        ghproxyLink: 'ghproxy.link'
+      },
+      feedCustom: 'Custom',
+      feedOff: 'Off',
+      feedPlaceholder: 'https://…/latest.yml',
+      feedHint:
+        'Pick a source, then hit "Check for updates". For more resilience put several URLs in the field, separated by spaces or commas — they are tried in order.',
+      feedMirrorWarning:
+        'A mirror is third-party forwarding: both the manifest and the installer come from it, so it can forge them together. The sha512 check protects nothing on that path. It solves "cannot connect", not "insecure".',
+      feedCustomHint:
+        'Only point this at a static URL you control (object storage, your own server). The sha512 proves the file matches the manifest, not that the manifest itself is trustworthy.',
+      feedOffHint: 'Online update is off — "Check for updates" will not send any request.',
       updateIdle: 'Not checked yet',
       updateIdleFailed: 'Last automatic check failed: {error}',
       updateFailHint:
-        'Try "Check for updates" again first. If it keeps failing, the update feed is probably unreachable — set a proxy via `runtime.update.proxy` (e.g. http://127.0.0.1:7890) or use "Download manually"',
+        'Retry "Check for updates" first. If it keeps failing, switch the update source above, or give updates their own proxy (`runtime.update.proxy`, e.g. http://127.0.0.1:7890). As a last resort, use "Download manually".',
       updateChecking: 'Checking for updates…',
       updateLatest: 'You are on the latest version ({version})',
       updateAvailable: 'Version {version} is available',

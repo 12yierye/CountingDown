@@ -174,9 +174,15 @@ async function main() {
       continue
     }
 
-    const feed = updateLogic.parseUpdateFeed(response.body.toString('utf8'), url)
+    const body = response.body.toString('utf8')
+    const feed = updateLogic.parseUpdateFeed(body, url)
     if (!feed) {
-      console.log(bad(`内容不是可解析的 latest.yml / JSON（${response.body.length}B）`))
+      if (updateLogic.looksLikeHtml(body)) {
+        console.log(bad(`返回的是网页而不是清单（HTTP ${response.status}，${response.body.length}B）`))
+        console.log(`  ${DIM}→ 镜像没取到文件时常把首页当 200 吐回来：先确认 Release 里真的有 latest.yml${RESET}`)
+      } else {
+        console.log(bad(`内容不是可解析的 latest.yml / JSON（${response.body.length}B）`))
+      }
       verdict = Math.max(verdict, 3)
       console.log('')
       continue
