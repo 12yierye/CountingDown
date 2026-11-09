@@ -4,12 +4,13 @@
  * 控件本身住在 AppearanceFields 里，好让「保存预设 → 手动调整」的模态框复用同一套表单，
  * 而不是再抄一份（抄一份的下场是两边慢慢长歪）。
  *
- * 这个壳额外承担三件「页面级」的事：
- *   1. 「常用 / 高级」两种密度，状态存在 localStorage，不写进配置；
- *   2. 一键配色（顶部预设条）直接覆盖全局外观，撤销交给设置页的 Ctrl+Z；
- *   3. 分组重置 —— 只恢复这一组的默认值，比「恢复默认设置」那颗核弹温和得多。
+ * 这个壳额外承担两件「页面级」的事：
+ *   1. 一键配色（顶部预设条）直接覆盖全局外观，撤销交给设置页的 Ctrl+Z；
+ *   2. 分组重置 —— 只恢复这一组的默认值，比「恢复默认设置」那颗核弹温和得多。
+ *
+ * 注意：这里不再有「常用 / 高级」总开关。折叠由每个分区自己负责（见 SettingSection），
+ * 一个总开关 + 一套分区折叠会让「我明明打开了高级，为什么边框还是看不到」这种问题冒出来。
  */
-import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { AppConfig } from '@shared/types'
@@ -22,26 +23,6 @@ const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{ (event: 'patch', patch: unknown): void }>()
 
 const { t } = useI18n()
-
-const STORAGE_KEY = 'cd.appearance.advanced'
-
-function readAdvanced(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-const advanced = ref(readAdvanced())
-
-watch(advanced, (value) => {
-  try {
-    localStorage.setItem(STORAGE_KEY, value ? '1' : '0')
-  } catch {
-    /* 隐私模式下写不进去，不影响使用 */
-  }
-})
 
 function patchAppearance(next: AppConfig['appearance']): void {
   emit('patch', { appearance: next })
@@ -85,7 +66,6 @@ function resetGroup(key: AppearanceResetKey): void {
   } else {
     patchAppearance({
       ...current,
-      textAlpha: defaults.textAlpha,
       title: defaults.title,
       count: defaults.count,
       hint: defaults.hint,
@@ -99,9 +79,7 @@ function resetGroup(key: AppearanceResetKey): void {
 <template>
   <AppearanceFields
     :appearance="config.appearance"
-    :advanced="advanced"
     @update:appearance="patchAppearance"
     @reset="resetGroup"
-    @toggle-advanced="(value: boolean) => (advanced = value)"
   />
 </template>

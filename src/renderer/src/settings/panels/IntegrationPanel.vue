@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { AppConfig, TrayMenuConfig } from '@shared/types'
 import FieldRow from '@/components/FieldRow.vue'
+import SettingSection from '@/components/SettingSection.vue'
 
 const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{ (event: 'patch', patch: unknown): void }>()
@@ -140,121 +141,19 @@ async function importSettings(): Promise<void> {
 function setNotifyEnabled(value: boolean): void {
   emit('patch', { runtime: { notifications: value } })
 }
+
 </script>
 
 <template>
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <span class="panel-card__title">
-          {{ t('integration.tray') }}
-          <el-tooltip :content="t('integration.trayHint')" placement="top" :show-after="150">
-            <span class="panel-card__help" tabindex="0">
-              <el-icon :size="13"><QuestionFilled /></el-icon>
-            </span>
-          </el-tooltip>
-        </span>
-      </div>
-    </template>
-    <p class="tray-info">
-      <span class="tray-info__dot"></span>
-      <span>{{ t('integration.trayHint') }}</span>
-    </p>
-
-    <el-divider content-position="left">
-      <span class="divider-title">
-        {{ t('integration.trayMenu') }}
-        <el-tooltip :content="t('integration.trayMenuHint')" placement="top" :show-after="150">
-          <span class="panel-card__help" tabindex="0">
-            <el-icon :size="13"><QuestionFilled /></el-icon>
-          </span>
-        </el-tooltip>
-      </span>
-    </el-divider>
-
-    <div class="tray-menu-grid">
-      <div v-for="item in trayItems" :key="item.key" class="tray-menu-item">
-        <el-checkbox
-          :model-value="trayChecked(item.key)"
-          @update:model-value="(v: string | number | boolean) => setTrayItem(item.key, Boolean(v))"
-        >
-          {{ item.label }}
-        </el-checkbox>
-      </div>
-    </div>
-  </el-card>
-
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <span class="panel-card__title">
-          {{ t('integration.hotkey') }}
-          <el-tooltip :content="t('integration.hotkeyHint')" placement="top" :show-after="150">
-            <span class="panel-card__help" tabindex="0">
-              <el-icon :size="13"><QuestionFilled /></el-icon>
-            </span>
-          </el-tooltip>
-        </span>
-      </div>
-    </template>
-
-    <FieldRow :label="t('integration.hotkey')" :hint="t('integration.hotkeyHint')">
-      <div class="hotkey">        <div
-          class="hotkey__display"
-          :class="{ 'is-recording': recording }"
-          tabindex="0"
-          @click="recording = !recording"
-        >
-          <template v-if="recording">{{ t('integration.hotkeyRecording') }}</template>
-          <template v-else-if="config.runtime.toggleHotkey">
-            <span class="hotkey__keys">
-              <kbd v-for="part in config.runtime.toggleHotkey.split('+')" :key="part">{{ part }}</kbd>
-            </span>
-          </template>
-          <template v-else>{{ t('integration.hotkeyEmpty') }}</template>
-        </div>
-        <el-button size="small" :type="recording ? 'danger' : 'primary'" plain @click="recording = !recording">
-          {{ recording ? t('common.cancel') : t('integration.hotkeyRecord') }}
-        </el-button>
-        <el-button size="small" plain @click="clearHotkey">{{ t('integration.hotkeyClear') }}</el-button>
-      </div>
-    </FieldRow>
-  </el-card>
-
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <span class="panel-card__title">
-          {{ t('integration.backup') }}
-          <el-tooltip :content="t('integration.backupHint')" placement="top" :show-after="150">
-            <span class="panel-card__help" tabindex="0">
-              <el-icon :size="13"><QuestionFilled /></el-icon>
-            </span>
-          </el-tooltip>
-        </span>
-      </div>
-    </template>
-
-    <FieldRow stacked>
-      <div class="inline-group">
-        <el-button size="small" plain @click="exportSettings">
-          {{ t('integration.exportConfig') }}
-        </el-button>
-        <el-button size="small" plain @click="importSettings">
-          {{ t('integration.importConfig') }}
-        </el-button>
-      </div>
-    </FieldRow>
-  </el-card>
-
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <span>{{ t('nav.integration') }}</span>
-      </div>
-    </template>
-
-    <!-- 通知是「权限」层面的总开关；具体哪一项在当天提醒，是每个倒数日自己的事 -->
+  <!--
+    通知与启动：这一页里最常被改的其实是这两个开关，所以放在第一块并默认展开。
+    托盘菜单、快捷键、备份都是「配一次就不动」的，默认收起。
+  -->
+  <SettingSection
+    :title="t('integration.notifyGroup')"
+    :help="t('integration.notifyPermissionHint')"
+    persist-key="integration.notify"
+  >
     <FieldRow :label="t('integration.notifyPermission')" :hint="t('integration.notifyPermissionHint')">
       <el-switch
         :model-value="config.runtime.notifications !== false"
@@ -274,17 +173,78 @@ function setNotifyEnabled(value: boolean): void {
         {{ t('integration.configFile') }}
       </el-button>
     </FieldRow>
-  </el-card>
+  </SettingSection>
+
+  <SettingSection
+    :title="t('integration.tray')"
+    :help="`${t('integration.trayHint')}；${t('integration.trayMenuHint')}`"
+    :default-open="false"
+    persist-key="integration.tray"
+  >
+    <div class="tray-menu-grid">
+      <div v-for="item in trayItems" :key="item.key" class="tray-menu-item">
+        <el-checkbox
+          :model-value="trayChecked(item.key)"
+          @update:model-value="(v: string | number | boolean) => setTrayItem(item.key, Boolean(v))"
+        >
+          {{ item.label }}
+        </el-checkbox>
+      </div>
+    </div>
+  </SettingSection>
+
+  <SettingSection
+    :title="t('integration.hotkey')"
+    :help="t('integration.hotkeyHint')"
+    :default-open="false"
+    persist-key="integration.hotkey"
+  >
+    <FieldRow :label="t('integration.hotkey')" :hint="t('integration.hotkeyHint')">
+      <div class="hotkey">
+        <div
+          class="hotkey__display"
+          :class="{ 'is-recording': recording }"
+          tabindex="0"
+          @click="recording = !recording"
+        >
+          <template v-if="recording">{{ t('integration.hotkeyRecording') }}</template>
+          <template v-else-if="config.runtime.toggleHotkey">
+            <span class="hotkey__keys">
+              <kbd v-for="part in config.runtime.toggleHotkey.split('+')" :key="part">{{ part }}</kbd>
+            </span>
+          </template>
+          <template v-else>{{ t('integration.hotkeyEmpty') }}</template>
+        </div>
+        <el-button size="small" :type="recording ? 'danger' : 'primary'" plain @click="recording = !recording">
+          {{ recording ? t('common.cancel') : t('integration.hotkeyRecord') }}
+        </el-button>
+        <el-button size="small" plain @click="clearHotkey">{{ t('integration.hotkeyClear') }}</el-button>
+      </div>
+    </FieldRow>
+  </SettingSection>
+
+  <SettingSection
+    :title="t('integration.backup')"
+    :help="t('integration.backupHint')"
+    :default-open="false"
+    persist-key="integration.backup"
+  >
+    <FieldRow stacked>
+      <div class="inline-group">
+        <el-button size="small" plain @click="exportSettings">
+          {{ t('integration.exportConfig') }}
+        </el-button>
+        <el-button size="small" plain @click="importSettings">
+          {{ t('integration.importConfig') }}
+        </el-button>
+      </div>
+    </FieldRow>
+  </SettingSection>
 </template>
 
 <style scoped>
-.divider-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tray-menu-grid {  display: grid;
+.tray-menu-grid {
+  display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 2px 20px;
 }
@@ -293,25 +253,6 @@ function setNotifyEnabled(value: boolean): void {
   min-height: 32px;
   display: flex;
   align-items: center;
-}
-
-.tray-info {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin: 0;
-  font-size: 12.5px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.6;
-}
-
-.tray-info__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--el-color-success);
-  margin-top: 5px;
-  flex: none;
 }
 
 .inline-group {

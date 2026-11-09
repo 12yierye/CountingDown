@@ -266,6 +266,8 @@ export function createWidgetWindow(): BrowserWindow {
   widgetWindow.on('close', (event) => {
     if ((app as unknown as { isQuitting?: boolean }).isQuitting) return
     event.preventDefault()
+    // 预览期间（编辑倒数日 / 调外观）不允许关掉：这张卡就是预览本身
+    if (getPreviewItem()) return
     widgetWindow?.hide()
     setWidgetInteractive(false)
     updateConfig({ runtime: { widgetVisible: false } })
@@ -596,6 +598,35 @@ export function showWidget(): boolean {
 }
 
 /**
+ * 预览期间组件窗口被强制显示。
+ *
+ * `previewForced` 记住「原本是藏着的」：退出预览时按用户原本的意愿收回去；
+ * 原本就开着则什么都不做，绝不会因为进过一次编辑页就把 `widgetVisible` 改掉。
+ */
+let previewForced = false
+
+/** 进入/退出预览时调用：进入先确保卡片可见，退出再还原成原来的显示状态 */
+export function applyPreviewVisibility(active: boolean): void {
+  if (active) {
+    const win = getWidgetWindow()
+    const visible = win ? win.isVisible() : getConfig().runtime.widgetVisible
+    if (visible) return
+    if (!previewForced) previewForced = true
+    showWidget()
+    return
+  }
+  if (!previewForced) return
+  previewForced = false
+  // 用户原本就是开着的（或中途在设置里打开了），保持原样
+  if (getConfig().runtime.widgetVisible) return
+  const win = getWidgetWindow()
+  if (!win) return
+  cancelWidgetDrag()
+  win.hide()
+  setWidgetInteractive(false)
+}
+
+/**
  * 设置组件窗口的显示状态。
  *
  * `getWidgetWindow()` 在窗口不存在或已销毁时返回 null —— 从前这里直接 `return visible`，
@@ -604,6 +635,8 @@ export function showWidget(): boolean {
  * 现在窗口缺失时先重建，再走统一的显示路径。
  */
 export function setWidgetVisible(visible: boolean): boolean {
+  // 正在预览（编辑倒数日 / 调外观）时不允许关掉：那张卡片就是预览本身
+  if (!visible && getPreviewItem()) return true
   updateConfig({ runtime: { widgetVisible: visible } })
   if (visible) {
     showWidget()
@@ -669,6 +702,7 @@ export function createSettingsWindow(): BrowserWindow {
   const dropPreview = (): void => {
     if (!getPreviewItem()) return
     clearPreviewItem()
+    applyPreviewVisibility(false)
     pushWidgetConfig()
   }
   settingsWindow.on('hide', dropPreview)
@@ -743,7 +777,8 @@ export function setupWindowSync(): void {
       win.setAlwaysOnTop(config.behavior.alwaysOnTop, 'screen-saver')
       // 只处理「配置说显示但窗口还没显示」的情况，走统一显示路径（含强制重绘）
       if (config.runtime.widgetVisible && !win.isVisible()) showWidgetWindow(win)
-      if (!config.runtime.widgetVisible && win.isVisible()) win.hide()
+      // 预览期间窗口是「强制显示」的，不能被这条配置观察器顺手关掉
+      if (!config.runtime.widgetVisible && win.isVisible() && !getPreviewItem()) win.hide()
       // 拖动过程中主进程正在按光标移动窗口，这时不能插手
       if (!dragState && positionChanged(config.runtime.window, lastWindow)) applyPosition()
       // 「鼠标点击穿透」改了要立刻重新应用命中策略，否则要等下次显示才生效

@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import type { AppConfig, Corner, HostInfo, ScreenInfo } from '@shared/types'
 import FieldRow from '@/components/FieldRow.vue'
 import SliderField from '@/components/SliderField.vue'
+import SettingSection from '@/components/SettingSection.vue'
 
 const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{
@@ -22,7 +23,8 @@ const { t } = useI18n()
 
 const corners: Corner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right']
 
-function cornerLabel(corner: Corner): string {
+/** 接受 string 而不是 Corner：cornerPreset 还可能是 'custom'，落进 default 分支 */
+function cornerLabel(corner: string): string {
   switch (corner) {
     case 'top-left':
       return t('layout.topLeft')
@@ -131,24 +133,19 @@ function setClickThrough(value: boolean): void {
 function setAllowDrag(value: boolean): void {
   patchWindow({ allowDrag: value })
 }
+
 </script>
 
 <template>
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <span class="panel-card__title">
-          {{ t('layout.title') }}
-          <el-tooltip :content="t('layout.cornerHint')" placement="top" :show-after="150">
-            <span class="panel-card__help" tabindex="0">
-              <el-icon :size="13"><QuestionFilled /></el-icon>
-            </span>
-          </el-tooltip>
-        </span>
-        <el-button size="small" plain @click="resetOffset">
-          {{ t('layout.resetOffset') }}
-        </el-button>
-      </div>
+  <SettingSection
+    :title="t('layout.title')"
+    :help="t('layout.cornerHint')"
+    persist-key="layout.position"
+  >
+    <template #actions>
+      <el-button size="small" text @click="resetOffset">
+        {{ t('layout.resetOffset') }}
+      </el-button>
     </template>
 
     <FieldRow :label="t('layout.anchor')" :hint="t('layout.anchorHint')">
@@ -213,22 +210,14 @@ function setAllowDrag(value: boolean): void {
         />
       </FieldRow>
     </div>
-  </el-card>
+  </SettingSection>
 
-  <el-card shadow="never" class="panel-card">
-    <template #header>
-      <div class="panel-card__header">
-        <span class="panel-card__title">
-          {{ t('layout.windowTitle') }}
-          <el-tooltip :content="t('layout.windowHint')" placement="top" :show-after="150">
-            <span class="panel-card__help" tabindex="0">
-              <el-icon :size="13"><QuestionFilled /></el-icon>
-            </span>
-          </el-tooltip>
-        </span>
-      </div>
-    </template>
-
+  <SettingSection
+    :title="t('layout.windowTitle')"
+    :help="t('layout.windowHint')"
+    :default-open="false"
+    persist-key="layout.window"
+  >
     <FieldRow :label="t('behavior.alwaysOnTop')" :hint="t('behavior.alwaysOnTopHint')">
       <el-switch
         :model-value="config.behavior.alwaysOnTop"
@@ -275,7 +264,7 @@ function setAllowDrag(value: boolean): void {
       show-icon
       :title="t('layout.transparentUnsupported')"
     />
-  </el-card>
+  </SettingSection>
 </template>
 
 <style scoped>

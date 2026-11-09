@@ -92,8 +92,6 @@ export interface TextOverride {
 /** 外观覆盖：字段缺省表示跟随全局 */
 export interface AppearanceOverride {
   fontFamily?: string
-  /** 文字透明度 0 - 1；只影响文字，与背景透明度无关 */
-  textAlpha?: number
   background?: Partial<BackgroundConfig>
   title?: TextStyle
   count?: TextStyle
@@ -148,8 +146,6 @@ export interface BackgroundConfig {
 
 export interface AppearanceConfig {
   fontFamily: string
-  /** 文字透明度总开关 0 - 1；与每个文字样式自身的透明度相乘 */
-  textAlpha: number
   background: BackgroundConfig
   title: TextStyle
   count: TextStyle
@@ -163,8 +159,6 @@ export interface BehaviorConfig {
   showDaysInPrecise: boolean
   /** 四个分段的单位字（天/时/分/秒）；每项倒数日都能单独覆盖 */
   units: UnitLabelConfig
-  /** 过期后显示「过去 N 天」而不是纯文案 */
-  showPastDays: boolean
   /** 组件是否始终置顶 */
   alwaysOnTop: boolean
 }
@@ -229,7 +223,10 @@ export interface CustomPreset {
 
 /** 在线更新设置 */
 export interface UpdateConfig {
-  /** 更新源直链（latest.yml 或 JSON）；留空表示关闭在线更新 */
+  /**
+   * 更新源直链（latest.yml 或 JSON）。
+   * 界面只提供预设，留空视为官方源 —— 不再有「关闭在线更新」这个状态。
+   */
   feedUrl: string
   /**
    * 更新专用的代理，例如 `http://127.0.0.1:7890`（Clash 默认端口）。
@@ -253,7 +250,6 @@ export type UpdatePhase =
   | 'downloading'
   | 'ready'
   | 'error'
-  | 'disabled'
 
 export interface UpdateState {
   phase: UpdatePhase
@@ -295,9 +291,12 @@ export interface AppConfig {
   countdowns: CountdownItem[]
   /** 当前显示在桌面上的倒数日 id */
   activeId: string
-  /** 全局日期语义：单项字段留空时使用 */
-  target: TargetConfig
-  /** 全局文案：单项留空时使用 */
+  /**
+   * 全局文案：单项留空时使用
+   *
+   * 注意这里**没有**全局默认日期：日期是每一项自己的事，
+   * 旧配置里的 `target` 字段会在 normalizeConfig 里被搬进各单项后丢弃。
+   */
   text: TextConfig
   /** 全局外观 */
   appearance: AppearanceConfig
@@ -311,9 +310,12 @@ export interface ScreenInfo {
   /** Electron display id */
   id: number
   label: string
+  /** DIP 尺寸（已按系统缩放折算），不是用户口中的「分辨率」 */
   bounds: { x: number; y: number; width: number; height: number }
   workArea: { x: number; y: number; width: number; height: number }
   scaleFactor: number
+  /** 实际刷新率（Hz）；取不到时为 0 */
+  refreshRate: number
   primary: boolean
 }
 

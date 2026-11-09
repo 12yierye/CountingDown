@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import type { TextStyle } from '@shared/types'
-import { normalizeWeight, weightLabelKey } from '@/utils/style'
+import { normalizeWeight } from '@shared/defaults'
+import { weightLabelKey } from '@/utils/style'
+import ColorField from '@/components/ColorField.vue'
 import SliderField from '@/components/SliderField.vue'
 
 const props = withDefaults(
@@ -29,8 +31,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-/** 字重只保留系统字体真正会呈现差异的几档 */
-const weights = [400, 500, 600, 700, 800]
+/** 字重只留两档：多数系统字体在 500/600 之间的差异肉眼看不出来，放在这里只是干扰 */
+const weights = [400, 700]
 
 function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
   emit('update:modelValue', { ...props.modelValue, [key]: value })
@@ -71,10 +73,9 @@ function update<K extends keyof TextStyle>(key: K, value: TextStyle[K]): void {
     <div class="row">
       <span class="row__label">{{ t('appearance.color') }}</span>
       <div class="row__control">
-        <el-color-picker
+        <ColorField
           :model-value="modelValue.color"
-          size="small"
-          @update:model-value="(v: string | null) => update('color', v || '#ffffff')"
+          @update:model-value="(v: string) => update('color', v)"
         />
       </div>
     </div>

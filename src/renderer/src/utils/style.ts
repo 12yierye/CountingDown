@@ -1,5 +1,4 @@
 import type { AppConfig, AppearanceConfig, TextStyle } from '@shared/types'
-import { clampInt } from '@shared/defaults'
 
 export function hexToRgba(hex: string, alpha: number): string {
   const value = (hex || '#000000').trim()
@@ -46,8 +45,8 @@ export function toHexColor(value: string, fallback = '#000000'): string {
  * 文字样式：透明度单独抽成 alpha 而不是用 CSS `opacity`，
  * 这样它只影响这一行文字，和卡片背景的透明度完全无关。
  */
-export function textStyle(style: TextStyle, textAlpha = 1): Record<string, string> {
-  const alpha = clampAlpha((style?.opacity ?? 1) * (textAlpha ?? 1))
+export function textStyle(style: TextStyle): Record<string, string> {
+  const alpha = clampAlpha(style?.opacity ?? 1)
   return {
     fontSize: `${style.fontSize}px`,
     color: hexToRgba(style.color, alpha),
@@ -95,15 +94,7 @@ export function cardStyleFor(look: AppearanceConfig): Record<string, string> {
 }
 
 export function weightLabelKey(weight: number): string {
-  if (weight <= 400) return 'appearance.weightRegular'
-  if (weight <= 500) return 'appearance.weightMedium'
-  if (weight <= 600) return 'appearance.weightSemiBold'
-  if (weight <= 700) return 'appearance.weightBold'
-  return 'appearance.weightBlack'
-}
-
-export function normalizeWeight(value: number): number {
-  return clampInt(value, 100, 900)
+  return weight >= 700 ? 'appearance.weightBold' : 'appearance.weightRegular'
 }
 
 /**

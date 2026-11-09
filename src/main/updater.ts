@@ -16,6 +16,7 @@ import { basename, dirname, join } from 'node:path'
 import { Transform, pipeline } from 'node:stream'
 import { Notification, app, net, session, shell, type Session } from 'electron'
 import {
+  DEFAULT_UPDATE_FEED,
   compareVersions,
   looksLikeHtml,
   parseFeedUrls,
@@ -172,8 +173,14 @@ async function requestFeed(url: string, attempts = 2): Promise<string> {
   throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
+/**
+ * 当前生效的更新源。
+ *
+ * 「不使用在线更新」这个选项已经移除，所以空值不再表示关闭，
+ * 而是回落到官方源 —— 配置里读到的空串只可能来自旧版本。
+ */
 function feedUrlOf(): string {
-  return (getConfig().runtime.update?.feedUrl ?? '').trim()
+  return (getConfig().runtime.update?.feedUrl ?? '').trim() || DEFAULT_UPDATE_FEED
 }
 
 /**
@@ -185,20 +192,13 @@ function feedUrlOf(): string {
  *
  * `feedUrl` 可以写多个地址（空格 / 逗号 / 换行分隔），按顺序试：
  * GitHub 直链在国内时通时不通，留一个镜像做后备比让用户干瞪眼强。
+ *
+ * 不存在「没有配置更新源」这种状态：界面去掉了「不使用在线更新」，
+ * 空值在 feedUrlOf 里就回落到官方源，这里拿到的候选列表至少有一条。
  */
 export async function checkForUpdate(manual = false): Promise<UpdateState> {
   const candidates = parseFeedUrls(feedUrlOf())
-  if (!candidates.length) {
-    pending = null
-    return setState({
-      phase: 'disabled',
-      feedUrl: '',
-      latest: undefined,
-      error: undefined,
-      progress: undefined,
-      current: app.getVersion()
-    })
-  }
+  if (!candidates.length) candidates.push(DEFAULT_UPDATE_FEED)
   // 正在下载时别插一脚：打断它既丢进度也丢已经下到的字节
   if (state.phase === 'downloading') return getUpdateState()
   if (busy) return getUpdateState()
@@ -487,7 +487,7 @@ export function scheduleAutoCheck(delay = 12000): void {
   const timer = setTimeout(() => {
     if (isDev()) return
     const update = getConfig().runtime.update
-    if (!update?.autoCheck || !update.feedUrl?.trim()) return
+    if (!update?.autoCheck) return
     void checkForUpdate(false)
   }, delay)
   // 别让这个定时器拖住进程退出

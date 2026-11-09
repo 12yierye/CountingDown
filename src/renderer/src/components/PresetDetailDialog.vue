@@ -3,11 +3,11 @@
  * 预设参数详情：让用户可以在**不套用**的前提下看清一个预设（内置或自定义）
  * 到底把哪些参数设成了什么值，包括各段文案的实际内容。
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AppConfig, AppearanceConfig } from '@shared/types'
 import CountdownPreview from '@/components/CountdownPreview.vue'
-import { textStyle } from '@/utils/style'
+import { hexToRgba, textStyle } from '@/utils/style'
 
 const props = defineProps<{
   modelValue: boolean
@@ -40,6 +40,48 @@ const styleRows = computed<StyleRow[]>(() => [
 ])
 
 const bg = computed(() => props.appearance?.background ?? null)
+
+/**
+ * 样张底色 = 这个预设自己的背景色（带上它的透明度）。
+ *
+ * 原来样张直接摆在对话框的白底上，靠一层 text-shadow 勉强描边，
+ * 遇到「深色卡片 + 白字」的预设仍然几乎看不见。铺上真实底色之后，
+ * 对比度就是预设实际的样子，也不再需要那层阴影。
+ */
+const sampleBg = computed(() => {
+  const color = props.appearance?.background?.color
+  if (!color) return {}
+  const alpha = props.appearance?.background?.alpha
+  const rgba = hexToRgba(color, typeof alpha === 'number' ? alpha : 1)
+  // 用一层渐变叠在浅色底上：背景本身半透明时仍然看得见底，不会变成一片空白
+  return { backgroundImage: `linear-gradient(${rgba}, ${rgba})` }
+})
+
+/**
+ * 字体族只显示第一个字体名，后面挂一个「+N」。
+ *
+ * 整串 CSS 栈（`"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", …`）
+ * 放进参数表会换行五六行，把整张网格撑歪；省略号 + 悬浮又要鼠标才能看全。
+ * 这里默认只给一个人能读的名字，点一下**就地**展开完整栈，再点收起。
+ */
+const fontStack = computed(() =>
+  String(props.appearance?.fontFamily ?? '')
+    .split(',')
+    .map((part) => part.trim().replace(/^["']|["']$/g, ''))
+    .filter(Boolean)
+)
+
+const fontHead = computed(() => fontStack.value[0] ?? '')
+const fontRest = computed(() => Math.max(0, fontStack.value.length - 1))
+const fontExpanded = ref(false)
+
+/** 换一个预设就收起展开的字体栈，别把上一个的状态带过来 */
+watch(
+  () => props.name,
+  () => {
+    fontExpanded.value = false
+  }
+)
 
 const previewConfig = computed<AppConfig>(() =>
   props.appearance ? { ...props.config, appearance: props.appearance } : props.config
@@ -86,7 +128,20 @@ function percent(value: number | undefined): string {
       <div class="detail__grid">
         <div class="detail__row">
           <span class="detail__label">{{ t('preset.fieldFont') }}</span>
-          <span class="detail__value mono">{{ show(appearance.fontFamily) }}</span>
+          <button
+            v-if="fontStack.length"
+            type="button"
+            class="detail__font"
+            :aria-expanded="fontExpanded"
+            @click="fontExpanded = !fontExpanded"
+          >
+            <span class="detail__font-head">{{ fontHead }}</span>
+            <span v-if="fontRest" class="detail__font-badge">+{{ fontRest }}</span>
+          </button>
+          <span v-else class="detail__value">{{ show('') }}</span>
+        </div>
+        <div v-if="fontExpanded" class="detail__font-full mono">
+          {{ appearance.fontFamily }}
         </div>
         <div class="detail__row">
           <span class="detail__label">{{ t('preset.fieldBgColor') }}</span>
@@ -133,32 +188,59 @@ function percent(value: number | undefined): string {
             {{ show(bg?.shadowColor) }}
           </span>
         </div>
-        <div class="detail__row">
-          <span class="detail__label">{{ t('preset.fieldTextAlpha') }}</span>
-          <span class="detail__value">{{ percent(appearance.textAlpha) }}</span>
-        </div>
       </div>
 
       <div class="detail__styles">
         <div v-for="row in styleRows" :key="row.key" class="detail__style">
-          <div class="detail__style-head">
-            <span class="detail__style-name">{{ t(row.label) }}</span>
-            <span class="detail__style-sample" :style="textStyle(appearance[row.key], appearance.textAlpha)">
-              {{ row.sample }}
-            </span>
-          </div>
+          <div class="detail__style-name">{{ t(row.label) }}</div>
+
+          <!--
+            一项一行，不并排：五行参数长短不一，挤成一行时会按字数自己折行，
+            四张卡的折行位置各不相同，整块看起来就是参差不齐的。
+          -->
           <div class="detail__style-values">
-            <span>{{ t('preset.fieldFontSize') }} {{ appearance[row.key].fontSize }} px</span>
-            <span class="mono">
-              {{ t('preset.fieldColor') }} {{ appearance[row.key].color }}
-              <span
-                class="detail__swatch"
-                :style="{ background: appearance[row.key].color }"
-              ></span>
-            </span>
-            <span>{{ t('preset.fieldWeight') }} {{ appearance[row.key].weight }}</span>
-            <span>{{ t('preset.fieldLetterSpacing') }} {{ appearance[row.key].letterSpacing }} px</span>
-            <span>{{ t('preset.fieldOpacity') }} {{ percent(appearance[row.key].opacity) }}</span>
+            <div class="detail__kv">
+              <span class="detail__k">{{ t('preset.fieldFontSize') }}</span>
+              <span class="detail__v">{{ appearance[row.key].fontSize }} px</span>
+            </div>
+            <div class="detail__kv">
+              <span class="detail__k">{{ t('preset.fieldColor') }}</span>
+              <span class="detail__v mono">
+                <span
+                  class="detail__swatch"
+                  :style="{ background: appearance[row.key].color }"
+                ></span>
+                {{ appearance[row.key].color }}
+              </span>
+            </div>
+            <div class="detail__kv">
+              <span class="detail__k">{{ t('preset.fieldWeight') }}</span>
+              <span class="detail__v">{{ appearance[row.key].weight }}</span>
+            </div>
+            <div class="detail__kv">
+              <span class="detail__k">{{ t('preset.fieldLetterSpacing') }}</span>
+              <span class="detail__v">{{ appearance[row.key].letterSpacing }} px</span>
+            </div>
+            <div class="detail__kv">
+              <span class="detail__k">{{ t('preset.fieldOpacity') }}</span>
+              <span class="detail__v">{{ percent(appearance[row.key].opacity) }}</span>
+            </div>
+          </div>
+
+          <!--
+            样张放在参数下面而不是和名字并排：它的大小、颜色都属于「结果」，
+            并排会让每张卡的标题行被样张高度撑得不一样高。
+            底色用这个预设自己的背景色，深底浅字才看得出对比。
+          -->
+          <div
+            class="detail__style-sample"
+            :style="[
+              textStyle(appearance[row.key]),
+              { fontFamily: appearance.fontFamily },
+              sampleBg
+            ]"
+          >
+            {{ row.sample }}
           </div>
         </div>
       </div>
@@ -247,6 +329,59 @@ function percent(value: number | undefined): string {
   flex: 1;
   min-width: 0;
   font-size: 12.5px;
+  /* break-all 会把 "Microsoft" 从中间劈开，中文段落又需要能断行：用 anywhere 而不是 break-all */
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 字体族：首字体 + 「+N」，点一下就地展开完整栈（不弹窗、不用省略号） */
+.detail__font {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--el-color-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.detail__font:hover .detail__font-head {
+  text-decoration: underline;
+}
+
+.detail__font-head {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail__font-badge {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--el-fill-color);
+  font-size: 11px;
+  line-height: 17px;
+  color: var(--el-text-color-secondary);
+}
+
+/* 展开后的完整字体栈：跨两列铺开，等宽字体，允许换行 */
+.detail__font-full {
+  grid-column: 1 / -1;
+  margin: 0 0 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--el-fill-color-lighter);
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--el-text-color-regular);
   word-break: break-all;
 }
 
@@ -268,17 +403,11 @@ function percent(value: number | undefined): string {
 }
 
 .detail__style {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   padding: 8px 10px;
-}
-
-.detail__style-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 4px;
 }
 
 .detail__style-name {
@@ -286,22 +415,45 @@ function percent(value: number | undefined): string {
   font-weight: 600;
 }
 
+/* 一项一行：左边参数名、右边取值，两端对齐，不再按字数自己折行 */
+.detail__style-values {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.detail__kv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 18px;
+}
+
+.detail__k {
+  flex: none;
+  color: var(--el-text-color-secondary);
+}
+
+.detail__v {
+  min-width: 0;
+  color: var(--el-text-color-regular);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* 样张：参数下面是「结果」，底色用预设自己的背景色 */
 .detail__style-sample {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background-color: var(--el-fill-color-light);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  max-width: 55%;
-  text-shadow:
-    0 1px 0 var(--el-bg-color),
-    0 -1px 0 var(--el-bg-color);
-}
-
-.detail__style-values {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
 }
 
 .mono {

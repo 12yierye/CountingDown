@@ -26,17 +26,6 @@ type TextFieldKey = 'hint' | 'futureText' | 'todayText' | 'pastText'
 
 export const DAY_MS = 86_400_000
 
-/** 文字透明度的合法区间 */
-export const TEXT_ALPHA_MIN = 0
-export const TEXT_ALPHA_MAX = 1
-
-/** 把任意输入收敛到合法的文字透明度 */
-export function clampTextAlpha(value: unknown, fallback = 1): number {
-  const n = Number(value)
-  if (!Number.isFinite(n)) return fallback
-  return Math.min(TEXT_ALPHA_MAX, Math.max(TEXT_ALPHA_MIN, Number(n.toFixed(2))))
-}
-
 /** 单个文字样式的透明度合法区间 */
 export const STYLE_OPACITY_MIN = 0.05
 export const STYLE_OPACITY_MAX = 1
@@ -51,9 +40,26 @@ export function clampStyleOpacity(value: unknown, fallback = 1): number {
   )
 }
 
-/** 补齐文字样式里可能缺失的透明度（旧配置 / 旧预设没有这个字段） */
+/**
+ * 补齐文字样式里可能缺失的透明度（旧配置 / 旧预设没有这个字段），
+ * 并把字重收敛到 400 / 700 两档。
+ *
+ * 字重只剩「常规」和「粗体」两个选项之后，旧配置里的 500 / 600 / 800
+ * 必须在这里归一 —— 否则单选组一个都对不上，界面看起来像没选中任何一项。
+ */
 export function normalizeTextStyle(style: TextStyle): TextStyle {
-  return { ...style, opacity: clampStyleOpacity(style?.opacity, 1) }
+  return {
+    ...style,
+    opacity: clampStyleOpacity(style?.opacity, 1),
+    weight: normalizeWeight(style?.weight)
+  }
+}
+
+/** 字重只保留常规 / 粗体两档，其余就近归并 */
+export function normalizeWeight(value: unknown): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return 400
+  return n >= 600 ? 700 : 400
 }
 
 export function createItemId(): string {
@@ -79,6 +85,15 @@ function emptyTarget(): TargetConfig {
   return { mode: 'annual', date: '', month: 1, day: 1 }
 }
 
+/** 新建项与示例项的初始日期：今天，每年重复 */
+function todayTarget(): TargetConfig {
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const day = now.getDate()
+  const date = `${now.getFullYear()}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  return { mode: 'annual', date, month, day }
+}
+
 export function createCountdownItem(partial: Partial<CountdownItem> = {}): CountdownItem {
   return {
     id: partial.id ?? createItemId(),
@@ -86,7 +101,7 @@ export function createCountdownItem(partial: Partial<CountdownItem> = {}): Count
     enabled: partial.enabled ?? true,
     displayMode: partial.displayMode ?? '',
     notifyOnToday: partial.notifyOnToday ?? false,
-    target: partial.target ?? emptyTarget(),
+    target: partial.target ?? todayTarget(),
     text: { ...emptyTextOverride(), ...(partial.text ?? {}) },
     units: { ...emptyUnitOverride(), ...(partial.units ?? {}) },
     appearance: partial.appearance ?? {}
@@ -182,7 +197,7 @@ export function resolveText(
   return out
 }
 
-/** 日期字段是否留空（留空即跟随全局） */
+/** 日期字段是否留空（正常流程不会出现，只为兜住旧配置与脏数据） */
 export function isTargetBlank(target: TargetConfig | undefined | null): boolean {
   if (!target) return true
   if (target.mode === 'once') return !String(target.date ?? '').trim()
@@ -191,14 +206,14 @@ export function isTargetBlank(target: TargetConfig | undefined | null): boolean 
   return !Number.isFinite(month) || !Number.isFinite(day) || month <= 0 || day <= 0
 }
 
-/** 单项日期 -> 全局日期 -> 内置默认 */
-export function resolveTarget(
-  item: TargetConfig | undefined | null,
-  global: TargetConfig
-): TargetConfig {
-  if (!isTargetBlank(item)) return item as TargetConfig
-  if (!isTargetBlank(global)) return global
-  return emptyTarget()
+/**
+ * 单项日期。
+ *
+ * 从前这里要接一个「全局默认日期」做兜底，现在没有全局日期了 ——
+ * 日期是每一项自己的字段，留空只可能是旧数据或脏数据，兜底成 1/1。
+ */
+export function resolveTarget(target: TargetConfig | undefined | null): TargetConfig {
+  return isTargetBlank(target) ? emptyTarget() : (target as TargetConfig)
 }
 
 export function createDefaultConfig(): AppConfig {
@@ -211,12 +226,6 @@ export function createDefaultConfig(): AppConfig {
   return {
     countdowns: [first],
     activeId: first.id,
-    target: {
-      mode: 'annual',
-      date: `${nextYear}-01-01T00:00`,
-      month: 1,
-      day: 1
-    },
     text: {
       hint: '',
       futureText: '还有 {days} 天',
@@ -228,7 +237,6 @@ export function createDefaultConfig(): AppConfig {
     appearance: {
       fontFamily:
         '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif',
-      textAlpha: 1,
       background: {
         color: '#1e2230',
         alpha: 0.78,
@@ -240,16 +248,15 @@ export function createDefaultConfig(): AppConfig {
         borderColor: '#ffffff2e',
         width: 0
       },
-      title: { fontSize: 16, color: '#b9c4dc', weight: 500, letterSpacing: 0, opacity: 0.9 },
+      title: { fontSize: 16, color: '#b9c4dc', weight: 400, letterSpacing: 0, opacity: 0.9 },
       count: { fontSize: 64, color: '#ffffff', weight: 700, letterSpacing: -1, opacity: 1 },
       hint: { fontSize: 14, color: '#a7b3cc', weight: 400, letterSpacing: 0, opacity: 0.9 },
-      status: { fontSize: 15, color: '#7ec8ff', weight: 500, letterSpacing: 0, opacity: 1 }
+      status: { fontSize: 15, color: '#7ec8ff', weight: 400, letterSpacing: 0, opacity: 1 }
     },
     behavior: {
       displayMode: 'days',
       showDaysInPrecise: true,
       units: { ...BUILTIN_UNITS },
-      showPastDays: false,
       alwaysOnTop: true
     },
     runtime: {
@@ -328,7 +335,27 @@ export function mergeConfig(base: AppConfig, patch: unknown): AppConfig {
   return normalizeConfig(merged)
 }
 
-function normalizeItem(item: CountdownItem): CountdownItem {
+/**
+ * 单项日期的归一化。
+ *
+ * 1. 日期空着、旧配置里又有全局默认日期 —— 把全局值复制过来（只发生一次，见 normalizeConfig）；
+ * 2. 「单次」却没有具体日期属于脏数据：用它的月日补上今年那天，
+ *    否则保存出去只能兜底成 1/1，用户会看到日期凭空跳掉。
+ */
+function normalizeTarget(input: TargetConfig | undefined, legacyTarget?: TargetConfig): TargetConfig {
+  if (isTargetBlank(input) && legacyTarget) return { ...legacyTarget }
+  const target = input ?? emptyTarget()
+  if (target.mode === 'once' && !String(target.date ?? '').trim()) {
+    const year = new Date().getFullYear()
+    const month = Math.min(Math.max(Number(target.month) || 1, 1), 12)
+    const day = Math.min(Math.max(Number(target.day) || 1, 1), 31)
+    const pad = (value: number): string => String(value).padStart(2, '0')
+    return { ...target, date: `${year}-${pad(month)}-${pad(day)}` }
+  }
+  return target
+}
+
+function normalizeItem(item: CountdownItem, legacyTarget?: TargetConfig): CountdownItem {
   const legacyText = (item.text ?? {}) as { unit?: unknown }
   const raw = item as {
     units?: Partial<UnitLabelConfig> & { enabled?: unknown }
@@ -354,7 +381,7 @@ function normalizeItem(item: CountdownItem): CountdownItem {
       ? (item.displayMode as DisplayMode)
       : '',
     notifyOnToday: item.notifyOnToday === true,
-    target: item.target ?? emptyTarget(),
+    target: normalizeTarget(item.target, legacyTarget),
     text: { ...emptyTextOverride(), ...(item.text ?? {}) },
     units: enabled
       ? { ...labels, enabled: true }
@@ -371,7 +398,6 @@ function normalizeOverride(input: AppearanceOverride | undefined): AppearanceOve
   if (!input) return {}
   const out: AppearanceOverride = {}
   if (typeof input.fontFamily === 'string' && input.fontFamily) out.fontFamily = input.fontFamily
-  if (input.textAlpha !== undefined) out.textAlpha = clampTextAlpha(input.textAlpha, 1)
   if (input.background && Object.keys(input.background).length) {
     out.background = { ...input.background }
   }
@@ -401,7 +427,6 @@ function normalizeBehavior(input: BehaviorConfig | undefined): BehaviorConfig {
       },
       fallback.units
     ),
-    showPastDays: source.showPastDays === true,
     alwaysOnTop: source.alwaysOnTop !== false
   }
 }
@@ -419,15 +444,24 @@ function normalizeTrayMenu(input: TrayMenuConfig | undefined): TrayMenuConfig {
 
 /** 保证列表、选中项、全局字段、窗口与自定义预设都合法 */
 export function normalizeConfig(config: AppConfig): AppConfig {
-  const countdowns = (Array.isArray(config.countdowns) ? config.countdowns : []).map(normalizeItem)
+  /*
+   * 旧配置里有 `target`（全局默认日期），新结构没有这个概念。
+   * 迁移只做一次：把旧值复制进那些日期还空着的项，然后把这个字段从结果里摘掉 ——
+   * 不摘掉的话，它会一直跟着配置往返落盘，下个版本还得再处理一遍。
+   */
+  const legacyTarget = (config as AppConfig & { target?: TargetConfig }).target
+  const countdowns = (Array.isArray(config.countdowns) ? config.countdowns : []).map((item) =>
+    normalizeItem(item, legacyTarget)
+  )
   // 只有启用的项才能作为桌面显示项
   const selectable = countdowns.filter((item) => item.enabled)
   const activeId = selectable.some((item) => item.id === config.activeId)
     ? config.activeId
     : selectable[0]?.id ?? ''
   const window = normalizeWindow(config.runtime?.window)
+  const { target: _legacyTarget, ...rest } = config as AppConfig & { target?: TargetConfig }
   return {
-    ...config,
+    ...rest,
     countdowns,
     activeId,
     appearance: normalizeAppearance(config.appearance),
@@ -438,25 +472,37 @@ export function normalizeConfig(config: AppConfig): AppConfig {
       window,
       trayMenu: normalizeTrayMenu(config.runtime?.trayMenu),
       update: {
+        // 旧版可以选「不使用在线更新」，存下来就是空串。那个选项已经移除，
+        // 留空一律补成官方源，否则「关于」页会停在一个无法操作的状态。
         feedUrl:
-          typeof config.runtime?.update?.feedUrl === 'string'
+          typeof config.runtime?.update?.feedUrl === 'string' &&
+          config.runtime.update.feedUrl.trim()
             ? config.runtime.update.feedUrl
             : DEFAULT_UPDATE_FEED,
         proxy: typeof config.runtime?.update?.proxy === 'string' ? config.runtime.update.proxy : '',
         autoCheck: config.runtime?.update?.autoCheck !== false
       }
     },
-    customPresets: Array.isArray(config.customPresets) ? config.customPresets : []
+    // 自定义预设也要过一遍外观归一化：旧预设里的字重可能是 500/600/800，
+    // 界面上只剩常规/粗体两档后，不归一就会出现「单选组一个都没选中」
+    customPresets: (Array.isArray(config.customPresets) ? config.customPresets : []).map(
+      (preset) => ({ ...preset, appearance: normalizeAppearance(preset.appearance) })
+    )
   }
 }
 
-/** 外观兜底：文字透明度与四个文字样式都可能缺字段，逐一补齐 */
+/**
+ * 外观兜底：四个文字样式与背景都可能缺字段，逐一补齐。
+ *
+ * 这里逐字段构造而不是 `{ ...source }`：旧配置里的 `textAlpha`（文字总透明度）
+ * 已经在 1.3 移除，展开写法会把它原样带回来、再跟着下次保存写回磁盘。
+ */
 function normalizeAppearance(input: AppearanceConfig | undefined): AppearanceConfig {
   const fallback = createDefaultConfig().appearance
   const source = input ?? fallback
   return {
-    ...source,
-    textAlpha: clampTextAlpha(source.textAlpha, fallback.textAlpha),
+    fontFamily: source.fontFamily || fallback.fontFamily,
+    background: { ...fallback.background, ...(source.background ?? {}) },
     title: normalizeTextStyle(source.title ?? fallback.title),
     count: normalizeTextStyle(source.count ?? fallback.count),
     hint: normalizeTextStyle(source.hint ?? fallback.hint),
@@ -538,7 +584,6 @@ export function migrateLegacy(raw: unknown): unknown {
     ...rest,
     countdowns: [item],
     activeId: item.id,
-    target,
     text: {
       hint: legacyText?.hint ?? '',
       futureText: legacyText?.futureText || '还有 {days} 天',
@@ -557,7 +602,7 @@ export function migrateLegacy(raw: unknown): unknown {
 
 /**
  * 递归合并外观覆盖：只有显式给出的字段才覆盖全局。
- * 文字透明度（textAlpha 与四个样式各自的 opacity）与背景 alpha 完全独立，
+ * 四段文字各自的 opacity 与背景 alpha 完全独立，
  * 因此这里不需要也不应该做任何相乘。
  */
 export function mergeAppearance(
@@ -575,10 +620,6 @@ export function mergeAppearance(
   }
   return {
     fontFamily: override.fontFamily || base.fontFamily,
-    textAlpha:
-      override.textAlpha === undefined || override.textAlpha === null
-        ? base.textAlpha ?? 1
-        : clampTextAlpha(override.textAlpha, base.textAlpha ?? 1),
     background: mergeBackground(base.background, override.background),
     title: mergeStyle(base.title, override.title),
     count: mergeStyle(base.count, override.count),
@@ -628,7 +669,7 @@ export function resolveCountdown(config: AppConfig, item: CountdownItem): Resolv
   return {
     id: item.id,
     name: item.name,
-    target: resolveTarget(item.target, config.target),
+    target: resolveTarget(item.target),
     text: { title: item.name, ...mergeText(config.text, item.text) },
     showHint: resolveVisibility(item.text?.showHint, config.text.showHint).show,
     showStatus: resolveVisibility(item.text?.showStatus, config.text.showStatus).show,
@@ -865,7 +906,6 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     appearance: {
       fontFamily:
         '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif',
-      textAlpha: 1,
       background: {
         color: '#1e2230',
         alpha: 0.78,
@@ -877,10 +917,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#ffffff2e',
         width: 0
       },
-      title: { fontSize: 16, color: '#b9c4dc', weight: 500, letterSpacing: 0, opacity: 0.9 },
+      title: { fontSize: 16, color: '#b9c4dc', weight: 400, letterSpacing: 0, opacity: 0.9 },
       count: { fontSize: 64, color: '#ffffff', weight: 700, letterSpacing: -1, opacity: 1 },
       hint: { fontSize: 14, color: '#a7b3cc', weight: 400, letterSpacing: 0, opacity: 0.85 },
-      status: { fontSize: 15, color: '#7ec8ff', weight: 500, letterSpacing: 0, opacity: 1 }
+      status: { fontSize: 15, color: '#7ec8ff', weight: 400, letterSpacing: 0, opacity: 1 }
     }
   },
   {
@@ -889,7 +929,6 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Frost',
     appearance: {
       fontFamily: '"Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif',
-      textAlpha: 1,
       background: {
         color: '#ffffff',
         alpha: 0.82,
@@ -901,10 +940,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#00000014',
         width: 0
       },
-      title: { fontSize: 16, color: '#4b5563', weight: 500, letterSpacing: 0, opacity: 0.9 },
+      title: { fontSize: 16, color: '#4b5563', weight: 400, letterSpacing: 0, opacity: 0.9 },
       count: { fontSize: 64, color: '#111827', weight: 700, letterSpacing: -1, opacity: 1 },
       hint: { fontSize: 14, color: '#5f6672', weight: 400, letterSpacing: 0, opacity: 0.85 },
-      status: { fontSize: 15, color: '#2563eb', weight: 500, letterSpacing: 0, opacity: 1 }
+      status: { fontSize: 15, color: '#2563eb', weight: 400, letterSpacing: 0, opacity: 1 }
     }
   },
   {
@@ -913,7 +952,6 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Sakura',
     appearance: {
       fontFamily: '"Microsoft YaHei UI", "PingFang SC", system-ui, sans-serif',
-      textAlpha: 1,
       background: {
         color: '#ffe3ec',
         alpha: 0.9,
@@ -925,10 +963,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#ffffffaa',
         width: 0
       },
-      title: { fontSize: 16, color: '#a33a63', weight: 500, letterSpacing: 0, opacity: 0.9 },
-      count: { fontSize: 68, color: '#a32652', weight: 800, letterSpacing: -1, opacity: 1 },
+      title: { fontSize: 16, color: '#a33a63', weight: 400, letterSpacing: 0, opacity: 0.9 },
+      count: { fontSize: 68, color: '#a32652', weight: 700, letterSpacing: -1, opacity: 1 },
       hint: { fontSize: 14, color: '#96486a', weight: 400, letterSpacing: 0, opacity: 0.85 },
-      status: { fontSize: 15, color: '#8f2f56', weight: 600, letterSpacing: 0, opacity: 1 }
+      status: { fontSize: 15, color: '#8f2f56', weight: 700, letterSpacing: 0, opacity: 1 }
     }
   },
   {
@@ -937,7 +975,6 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Terminal',
     appearance: {
       fontFamily: '"Cascadia Mono", "Consolas", "JetBrains Mono", monospace',
-      textAlpha: 1,
       background: {
         color: '#0b1a10',
         alpha: 0.85,
@@ -949,10 +986,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#39ff8855',
         width: 0
       },
-      title: { fontSize: 15, color: '#5fbf87', weight: 500, letterSpacing: 2, opacity: 0.9 },
+      title: { fontSize: 15, color: '#5fbf87', weight: 400, letterSpacing: 2, opacity: 0.9 },
       count: { fontSize: 62, color: '#39ff88', weight: 700, letterSpacing: 0, opacity: 1 },
       hint: { fontSize: 13, color: '#4e9c72', weight: 400, letterSpacing: 1, opacity: 0.85 },
-      status: { fontSize: 14, color: '#9dffc4', weight: 500, letterSpacing: 1, opacity: 1 }
+      status: { fontSize: 14, color: '#9dffc4', weight: 400, letterSpacing: 1, opacity: 1 }
     }
   },
   {
@@ -961,7 +998,6 @@ export const THEME_PRESETS: ThemePresetDef[] = [
     nameEn: 'Paper Note',
     appearance: {
       fontFamily: '"KaiTi", "STKaiti", "Microsoft YaHei UI", serif',
-      textAlpha: 1,
       background: {
         color: '#fdf6d8',
         alpha: 0.96,
@@ -973,10 +1009,10 @@ export const THEME_PRESETS: ThemePresetDef[] = [
         borderColor: '#00000000',
         width: 0
       },
-      title: { fontSize: 16, color: '#7a6435', weight: 500, letterSpacing: 1, opacity: 0.9 },
+      title: { fontSize: 16, color: '#7a6435', weight: 400, letterSpacing: 1, opacity: 0.9 },
       count: { fontSize: 66, color: '#5b4a1f', weight: 700, letterSpacing: 0, opacity: 1 },
       hint: { fontSize: 14, color: '#7b6a3d', weight: 400, letterSpacing: 0, opacity: 0.85 },
-      status: { fontSize: 15, color: '#a0481a', weight: 600, letterSpacing: 0, opacity: 1 }
+      status: { fontSize: 15, color: '#a0481a', weight: 700, letterSpacing: 0, opacity: 1 }
     }
   }
 ]

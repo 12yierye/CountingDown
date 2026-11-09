@@ -11,6 +11,7 @@ import {
 } from './config-store'
 import {
   applyPosition,
+  applyPreviewVisibility,
   beginWidgetDrag,
   broadcast,
   createSettingsWindow,
@@ -74,6 +75,7 @@ function hostInfo(): HostInfo {
       bounds: display.bounds,
       workArea: display.workArea,
       scaleFactor: display.scaleFactor,
+      refreshRate: Math.round(Number(display.displayFrequency) || 0),
       primary: display.id === screen.getPrimaryDisplay().id
     })),
     shortcutRegistered: isHotkeyRegistered(),
@@ -212,7 +214,10 @@ function registerIpc(): void {
    * null 表示清空覆盖层 —— 桌面卡片随即回到「编辑前」的持久化配置。
    */
   ipcMain.handle('preview:set', (_event, item: unknown) => {
-    setPreviewItem((item as CountdownItem | null) ?? null)
+    const next = (item as CountdownItem | null) ?? null
+    setPreviewItem(next)
+    // 有草稿就先把卡片叫出来，退出预览再按原本的显示状态收回去
+    applyPreviewVisibility(Boolean(next))
     pushWidgetConfig()
     return true
   })
@@ -233,8 +238,9 @@ function registerIpc(): void {
     app.quit()
   })
   ipcMain.handle('runtime:hideAll', () => {
-    setWidgetVisible(false)
+    // 先关设置窗口：它会顺手清掉预览覆盖层并解除「预览期间不允许隐藏」的限制
     getSettingsWindow()?.hide()
+    setWidgetVisible(false)
     return true
   })
 

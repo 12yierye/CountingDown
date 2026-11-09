@@ -151,16 +151,16 @@ export function useCountdownCard(
     ...cardStyle(config(), resolved.value?.appearance)
   }))
 
-  const titleStyle = computed(() => textStyle(appearance.value.title, appearance.value.textAlpha))
-  const countStyle = computed(() => textStyle(appearance.value.count, appearance.value.textAlpha))
-  const hintStyle = computed(() => textStyle(appearance.value.hint, appearance.value.textAlpha))
-  const statusStyle = computed(() => textStyle(appearance.value.status, appearance.value.textAlpha))
+  const titleStyle = computed(() => textStyle(appearance.value.title))
+  const countStyle = computed(() => textStyle(appearance.value.count))
+  const hintStyle = computed(() => textStyle(appearance.value.hint))
+  const statusStyle = computed(() => textStyle(appearance.value.status))
   const unitStyle = computed(() => {
     const count = appearance.value.count
     return {
       fontSize: `${Math.max(12, Math.round(count.fontSize * 0.42))}px`,
-      color: textStyle(count, appearance.value.textAlpha).color,
-      fontWeight: String(Math.min(600, count.weight)),
+      color: textStyle(count).color,
+      fontWeight: String(count.weight),
       letterSpacing: `${count.letterSpacing}px`
     }
   })
@@ -201,9 +201,6 @@ export function useCountdownCard(
     }
     if (computedResult.state === 'today') {
       return applyTemplate(text.todayText, { ...vars, days: '0' })
-    }
-    if (config().behavior.showPastDays && !text.pastText.includes('{days}')) {
-      return `${applyTemplate(text.pastText, vars)} · ${absDays.value}`
     }
     return applyTemplate(text.pastText, vars)
   })

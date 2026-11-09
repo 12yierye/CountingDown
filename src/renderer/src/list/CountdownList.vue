@@ -38,7 +38,7 @@ interface Row {
 }
 
 function toRow(item: CountdownItem): Row {
-  const target = resolveTarget(item.target, props.config.target)
+  const target = resolveTarget(item.target)
   const result = computeCountdown(target)
   const absDays = Math.abs(result.days)
   const status =

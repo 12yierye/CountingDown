@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
-import type { AppConfig, AppLanguage, HostInfo, UpdateState } from '@shared/types'
+import type { AppConfig, AppLanguage, HostInfo, ScreenInfo, UpdateState } from '@shared/types'
 import { formatBytes, presetIdOf, UPDATE_FEED_PRESETS } from '@shared/update'
 import FieldRow from '@/components/FieldRow.vue'
+import HelpDisclosure from '@/components/HelpDisclosure.vue'
 
 const props = defineProps<{ config: AppConfig }>()
 const emit = defineEmits<{
@@ -15,6 +16,20 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const host = ref<HostInfo | null>(null)
+
+/**
+ * 显示器一行写完：物理分辨率 · 缩放 · 刷新率。
+ *
+ * bounds 是 DIP（Windows 在 125% 缩放下会把 1920 报成 1536），乘 scaleFactor 才是
+ * 用户说的「分辨率」；workArea 又扣掉了任务栏，拿它当分辨率必然偏小。
+ */
+function screenLabel(screen: ScreenInfo): string {
+  const width = Math.round(screen.bounds.width * screen.scaleFactor)
+  const height = Math.round(screen.bounds.height * screen.scaleFactor)
+  const parts = [`${width}×${height}`, `${Math.round(screen.scaleFactor * 100)}%`]
+  if (screen.refreshRate > 0) parts.push(`${screen.refreshRate}Hz`)
+  return parts.join(' · ')
+}
 
 /* ------------------------------ 在线更新 ------------------------------ */
 
@@ -28,8 +43,6 @@ let stopUpdate: (() => void) | null = null
 const statusText = computed(() => {
   const state = update.value
   switch (state.phase) {
-    case 'disabled':
-      return t('about.updateDisabled')
     case 'checking':
       return t('about.updateChecking')
     case 'latest':
@@ -71,52 +84,45 @@ async function checkUpdate(): Promise<void> {
 /* ------------------------------ 更新源 ------------------------------ */
 
 /**
- * 更新源直接写 `runtime.update.feedUrl`，主进程监听到变化会把上一次的检查结果清空，
- * 所以换源之后不需要（也不应该）自动开查 —— 用户自己点「检查更新」再走一遍。
+ * 更新源只从预设里挑，不提供手填地址。
+ *
+ * 以前这里是「下拉 + 一个 URL 输入框」：地址写错一个字符，检查更新就永远失败，
+ * 而错误提示里给出的仍然是那条写错的地址，用户只会以为是软件坏了。
+ * 现在地址只来自 shared/update.ts 的预设表，要加镜像改那一处即可。
  */
 const feedUrl = computed(() => String(props.config.runtime.update?.feedUrl ?? '').trim())
 const feedChoice = computed(() => presetIdOf(feedUrl.value))
-/** 输入框的草稿值：只在失焦 / 回车时落盘，否则每敲一个字符都会重置一次更新状态 */
-const feedDraft = ref(feedUrl.value)
-const feedInput = ref<{ focus: () => void } | null>(null)
 
-/** 下拉项由预设表生成：以后加镜像只改 shared/update.ts，不用再动模板 */
-const feedOptions = computed(() => [
-  ...UPDATE_FEED_PRESETS.map((preset) => ({
+/**
+ * 下拉项：官方源 / 镜像。
+ * 旧配置里存过手填地址时，补一条只读的「自定义（当前）」，
+ * 让它至少能显示出当前用的是哪一条，选别的源即可覆盖。
+ *
+ * 这里没有「不使用在线更新」——关掉检查和「关于」页放一个永远点不动的主按钮
+ * 是同一个状态，不如让源始终有效；不想要更新的人本来也不会去点它。
+ */
+const feedOptions = computed(() => {
+  const options = UPDATE_FEED_PRESETS.map((preset) => ({
     value: preset.id as string,
     label: t(`about.feedPresets.${preset.id}`)
-  })),
-  { value: 'custom', label: t('about.feedCustom') },
-  { value: 'off', label: t('about.feedOff') }
-])
+  }))
+  if (feedChoice.value === 'custom') {
+    options.unshift({ value: 'custom', label: t('about.feedCustom') })
+  }
+  return options
+})
 
 /** 除官方源以外，预设里的每一项都是第三方转发 */
 const mirrorSelected = computed(
-  () => feedChoice.value !== 'github' && feedChoice.value !== 'custom' && feedChoice.value !== 'off'
+  () => feedChoice.value !== 'github' && feedChoice.value !== 'custom'
 )
 
-watch(feedUrl, (value) => {
-  feedDraft.value = value
-})
-
-function applyFeed(value: string): void {
-  const next = String(value ?? '').trim()
-  if (next === feedUrl.value) return
-  emit('patch', { runtime: { update: { feedUrl: next } } })
-}
-
 function chooseFeed(id: string): void {
-  if (id === 'custom') {
-    // 「自定义」不是一种源，只是让你接着编辑输入框里那一行
-    feedInput.value?.focus()
-    return
-  }
+  if (id === 'custom') return
   const preset = UPDATE_FEED_PRESETS.find((item) => item.id === id)
-  if (preset) {
-    applyFeed(preset.url)
-    return
-  }
-  applyFeed('')
+  // 找不到预设就不动：这里已经没有「关闭」这一项，不该再往里写空串
+  if (!preset || preset.url === feedUrl.value) return
+  emit('patch', { runtime: { update: { feedUrl: preset.url } } })
 }
 
 async function downloadUpdate(): Promise<void> {
@@ -204,9 +210,13 @@ async function quitApp(): Promise<void> {
           :show-text="false"
         />
         <p v-if="update.notes" class="update-row__notes">{{ update.notes }}</p>
-        <p v-if="update.phase === 'error'" class="update-row__hint">
+        <HelpDisclosure
+          v-if="update.phase === 'error'"
+          class="update-row__help"
+          :summary="t('about.updateFailToggle')"
+        >
           {{ t('about.updateFailHint') }}
-        </p>
+        </HelpDisclosure>
       </div>
 
       <div class="update-row__actions">
@@ -264,27 +274,16 @@ async function quitApp(): Promise<void> {
         </el-select>
       </div>
 
-      <el-input
-        v-if="feedChoice !== 'off'"
-        ref="feedInput"
-        v-model="feedDraft"
-        size="small"
-        class="update-source__url"
-        :placeholder="t('about.feedPlaceholder')"
-        @change="applyFeed(feedDraft)"
-        @keyup.enter="applyFeed(feedDraft)"
-      />
-
-      <p v-if="mirrorSelected" class="update-source__warn">
-        {{ t('about.feedMirrorWarning') }}
+      <p v-if="feedChoice === 'custom'" class="update-source__note">
+        {{ t('about.feedCustomReadonly') }}
+        <span class="mono">{{ feedUrl }}</span>
       </p>
-      <p v-else-if="feedChoice === 'custom'" class="update-source__note">
-        {{ t('about.feedCustomHint') }}
-      </p>
-      <p v-else-if="feedChoice === 'off'" class="update-source__note">
-        {{ t('about.feedOffHint') }}
-      </p>
-      <p v-else class="update-source__note">{{ t('about.feedHint') }}</p>
+      <div v-if="mirrorSelected" class="update-source__warn">
+        <p class="update-source__warn-line">{{ t('about.feedMirrorShort') }}</p>
+        <HelpDisclosure :summary="t('about.feedMirrorToggle')">
+          {{ t('about.feedMirrorWarning') }}
+        </HelpDisclosure>
+      </div>
     </div>
   </el-card>
 
@@ -333,9 +332,7 @@ async function quitApp(): Promise<void> {
           <el-tag size="small" :type="screen.primary ? 'primary' : 'info'" effect="plain">
             {{ screen.label }}
           </el-tag>
-          <span class="mono">
-            {{ screen.workArea.width }}×{{ screen.workArea.height }} @ {{ screen.scaleFactor }}x
-          </span>
+          <span class="mono">{{ screenLabel(screen) }}</span>
         </div>
       </div>
     </FieldRow>
@@ -350,7 +347,12 @@ async function quitApp(): Promise<void> {
     </template>
 
     <div class="danger-row">
-      <p class="danger-row__text">{{ t('about.resetHint') }}</p>
+      <div class="danger-row__main">
+        <p class="danger-row__text">{{ t('about.resetHint') }}</p>
+        <HelpDisclosure :summary="t('about.resetHintToggle')">
+          {{ t('about.resetHintDetails') }}
+        </HelpDisclosure>
+      </div>
       <el-button size="small" type="danger" plain @click="emit('reset')">
         {{ t('common.resetAll') }}
       </el-button>
@@ -437,11 +439,8 @@ async function quitApp(): Promise<void> {
 }
 
 /* 失败时给一条「怎么自救」的提示，比只报错有用 */
-.update-row__hint {
-  margin: 6px 0 0;
-  font-size: 11.5px;
-  line-height: 1.7;
-  color: var(--el-text-color-secondary);
+.update-row__help {
+  margin-top: 6px;
 }
 
 .update-row__actions {
@@ -479,15 +478,7 @@ async function quitApp(): Promise<void> {
   width: 190px;
 }
 
-.update-source__url {
-  margin-top: 8px;
-  max-width: 520px;
-}
 
-.update-source__url :deep(.el-input__inner) {
-  font-family: var(--cd-font-mono, ui-monospace, 'Cascadia Mono', Consolas, monospace);
-  font-size: 11.5px;
-}
 
 .update-source__note {
   margin: 6px 0 0;
@@ -498,7 +489,11 @@ async function quitApp(): Promise<void> {
 
 /* 第三方镜像不是「更快的官方源」，它拿得到你的全部信任，得说清楚 */
 .update-source__warn {
-  margin: 6px 0 0;
+  margin-top: 6px;
+}
+
+.update-source__warn-line {
+  margin: 0;
   font-size: 11.5px;
   line-height: 1.7;
   color: var(--el-color-warning-dark-2);
@@ -525,9 +520,14 @@ async function quitApp(): Promise<void> {
  */
 .danger-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.danger-row__main {
+  flex: 1;
+  min-width: 0;
 }
 
 .danger-row__text {

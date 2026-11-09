@@ -1,20 +1,19 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
-import type { AppConfig, Corner, CustomPreset } from '@shared/types'
-import { THEME_PRESETS, createDefaultConfig } from '@shared/defaults'
+import type { AppConfig, Corner, CountdownItem, CustomPreset } from '@shared/types'
+import { BUILTIN_TEXT, THEME_PRESETS, createCountdownItem, createDefaultConfig, findActiveItem } from '@shared/defaults'
 import {
   config,
   loadConfig,
   patchConfig,
   replaceConfig,
-  resetConfig
+  resetConfig,
+  toPlain
 } from '@/composables/useConfig'
-import { onSaved } from '@/utils/misc'
-import CountdownPreview from '@/components/CountdownPreview.vue'
 import PresetGallery from '@/components/PresetGallery.vue'
 import type { PresetSaveMode } from '@/components/PresetGallery.vue'
 import CountdownList from '@/list/CountdownList.vue'
@@ -22,7 +21,6 @@ import appIconUrl from '../../../../resources/icon.png'
 import TargetPanel from '@/settings/panels/TargetPanel.vue'
 import AppearancePanel from '@/settings/panels/AppearancePanel.vue'
 import LayoutPanel from '@/settings/panels/LayoutPanel.vue'
-import BehaviorPanel from '@/settings/panels/BehaviorPanel.vue'
 import IntegrationPanel from '@/settings/panels/IntegrationPanel.vue'
 import AboutPanel from '@/settings/panels/AboutPanel.vue'
 
@@ -44,34 +42,63 @@ type SectionId =
 const section = ref<SectionId>('list')
 
 /**
- * 实时预览只对「有外观可看」的页面有意义：
- * 列表页自带逐项信息、预设页本身就是一组预览卡片、系统集成与关于没有可预览的东西。
+ * 实时预览不画在设置窗口里 —— 真正在预览的就是桌面那张卡片本身。
+ *
+ *   外观页：卡片切成固定样例（元旦 + 内置文案），判断颜色字号时不被自己的文案干扰；
+ *   文案与显示页：同样用元旦当标题，但文案留空跟随全局，正好实时反映正在改的内容；
+ *   其余页面不覆盖，桌面卡片保持用户自己那一项。
  */
-const showPreview = computed(() =>
-  ['target', 'appearance', 'behavior'].includes(section.value)
+function buildPreviewItem(): CountdownItem | null {
+  if (section.value !== 'appearance' && section.value !== 'target') return null
+  const active = findActiveItem(config.value)
+  // main/preview.ts 只把草稿套给「当前显示项」，没有可显示的项就无从预览
+  if (!active) return null
+  const empty = createCountdownItem()
+  return {
+    ...empty,
+    id: active.id,
+    name: t('sample.title'),
+    target: { mode: 'annual', date: '', month: 1, day: 1 },
+    text:
+      section.value === 'target'
+        ? empty.text
+        : {
+            ...empty.text,
+            hint: BUILTIN_TEXT.hint,
+            futureText: BUILTIN_TEXT.futureText,
+            todayText: BUILTIN_TEXT.todayText,
+            pastText: BUILTIN_TEXT.pastText
+          }
+  }
+}
+
+/**
+ * 只在「换了页面 / 换了显示项 / 换了语言」时重推一次。
+ * 不要 watch 整个 config：拖一次滑条会 patch 十几次，每次都发一条 IPC 属于浪费，
+ * 而配置本身的变化桌面卡片本来就会跟着重渲染。
+ */
+function syncPreview(): void {
+  const item = buildPreviewItem()
+  void window.cd.setPreviewItem(item ? toPlain(item) : null)
+}
+
+watch(
+  [() => section.value, () => config.value.activeId, () => locale.value],
+  syncPreview,
+  { immediate: true }
 )
 
-function readBool(key: string, fallback: boolean): boolean {
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw === null) return fallback
-    return raw === '1'
-  } catch {
-    return fallback
-  }
-}
+/*
+ * 设置窗口隐藏时主进程会丢掉覆盖层（避免桌面卡片停在未保存的草稿上），
+ * 重新显示时它会发一条 preview:sync —— 这里补发一次，否则回到外观页看不到预览。
+ * 编辑页也订阅同一个事件并在之后补发自己的草稿，所以列表页不会被打断。
+ */
+const unsubscribePreviewSync = window.cd.onPreviewSync(() => syncPreview())
 
-function writeBool(key: string, value: boolean): void {
-  try {
-    localStorage.setItem(key, value ? '1' : '0')
-  } catch {
-    /* 隐私模式下写不进去，不影响使用 */
-  }
-}
-
-/** 预览侧栏：宽屏默认开，窄屏由 CSS 隐藏；状态只存本地，不写进配置 */
-const previewOpen = ref(readBool('cd.settings.preview', true))
-watch(previewOpen, (value) => writeBool('cd.settings.preview', value))
+onBeforeUnmount(() => {
+  unsubscribePreviewSync()
+  void window.cd.setPreviewItem(null)
+})
 
 interface NavItem {
   id: SectionId
@@ -115,11 +142,11 @@ const groups = computed<NavGroup[]>(() => [
         keywords: '外观 颜色 字体 背景 阴影 边框 字号 透明度 圆角 appearance color font background shadow'
       },
       {
-        /* 日期与文案改的是「卡片上写什么」，和外观同属看得见的那一层 */
+        /* 日期归每一项自己管，这一页改的是「卡片上写什么」 */
         id: 'target',
         icon: 'Calendar',
         label: t('nav.target'),
-        keywords: '日期 文案 副标题 状态 过期 显示 星期 target date text hint status weekday'
+        keywords: '文案 副标题 状态 过期 显示 单位 星期 text hint status weekday unit'
       },
       {
         id: 'preset',
@@ -138,7 +165,7 @@ const groups = computed<NavGroup[]>(() => [
         icon: 'SetUp',
         label: t('nav.behavior'),
         keywords:
-          '行为 显示模式 单位 置顶 位置 角落 偏移 拖动 穿透 透明 窗口 layout position corner offset drag transparent behavior mode unit top'
+          '窗口 位置 角落 偏移 拖动 穿透 透明 置顶 桌面 layout position corner offset drag transparent always-on-top window'
       },
       {
         id: 'integration',
@@ -160,30 +187,13 @@ const currentLabel = computed(() => {
   return ''
 })
 
-/* ------------------------------ 侧栏折叠与搜索 ------------------------------ */
+/* ------------------------------ 侧栏搜索 ------------------------------ */
 
 const search = ref('')
-const searching = computed(() => search.value.trim().length > 0)
 
-/** 展开的组；当前页面所在的组永远展开，避免「选中项看不见」 */
-const expanded = reactive(new Set<string>(['countdown']))
-
+/** 当前页面属于哪一组：只用来给组标题加一点对比度，不做折叠 */
 function groupHasSection(group: NavGroup): boolean {
   return group.items.some((item) => item.id === section.value)
-}
-
-function isExpanded(group: NavGroup): boolean {
-  return searching.value || expanded.has(group.id)
-}
-
-/**
- * 点组标题 = 展开/收起。
- * 不再强制「当前组永远展开」：那样点自己所在的组会毫无反应，像个坏按钮。
- * 切页面时会自动把目标组加进 expanded（见下面的 watch）。
- */
-function toggleGroup(group: NavGroup): void {
-  if (expanded.has(group.id)) expanded.delete(group.id)
-  else expanded.add(group.id)
 }
 
 const filteredGroups = computed<NavGroup[]>(() => {
@@ -197,11 +207,6 @@ const filteredGroups = computed<NavGroup[]>(() => {
       )
     }))
     .filter((group) => group.items.length > 0)
-})
-
-watch(section, (id) => {
-  const group = groups.value.find((entry) => entry.items.some((item) => item.id === id))
-  if (group) expanded.add(group.id)
 })
 
 /* --------------------------------- 写入与撤销 --------------------------------- */
@@ -288,7 +293,7 @@ async function resetPage(): Promise<void> {
 
   switch (section.value) {
     case 'target':
-      body = { target: defaults.target, text: defaults.text }
+      body = { text: defaults.text }
       break
     case 'appearance':
       body = { appearance: defaults.appearance }
@@ -424,25 +429,11 @@ async function restoreDefaults(): Promise<void> {
   }
 }
 
-/** 「已保存」只在真的写入后短暂出现，不再常驻占位 */
-const savedFlash = ref(false)
-let savedTimer: number | undefined
-let unhookSaved: (() => void) | null = null
-
 onMounted(() => {
-  unhookSaved = onSaved(() => {
-    savedFlash.value = true
-    if (savedTimer) window.clearTimeout(savedTimer)
-    savedTimer = window.setTimeout(() => {
-      savedFlash.value = false
-    }, 1400)
-  })
   window.addEventListener('keydown', onKeydown)
 })
 
 onBeforeUnmount(() => {
-  unhookSaved?.()
-  if (savedTimer) window.clearTimeout(savedTimer)
   window.removeEventListener('keydown', onKeydown)
 })
 
@@ -487,20 +478,14 @@ watch(
 
         <nav class="settings-nav">
           <div v-for="group in filteredGroups" :key="group.id" class="settings-nav__section">
-            <button
+            <p
               class="settings-nav__head"
-              :class="{ 'is-open': isExpanded(group), 'is-current': groupHasSection(group) }"
-              @click="toggleGroup(group)"
+              :class="{ 'is-current': groupHasSection(group) }"
             >
-              <span class="settings-nav__head-label">{{ group.label }}</span>
-              <el-icon :size="11" class="settings-nav__chevron"><ArrowRight /></el-icon>
-            </button>
+              {{ group.label }}
+            </p>
 
-            <!--
-              用 v-show 而不是 v-if：折叠时子项仍留在 DOM 里，
-              「按导航文字定位」的自动化脚本不会因为折叠而找不到入口。
-            -->
-            <div v-show="isExpanded(group)" class="settings-nav__items">
+            <div class="settings-nav__items">
               <button
                 v-for="item in group.items"
                 :key="item.id"
@@ -540,30 +525,14 @@ watch(
         <header class="settings-topbar">
           <span class="settings-topbar__title">{{ currentLabel }}</span>
           <div class="settings-topbar__actions">
-            <transition name="saved-fade">
-              <el-tag v-if="savedFlash" size="small" effect="plain" type="success">
-                <el-icon><Select /></el-icon>
-                <span style="margin-left: 4px">{{ t('common.saved') }}</span>
-              </el-tag>
-            </transition>
-            <el-button size="small" plain :disabled="!undoStack.length" @click="undo">
+            <!-- 当前页没有可撤销的改动就不显示，而不是摆一颗灰按钮占位 -->
+            <el-button v-if="undoStack.length" size="small" plain @click="undo">
               <el-icon><RefreshLeft /></el-icon>
               <span style="margin-left: 6px">{{ t('common.undo') }}</span>
             </el-button>
-            <el-button size="small" plain :disabled="!resettable" @click="resetPage">
+            <el-button v-if="resettable" size="small" plain @click="resetPage">
               <el-icon><Refresh /></el-icon>
               <span style="margin-left: 6px">{{ t('common.resetPage') }}</span>
-            </el-button>
-            <el-button
-              size="small"
-              plain
-              class="settings-topbar__preview"
-              :disabled="!showPreview"
-              :type="showPreview && previewOpen ? 'primary' : ''"
-              @click="previewOpen = !previewOpen"
-            >
-              <el-icon><View /></el-icon>
-              <span style="margin-left: 6px">{{ t('common.previewToggle') }}</span>
             </el-button>
             <el-button size="small" plain @click="showWidget">
               <el-icon><Monitor /></el-icon>
@@ -589,14 +558,12 @@ watch(
               :config="config"
               @patch="(p: unknown) => patch(p)"
             />
-            <div v-else-if="section === 'behavior'" class="panel-stack">
-              <BehaviorPanel :config="config" @patch="(p: unknown) => patch(p)" />
-              <LayoutPanel
-                :config="config"
-                @patch="(p: unknown) => patch(p)"
-                @snap="snapCorner"
-              />
-            </div>
+            <LayoutPanel
+              v-else-if="section === 'behavior'"
+              :config="config"
+              @patch="(p: unknown) => patch(p)"
+              @snap="snapCorner"
+            />
             <IntegrationPanel
               v-else-if="section === 'integration'"
               :config="config"
@@ -622,48 +589,8 @@ watch(
             />
           </div>
 
-          <aside v-if="showPreview && previewOpen" class="settings-rail">
-            <div class="preview-wrap">
-              <div class="preview-wrap__label">{{ t('common.preview') }}</div>
-              <CountdownPreview :config="config" sample />
-            </div>
-          </aside>
         </div>
       </section>
     </div>
   </el-config-provider>
 </template>
-
-<style scoped>
-.preview-wrap {
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 12px;
-  background: var(--el-bg-color);
-  overflow: hidden;
-}
-
-.preview-wrap__label {
-  /* 「实时预览」四个字不能贴着预览容器：留出一行文字的呼吸空间 */
-  padding: 10px 14px 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--el-text-color-secondary);
-}
-
-.preview-wrap :deep(.preview) {
-  padding: 14px 14px 16px;
-}
-
-.saved-fade-enter-active,
-.saved-fade-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.saved-fade-enter-from,
-.saved-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-2px);
-}
-</style>

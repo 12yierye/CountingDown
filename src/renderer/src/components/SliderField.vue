@@ -24,8 +24,12 @@ const emit = defineEmits<{
   (event: 'update:modelValue', value: number): void
 }>()
 
-/** 0~1 且步长小于 1 时按百分比显示与输入 */
-const isRatio = computed(() => props.min === 0 && props.max === 1 && props.step < 1)
+/**
+ * 0~1 且步长小于 1 时按百分比显示与输入。
+ * 不再要求 min === 0：文字透明度有 5% 的下限（0 会让整行消失），
+ * 但界面上仍然必须是「35%」而不是「0.35」。
+ */
+const isRatio = computed(() => props.max === 1 && props.step < 1)
 
 const decimals = computed(() => (props.precision > 0 ? props.precision : props.step < 1 ? 2 : 0))
 

@@ -297,55 +297,30 @@ body {
 }
 
 .settings-nav__section + .settings-nav__section {
-  margin-top: 4px;
+  margin-top: 10px;
 }
 
-/* 组标题：可点击折叠。它刻意不是 .settings-nav__item —— 自动化脚本按文字定位的是子项 */
+/* 组标题：纯分隔标签，不可点击（导航不做折叠）。
+   它刻意不是 .settings-nav__item —— 自动化脚本按文字定位的是子项 */
 .settings-nav__head {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 7px 10px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
+  margin: 0;
+  padding: 7px 10px 4px;
   color: var(--el-text-color-secondary);
-  font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.3px;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
 }
 
-.settings-nav__head:hover {
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-primary);
-}
-
+/* 当前页所在的组：标签稍微提亮，一眼看出自己在哪一段 */
 .settings-nav__head.is-current {
   color: var(--el-text-color-primary);
-}
-
-.settings-nav__chevron {
-  flex: none;
-  transition: transform 0.15s ease;
-}
-
-.settings-nav__head.is-open .settings-nav__chevron {
-  transform: rotate(90deg);
 }
 
 .settings-nav__items {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 2px 0 6px;
+  padding: 2px 0 0;
 }
 
 .settings-nav__empty {
@@ -458,9 +433,7 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
   gap: 8px;
 }
 
-/* 内容区与预览侧栏并排。
-   预览从前固定在顶栏下方、永远占掉 240px 高度，表单可视区只剩 383px；
-   挪到右侧竖栏后，纵向空间全部还给表单。 */
+/* 内容区占满整个宽度：预览已经交给桌面卡片本身，设置窗口里不再留预览栏 */
 .settings-body {
   flex: 1;
   min-height: 0;
@@ -468,16 +441,6 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
   align-items: stretch;
 }
 
-.settings-rail {
-  width: 248px;
-  flex: none;
-  padding: 16px 16px 24px;
-  border-left: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color);
-  overflow: auto;
-  /* 预览最多占半屏多一点，超出部分由 CountdownPreview 等比缩下去 */
-  --cd-preview-max-height: min(56vh, 460px);
-}
 
 .settings-content {
   flex: 1;
@@ -488,14 +451,6 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
   display: flex;
   flex-direction: column;
   align-content: flex-start;
-}
-
-/* 窄窗口下侧栏没有容身之地：直接藏掉，把宽度还给表单 */
-@media (max-width: 1099px) {
-  .settings-rail,
-  .settings-topbar__preview {
-    display: none;
-  }
 }
 
 /* 面板标题右侧的操作区（重置本组 / 展开高级参数） */
@@ -572,35 +527,6 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
 }
 
 /*
- * 外观设置的分组容器。
- * 用的是全局外观页里 .text-style-editor 同款底色与描边，因此「编辑倒数日 → 外观覆盖」
- * 的各个类别（字体 / 背景 / 边框·阴影 / 文字样式）看上去与全局外观页是同一套分区，
- * 而不是平铺在卡片里的长列表。底部不留 padding，由最后一个 .field-row 的 padding 收尾。
- */
-.override-group {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  padding: 12px 14px 3px;
-  margin-bottom: 12px;
-  background: var(--el-fill-color-lighter);
-  min-width: 0;
-}
-
-.override-group__title {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--el-text-color-primary);
-  margin-bottom: 6px;
-}
-
-.override-group__empty {
-  margin: 0 0 12px;
-  font-size: 12px;
-  opacity: 0.75;
-  color: var(--el-text-color-secondary);
-}
-
-/*
  * 预设「手动调整参数」弹窗（PresetTuneDialog）的高度分配。
  *
  * 为什么写在这里而不是组件的 <style scoped> 里：class 绑定落在 .el-dialog **自身**
@@ -644,13 +570,6 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 0 36px;
-}
-
-/* 宽屏时把成组的样式编辑器排成两列，避免单列过长、滑块过宽 */
-.panel-grid-text {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 0 32px;
 }
 
 .row__label {

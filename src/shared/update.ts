@@ -36,10 +36,16 @@ export const UPDATE_FEED_PRESETS = [
 
 export type UpdateFeedPresetId = (typeof UPDATE_FEED_PRESETS)[number]['id']
 
-/** 当前地址对应哪个预设；对不上就是用户自定义的（空串另算「关闭」） */
-export function presetIdOf(url: string): UpdateFeedPresetId | 'custom' | 'off' {
+/**
+ * 当前地址对应哪个预设；对不上就是用户自定义的。
+ *
+ * 空串一律当作官方源：旧版本把「留空」当成关闭在线更新，那个选项已经移除，
+ * 这类配置会被 normalizeConfig 补成默认地址；这里再兜一层，
+ * 避免下拉框出现一个谁都对不上的空白值。
+ */
+export function presetIdOf(url: string): UpdateFeedPresetId | 'custom' {
   const value = String(url ?? '').trim()
-  if (!value) return 'off'
+  if (!value) return UPDATE_FEED_PRESETS[0].id
   const found = UPDATE_FEED_PRESETS.find((preset) => preset.url === value)
   return found ? found.id : 'custom'
 }

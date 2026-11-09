@@ -14,16 +14,15 @@ config.json 的字段结构。
       "id": "cd_xxx",
       "name": "元旦",
       "enabled": true,
-      "target": { "mode": "annual", "date": "", "month": 1, "day": 1 },  // once 模式下 date 为空 = 跟随全局
+      "target": { "mode": "annual", "date": "YYYY-MM-DD[THH:mm]", "month": 1, "day": 1 }, // 每项自己的日期，没有全局默认
       "text":     { "hint": "", "futureText": "", "todayText": "", "pastText": "", "unit": "" }, // 空串 = 跟随全局
       "appearance": {}                // 只出现被覆盖的字段，如 { "opacity": 0.8, "background": { "color": "#ff0055", "radius": 30 } }
     }
   ],
   "activeId": "cd_xxx",               // 当前显示在桌面上的项（只会指向 enabled 的项）
-  "target":     { "mode": "annual|once", "date": "YYYY-MM-DD[THH:mm]", "month": 1, "day": 1 }, // 全局默认日期
   "text":       { "hint", "futureText", "todayText", "pastText", "unit" },                     // 全局默认文案
   "appearance": { "fontFamily", "opacity", "background": {...}, "title": {...}, "count": {...}, "hint": {...}, "status": {...} },
-  "behavior":   { "displayMode", "showDaysInPrecise", "showPastDays", "alwaysOnTop" },
+  "behavior":   { "displayMode", "showDaysInPrecise", "alwaysOnTop" },
   "runtime": {
     "widgetVisible", "toggleHotkey", "startAtLogin", "language", "theme",
     "window": {

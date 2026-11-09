@@ -141,7 +141,6 @@ function sameBackground(
 function sameAppearance(a: AppearanceConfig, b: AppearanceConfig): boolean {
   return (
     a.fontFamily === b.fontFamily &&
-    a.textAlpha === b.textAlpha &&
     sameBackground(a.background, b.background) &&
     sameStyle(a.title, b.title) &&
     sameStyle(a.count, b.count) &&
@@ -215,7 +214,7 @@ function submitSave(): void {
   // 手动调整：这个弹窗只管「来源」，名字留到调完参数之后再问（见 PresetTuneDialog）
   if (saveMode.value === 'manual') {
     saveOpen.value = false
-    tuneOpen.value = true
+    openNewTuned()
     return
   }
   const trimmed = saveName.value.trim()
@@ -242,9 +241,29 @@ function closeSave(): void {
  * ------------------------------------------------------------------ */
 
 const tuneOpen = ref(false)
+/** 非空 = 正在编辑这个已有预设；为空 = 新建（先手动调参，再起名存成新预设） */
+const tuneTarget = ref<PresetEntry | null>(null)
 
-/** 模态框把「调好的外观 + 用户起的名字」一起交回来，这里只负责转发 */
+function openNewTuned(): void {
+  tuneTarget.value = null
+  tuneOpen.value = true
+}
+
+function editPreset(entry: PresetEntry): void {
+  tuneTarget.value = entry
+  tuneOpen.value = true
+}
+
+/** 模态框把「调好的外观 + 名字」一起交回来：编辑态直接覆盖原预设，新建态存一份新的 */
 function onTuned(payload: { name: string; appearance: AppConfig['appearance'] }): void {
+  const target = tuneTarget.value
+  tuneTarget.value = null
+  if (target) {
+    if (payload.name !== target.name) emit('rename', target.id, payload.name)
+    emit('overwrite', target.id, payload.appearance)
+    ElMessage.success(t('preset.overwritten', { name: payload.name }))
+    return
+  }
   emit('save', {
     name: payload.name,
     appearance: payload.appearance,
@@ -332,7 +351,8 @@ function duplicatePreset(entry: PresetEntry): void {
 }
 
 function onCommand(command: string, entry: PresetEntry): void {
-  if (command === 'copy') duplicatePreset(entry)
+  if (command === 'edit') editPreset(entry)
+  else if (command === 'copy') duplicatePreset(entry)
   else if (command === 'rename') void renamePreset(entry)
   else if (command === 'overwrite') void overwritePreset(entry)
   else if (command === 'remove') void confirmRemove(entry)
@@ -398,7 +418,13 @@ function viewDetail(entry: PresetEntry): void {
             </el-tag>
           </div>
           <div class="preset-footer__actions">
-            <el-button size="small" type="primary" plain @click="applyPreset(entry)">
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :disabled="isActive(entry)"
+              @click="applyPreset(entry)"
+            >
               {{ t('preset.apply') }}
             </el-button>
             <el-button size="small" text @click="viewDetail(entry)">
@@ -410,6 +436,7 @@ function viewDetail(entry: PresetEntry): void {
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
+                  <el-dropdown-item command="edit">{{ t('preset.edit') }}</el-dropdown-item>
                   <el-dropdown-item command="copy">{{ t('preset.copy') }}</el-dropdown-item>
                   <el-dropdown-item command="rename">{{ t('preset.rename') }}</el-dropdown-item>
                   <el-dropdown-item command="overwrite">{{ t('preset.overwrite') }}</el-dropdown-item>
@@ -463,7 +490,13 @@ function viewDetail(entry: PresetEntry): void {
             </el-tag>
           </div>
           <div class="preset-footer__actions">
-            <el-button size="small" type="primary" plain @click="applyPreset(entry)">
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :disabled="isActive(entry)"
+              @click="applyPreset(entry)"
+            >
               {{ t('preset.apply') }}
             </el-button>
             <el-button size="small" text @click="viewDetail(entry)">
@@ -490,23 +523,28 @@ function viewDetail(entry: PresetEntry): void {
   <!-- 新建预设：先选「从哪一份外观开始」，名称与「是否立即套用」在同一屏里解决 -->
   <el-dialog v-model="saveOpen" :title="t('preset.saveTitle')" width="620px">
     <div class="save-dialog">
-      <span class="save-dialog__label">{{ t('preset.saveModeTarget') }}</span>
-      <el-radio-group v-model="saveMode" class="source-list">
-        <div
-          v-for="option in sourceOptions"
-          :key="option.value"
-          class="source-item"
-          :class="{ 'is-active': saveMode === option.value, 'is-disabled': option.disabled }"
-          @click="option.disabled ? undefined : (saveMode = option.value)"
-        >
-          <el-radio :value="option.value" :disabled="option.disabled">
-            <span class="source-item__title">{{ option.label }}</span>
-          </el-radio>
-          <p class="source-item__hint">{{ option.hint }}</p>
-        </div>
-      </el-radio-group>
-
+      <!--
+        来源也走 el-form-item：它和下面的「名称」是同一级字段，
+        以前来源用裸 span 当标签，字号和基线都跟表单项对不上，看着就是没对齐。
+      -->
       <el-form label-position="top">
+        <el-form-item :label="t('preset.saveModeTarget')">
+          <el-radio-group v-model="saveMode" class="source-list">
+            <div
+              v-for="option in sourceOptions"
+              :key="option.value"
+              class="source-item"
+              :class="{ 'is-active': saveMode === option.value, 'is-disabled': option.disabled }"
+              @click="option.disabled ? undefined : (saveMode = option.value)"
+            >
+              <el-radio :value="option.value" :disabled="option.disabled">
+                <span class="source-item__title">{{ option.label }}</span>
+              </el-radio>
+              <p class="source-item__hint">{{ option.hint }}</p>
+            </div>
+          </el-radio-group>
+        </el-form-item>
+
         <el-form-item v-if="saveMode === 'item'" :label="t('preset.saveModeItemPick')">
           <el-select v-model="saveItemId" style="width: 100%">
             <el-option
@@ -546,7 +584,13 @@ function viewDetail(entry: PresetEntry): void {
     </template>
   </el-dialog>
 
-  <PresetTuneDialog v-model="tuneOpen" :config="config" @confirm="onTuned" />
+  <PresetTuneDialog
+    v-model="tuneOpen"
+    :config="config"
+    :initial-appearance="tuneTarget?.appearance ?? null"
+    :initial-name="tuneTarget?.name ?? ''"
+    @confirm="onTuned"
+  />
 
   <PresetDetailDialog
     v-model="detailOpen"
@@ -642,23 +686,21 @@ function viewDetail(entry: PresetEntry): void {
   color: var(--el-text-color-secondary);
 }
 
-.save-dialog__label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-}
+
 
 .source-list {
   display: flex;
   flex-direction: column;
+  /* Element 的 .el-radio-group 默认 align-items: center，
+     flex 列里会把每个选项压成文字宽度并居中 —— 必须显式拉满 */
+  align-items: stretch;
   gap: 8px;
-  margin-bottom: 16px;
   width: 100%;
 }
 
 /* 三选一做成可点击的整块卡片：说明文字跟着选项走，比「三个单选 + 一段会变的灰字」好读 */
 .source-item {
+  width: 100%;
   border: 1px solid var(--el-border-color-light);
   border-radius: 10px;
   padding: 9px 12px 10px;

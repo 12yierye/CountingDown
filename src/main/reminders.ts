@@ -32,7 +32,7 @@ function check(): void {
     if (item.notifyOnToday !== true) continue
     if (notified.get(item.id) === today) continue
 
-    const target = resolveTarget(item.target, config.target)
+    const target = resolveTarget(item.target)
     const result = computeCountdown(target)
     if (result.state !== 'today') continue
 

@@ -6,16 +6,17 @@
  * 不读全局配置、不落盘、不知道预设的存在。因此同一个组件既能给全局外观页用，
  * 也能给「手动调整预设参数」的模态框操作一份草稿 —— 后者改半天也不会碰到全局设置。
  *
- * dense = true 时外壳换成平铺分组（见 AppearanceGroup），供列宽只有 500px 出头的模态框使用；
- * 控件、标签、tooltip 两种变体完全一致。
+ * 分区一律可折叠，顺序固定：字体 / 背景 / 边框与阴影 / 文字。
+ * 默认只展开「背景」和「文字」—— 这两块打开就能解决八成的调外观需求；
+ * 字体与边框、内边距收在标题后面，但标题右侧写着当前值，不用点开也知道现在是什么。
  *
- * advanced = false（默认）时按使用频率分三层：一键配色 → 常用 6 项 → 高级参数折叠。
- * 折叠只影响这一层渲染，**不影响数据**：隐藏的字段仍原样保留在 appearance 里。
+ * dense = true 给列宽只有 500px 出头的模态框用：分区默认全展开。
+ * advanced = true 让四段文字样式直接铺开字重/字距/透明度；页面上则由「完整参数」手动切。
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AppearanceConfig, TextStyle } from '@shared/types'
-import AppearanceGroup from '@/components/AppearanceGroup.vue'
+import SettingSection from '@/components/SettingSection.vue'
 import FieldRow from '@/components/FieldRow.vue'
 import ColorField from '@/components/ColorField.vue'
 import TextStyleEditor from '@/components/TextStyleEditor.vue'
@@ -35,7 +36,6 @@ const props = withDefaults(
 const emit = defineEmits<{
   (event: 'update:appearance', value: AppearanceConfig): void
   (event: 'reset', key: 'font' | 'background' | 'border' | 'text'): void
-  (event: 'toggle-advanced', value: boolean): void
 }>()
 
 const { t } = useI18n()
@@ -55,6 +55,9 @@ function updateStyle(key: 'title' | 'count' | 'hint' | 'status', value: TextStyl
   patchAppearance({ [key]: value })
 }
 
+/** 四段文字样式默认只给字号与颜色；字重/字距/透明度藏在这一个开关后面 */
+const fullText = ref(props.advanced)
+
 /** 文案样板跟随界面语言，避免英文界面里预览出「元旦」「128 天」 */
 const samples = computed(() => ({
   title: t('sample.title'),
@@ -64,28 +67,18 @@ const samples = computed(() => ({
 }))
 
 const fontOptions = FONT_STACKS
+
+const openFont = computed(() => props.dense)
+const openBorder = computed(() => props.dense)
 </script>
 
 <template>
-  <!--
-    高级参数的总开关放在表单最上面，一个入口、一个位置。
-    以前「展开」藏在边框分组里、「收起」又跑到文字分组，「高级」到底指什么谁也说不清；
-    现在开关固定在最上方，说明里直接列出它会带出哪些项。
-    （预设调参模态框 dense 模式下没有开关位，那边固定展开。）
-  -->
-  <div v-if="!dense" class="advanced-bar">
-    <div class="advanced-bar__text">
-      <span class="advanced-bar__title">{{ t('appearance.advanced') }}</span>
-      <span class="advanced-bar__hint">{{ t('appearance.advancedBarHint') }}</span>
-    </div>
-    <el-switch
-      :model-value="advanced"
-      data-cd-advanced
-      @update:model-value="(v: string | number | boolean) => emit('toggle-advanced', Boolean(v))"
-    />
-  </div>
-
-  <AppearanceGroup :title="t('appearance.font')" :dense="dense">
+  <SettingSection
+    :title="t('appearance.font')"
+    :help="t('appearance.fontHint')"
+    :default-open="openFont"
+    :persist-key="dense ? '' : 'appearance.font'"
+  >
     <template #actions>
       <el-button link size="small" :title="t('appearance.resetFont')" @click="emit('reset', 'font')">
         {{ t('common.resetGroup') }}
@@ -106,9 +99,12 @@ const fontOptions = FONT_STACKS
         <el-option v-for="font in fontOptions" :key="font" :label="font" :value="font" />
       </el-select>
     </FieldRow>
-  </AppearanceGroup>
+  </SettingSection>
 
-  <AppearanceGroup :title="t('appearance.background')" :dense="dense">
+  <SettingSection
+    :title="t('appearance.background')"
+    persist-key="appearance.background"
+  >
     <template #actions>
       <el-button
         link
@@ -164,7 +160,7 @@ const fontOptions = FONT_STACKS
         />
       </FieldRow>
 
-      <FieldRow v-if="advanced" :label="t('appearance.padding')">
+      <FieldRow :label="t('appearance.padding')">
         <SliderField
           :model-value="bg.padding"
           :min="0"
@@ -174,13 +170,12 @@ const fontOptions = FONT_STACKS
         />
       </FieldRow>
     </div>
-  </AppearanceGroup>
+  </SettingSection>
 
-  <!-- 高级模式：边框与阴影整组出现；收起时整组不渲染，入口在上面那条总开关里 -->
-  <AppearanceGroup
-    v-if="advanced"
+  <SettingSection
     :title="`${t('appearance.border')} / ${t('appearance.shadow')}`"
-    :dense="dense"
+    :default-open="openBorder"
+    :persist-key="dense ? '' : 'appearance.border'"
   >
     <template #actions>
       <el-button link size="small" :title="t('appearance.resetBorder')" @click="emit('reset', 'border')">
@@ -223,98 +218,48 @@ const fontOptions = FONT_STACKS
         />
       </FieldRow>
     </div>
-  </AppearanceGroup>
+  </SettingSection>
 
-  <!-- 收起状态下整组不渲染：入口只有顶部那一个开关，不再另留一块占位说明 -->
-  <AppearanceGroup :title="t('appearance.textGroup')" :dense="dense">
-    <template #help>
-      <el-tooltip :content="t('appearance.textAlphaHint')" placement="top" :show-after="150">
-        <span class="panel-card__help" tabindex="0">
-          <el-icon :size="13"><QuestionFilled /></el-icon>
-        </span>
-      </el-tooltip>
-    </template>
+  <SettingSection
+    :title="t('appearance.textGroup')"
+    persist-key="appearance.text"
+  >
     <template #actions>
+      <el-button link size="small" @click="fullText = !fullText">
+        {{ fullText ? t('appearance.textCompact') : t('appearance.textFull') }}
+      </el-button>
       <el-button link size="small" :title="t('appearance.resetText')" @click="emit('reset', 'text')">
         {{ t('common.resetGroup') }}
       </el-button>
     </template>
 
-    <!--
-      文字透明度总开关单独放在最上面：它只影响文字，与上面的背景透明度无关；
-      下面每个文字样式还能再调各自的透明度，两者相乘。
-    -->
-    <FieldRow :label="t('appearance.textAlpha')" :hint="t('appearance.textAlphaHint')">
-      <SliderField
-        :model-value="appearance.textAlpha ?? 1"
-        :min="0"
-        :max="1"
-        :step="0.01"
-        @update:model-value="(v: number) => patchAppearance({ textAlpha: v })"
-      />
-    </FieldRow>
-
-    <div class="panel-grid-text">
-      <TextStyleEditor
-        :title="t('appearance.titleStyle')"
-        :model-value="appearance.title"
-        :sample="samples.title"
-        :compact="!advanced"
-        @update:model-value="(v: TextStyle) => updateStyle('title', v)"
-      />
-      <TextStyleEditor
-        :title="t('appearance.countStyle')"
-        :model-value="appearance.count"
-        :sample="samples.count"
-        :compact="!advanced"
-        @update:model-value="(v: TextStyle) => updateStyle('count', v)"
-      />
-      <TextStyleEditor
-        :title="t('appearance.hintStyle')"
-        :model-value="appearance.hint"
-        :sample="samples.hint"
-        :compact="!advanced"
-        @update:model-value="(v: TextStyle) => updateStyle('hint', v)"
-      />
-      <TextStyleEditor
-        :title="t('appearance.statusStyle')"
-        :model-value="appearance.status"
-        :sample="samples.status"
-        :compact="!advanced"
-        @update:model-value="(v: TextStyle) => updateStyle('status', v)"
-      />
-    </div>
-  </AppearanceGroup>
+    <TextStyleEditor
+      :title="t('appearance.titleStyle')"
+      :model-value="appearance.title"
+      :sample="samples.title"
+      :compact="!fullText"
+      @update:model-value="(v: TextStyle) => updateStyle('title', v)"
+    />
+    <TextStyleEditor
+      :title="t('appearance.countStyle')"
+      :model-value="appearance.count"
+      :sample="samples.count"
+      :compact="!fullText"
+      @update:model-value="(v: TextStyle) => updateStyle('count', v)"
+    />
+    <TextStyleEditor
+      :title="t('appearance.hintStyle')"
+      :model-value="appearance.hint"
+      :sample="samples.hint"
+      :compact="!fullText"
+      @update:model-value="(v: TextStyle) => updateStyle('hint', v)"
+    />
+    <TextStyleEditor
+      :title="t('appearance.statusStyle')"
+      :model-value="appearance.status"
+      :sample="samples.status"
+      :compact="!fullText"
+      @update:model-value="(v: TextStyle) => updateStyle('status', v)"
+    />
+  </SettingSection>
 </template>
-
-<style scoped>
-.advanced-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 10px 14px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: var(--cd-radius, 12px);
-  background: var(--el-fill-color-lighter);
-}
-
-.advanced-bar__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.advanced-bar__title {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.advanced-bar__hint {
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--el-text-color-secondary);
-}
-</style>

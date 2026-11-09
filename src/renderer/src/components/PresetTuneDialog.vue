@@ -16,6 +16,10 @@ const props = defineProps<{
   modelValue: boolean
   /** 提供文案、行为、语言等预览上下文；外观部分会被草稿覆盖 */
   config: AppConfig
+  /** 编辑已有预设时传入它当前的外观；为空表示新建（从全局外观起步） */
+  initialAppearance?: AppearanceConfig | null
+  /** 编辑已有预设时传入它当前的名字 */
+  initialName?: string
 }>()
 
 const emit = defineEmits<{
@@ -41,18 +45,21 @@ const nameError = ref(false)
 
 /**
  * 用 watch 而不是在 setup 里算一次：这个组件挂载时配置可能还没从主进程加载回来；
- * 而且每次打开都重置草稿，下次永远从「当前全局外观」起步，不做续作。
+ * 而且每次打开都重置草稿 —— 新建时从「当前全局外观」起步，编辑时从该预设的现值起步。
  */
 watch(
   () => props.modelValue,
   (open) => {
     if (!open) return
-    draft.value = cloneAppearance(props.config.appearance)
-    name.value = ''
+    draft.value = cloneAppearance(props.initialAppearance ?? props.config.appearance)
+    name.value = props.initialName ?? ''
     nameError.value = false
   },
   { immediate: true }
 )
+
+/** 编辑态：标题、说明与按钮文案都跟着变 */
+const editing = computed(() => Boolean(props.initialAppearance))
 
 /** 预览：只换掉 appearance，其余（文案、显示模式、语言）沿用真实配置 */
 const previewConfig = computed<AppConfig>(() => ({ ...props.config, appearance: draft.value }))
@@ -70,7 +77,7 @@ function submit(): void {
   <el-dialog
     v-model="visible"
     class="tune-dialog"
-    :title="t('preset.tuneTitle')"
+    :title="editing ? t('preset.tuneTitleEdit') : t('preset.tuneTitle')"
     width="860px"
     top="5vh"
     destroy-on-close
@@ -80,7 +87,9 @@ function submit(): void {
       这样弹窗外框始终被内容撑到合适高度，不需要给 .el-dialog 写任何 display/height hack。
     -->
     <div class="tune-dialog__inner">
-      <p class="tune-dialog__note">{{ t('preset.tuneNameFirst') }}</p>
+      <p class="tune-dialog__note">
+        {{ editing ? t('preset.tuneNoteEdit') : t('preset.tuneNameFirst') }}
+      </p>
 
       <div class="tune-dialog__body">
         <div class="tune-dialog__left">
@@ -116,7 +125,9 @@ function submit(): void {
 
     <template #footer>
       <el-button @click="visible = false">{{ t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="submit">{{ t('preset.tuneConfirm') }}</el-button>
+      <el-button type="primary" @click="submit">
+        {{ editing ? t('preset.tuneConfirmEdit') : t('preset.tuneConfirm') }}
+      </el-button>
     </template>
   </el-dialog>
 </template>
