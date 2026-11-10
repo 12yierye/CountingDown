@@ -164,9 +164,9 @@ function submit(): void {
   flex: none;
   width: 296px;
   padding: 10px 12px 12px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 10px;
-  background: linear-gradient(135deg, var(--el-fill-color-darker), var(--el-fill-color-light));
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-md);
+  background: linear-gradient(135deg, var(--cd-s2), var(--cd-s3));
   overflow: hidden;
 }
 

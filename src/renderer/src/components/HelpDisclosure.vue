@@ -66,13 +66,13 @@ const open = ref(props.defaultOpen)
 }
 
 .help-disclosure__toggle:hover {
-  color: var(--el-color-primary);
+  color: var(--cd-ink-1);
 }
 
 .help-disclosure__toggle:focus-visible {
-  outline: 2px solid var(--el-color-primary);
+  outline: 2px solid var(--cd-line-focus);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--cd-r-sm);
 }
 
 .help-disclosure__chevron {
@@ -107,12 +107,12 @@ const open = ref(props.defaultOpen)
 .help-disclosure__box {
   margin-top: 4px;
   padding: 8px 10px;
-  border: 1px solid var(--el-border-color-extra-light);
-  border-radius: 8px;
-  background: var(--el-fill-color-light);
+  border: 1px solid var(--cd-line-soft);
+  border-radius: var(--cd-r-sm);
+  background: var(--cd-s2);
   font-size: 11.5px;
   line-height: 1.75;
-  color: var(--el-text-color-secondary);
+  color: var(--cd-ink-3);
 }
 
 @media (prefers-reduced-motion: reduce) {

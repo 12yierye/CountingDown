@@ -88,9 +88,9 @@ function toggle(): void {
 
 <style scoped>
 .cd-section {
-  border: 1px solid var(--el-border-color-light);
-  border-radius: var(--cd-radius, 12px);
-  background: var(--el-bg-color);
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-md);
+  background: var(--cd-s1);
   /*
    * 必须显式禁止收缩。
    *
@@ -126,26 +126,26 @@ function toggle(): void {
   gap: 8px;
   padding: 8px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--cd-r-sm);
   background: transparent;
-  color: var(--el-text-color-primary);
+  color: var(--cd-ink-1);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
 .cd-section__toggle:hover {
-  background: var(--el-fill-color-light);
+  background: var(--cd-s3);
 }
 
 .cd-section__toggle:focus-visible {
-  outline: 2px solid var(--el-color-primary);
+  outline: 2px solid var(--cd-line-focus);
   outline-offset: -2px;
 }
 
 .cd-section__chevron {
   flex: none;
-  color: var(--el-text-color-secondary);
+  color: var(--cd-ink-3);
   transition: transform 0.16s ease;
 }
 
@@ -163,7 +163,7 @@ function toggle(): void {
   flex: none;
   display: inline-flex;
   align-items: center;
-  color: var(--el-text-color-secondary);
+  color: var(--cd-ink-3);
   cursor: help;
   outline: none;
   transition: color 0.15s ease;
@@ -171,7 +171,7 @@ function toggle(): void {
 
 .cd-section__help:hover,
 .cd-section__help:focus-visible {
-  color: var(--el-color-primary);
+  color: var(--cd-ink-1);
 }
 
 .cd-section__actions {

@@ -1,13 +1,16 @@
 <script setup lang="ts">
 /**
  * 预设参数详情：让用户可以在**不套用**的前提下看清一个预设（内置或自定义）
- * 到底把哪些参数设成了什么值，包括各段文案的实际内容。
+ * 到底把哪些参数设成了什么值。
+ *
+ * 只列外观参数，不列文案 —— 预设只覆盖 appearance，文案取自当前配置，
+ * 把它摆在「预设参数」里会让人误以为文案也是这个预设的一部分。
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AppConfig, AppearanceConfig } from '@shared/types'
 import CountdownPreview from '@/components/CountdownPreview.vue'
-import { hexToRgba, textStyle } from '@/utils/style'
+import { previewMetrics, sampleBackground, textStyle } from '@/utils/style'
 
 const props = defineProps<{
   modelValue: boolean
@@ -44,18 +47,11 @@ const bg = computed(() => props.appearance?.background ?? null)
 /**
  * 样张底色 = 这个预设自己的背景色（带上它的透明度）。
  *
- * 原来样张直接摆在对话框的白底上，靠一层 text-shadow 勉强描边，
- * 遇到「深色卡片 + 白字」的预设仍然几乎看不见。铺上真实底色之后，
- * 对比度就是预设实际的样子，也不再需要那层阴影。
+ * 与「文字样式样张」共用同一个工具函数，两处看到的是同一套对比度 ——
+ * 之前这里用 linear-gradient 叠层、那边用白底 + text-shadow，同一个预设
+ * 在两个界面上会显出不同的深浅。
  */
-const sampleBg = computed(() => {
-  const color = props.appearance?.background?.color
-  if (!color) return {}
-  const alpha = props.appearance?.background?.alpha
-  const rgba = hexToRgba(color, typeof alpha === 'number' ? alpha : 1)
-  // 用一层渐变叠在浅色底上：背景本身半透明时仍然看得见底，不会变成一片空白
-  return { backgroundImage: `linear-gradient(${rgba}, ${rgba})` }
-})
+const sampleBg = computed(() => sampleBackground(props.appearance?.background))
 
 /**
  * 字体族只显示第一个字体名，后面挂一个「+N」。
@@ -83,20 +79,18 @@ watch(
   }
 )
 
+/**
+ * 预览框尺寸跟着「显示精度」走。
+ *
+ * 精度只有「天」时卡片本身很窄，用给秒级准备的 220×124 会把卡片缩在中间、
+ * 两边留出大片空白；反过来精度到秒时卡片很宽，框再窄就会把内容挤扁。
+ * 所以低精度用更窄更高的框，高精度用更宽更矮的框。
+ */
+const metrics = computed(() => previewMetrics(props.config.behavior.displayMode))
+
 const previewConfig = computed<AppConfig>(() =>
   props.appearance ? { ...props.config, appearance: props.appearance } : props.config
 )
-
-const textRows = computed(() => {
-  const text = props.config.text
-  if (!text) return []
-  return [
-    { label: 'target.hintText', value: text.hint },
-    { label: 'target.futureText', value: text.futureText },
-    { label: 'target.todayText', value: text.todayText },
-    { label: 'target.pastText', value: text.pastText }
-  ]
-})
 
 function show(value: unknown, suffix = ''): string {
   if (value === undefined || value === null || value === '') return t('preset.detailEmpty')
@@ -113,9 +107,16 @@ function percent(value: number | undefined): string {
   <el-dialog v-model="visible" :title="t('preset.detailTitle')" width="720px" top="6vh">
     <div v-if="appearance" class="detail">
       <div class="detail__head">
-        <div class="detail__sample-wrap">
-          <!-- 真组件渲染，尺寸与比例和桌面卡片一致 -->
-          <CountdownPreview :config="previewConfig" sample still :scale="0.5" />
+        <div
+          class="detail__sample-wrap"
+          :style="{
+            width: `${metrics.width}px`,
+            height: `${metrics.height}px`,
+            '--cd-preview-max-height': `${metrics.height}px`
+          }"
+        >
+          <!-- 真组件渲染；scale 交给它自己按框的大小算，框变窄时卡片跟着缩 -->
+          <CountdownPreview :config="previewConfig" sample still />
         </div>
         <div class="detail__name">
           <span class="detail__name-label">{{ t('preset.nameLabel') }}</span>
@@ -245,15 +246,6 @@ function percent(value: number | undefined): string {
         </div>
       </div>
 
-      <template v-if="textRows.length">
-        <el-divider content-position="left">{{ t('preset.detailText') }}</el-divider>
-        <div class="detail__grid">
-          <div v-for="row in textRows" :key="row.label" class="detail__row">
-            <span class="detail__label">{{ t(row.label) }}</span>
-            <span class="detail__value">{{ show(row.value) }}</span>
-          </div>
-        </div>
-      </template>
     </div>
 
     <template #footer>
@@ -269,16 +261,21 @@ function percent(value: number | undefined): string {
   gap: 20px;
 }
 
+/* 宽高由内联样式按显示精度给，这里只负责定住位置与底色 */
 .detail__sample-wrap {
   flex: none;
-  width: 220px;
-  height: 124px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  background: var(--el-fill-color-light);
+  border-radius: var(--cd-r-md);
+  background: var(--cd-s2);
   overflow: hidden;
+}
+
+/* 自动适配要靠容器的可用宽度来决定缩放比例：
+   预览根节点默认按内容宽度撑开，量到的永远是"卡片多宽"，缩放就成了 1。 */
+.detail__sample-wrap :deep(.preview) {
+  width: 100%;
 }
 
 .detail__name {
@@ -346,7 +343,7 @@ function percent(value: number | undefined): string {
   background: transparent;
   font: inherit;
   font-size: 12.5px;
-  color: var(--el-color-primary);
+  color: var(--cd-ink-1);
   text-align: left;
   cursor: pointer;
 }
@@ -365,11 +362,11 @@ function percent(value: number | undefined): string {
 .detail__font-badge {
   flex: none;
   padding: 0 6px;
-  border-radius: 999px;
-  background: var(--el-fill-color);
+  border-radius: var(--cd-r-full);
+  background: var(--cd-s3);
   font-size: 11px;
   line-height: 17px;
-  color: var(--el-text-color-secondary);
+  color: var(--cd-ink-3);
 }
 
 /* 展开后的完整字体栈：跨两列铺开，等宽字体，允许换行 */
@@ -377,11 +374,11 @@ function percent(value: number | undefined): string {
   grid-column: 1 / -1;
   margin: 0 0 4px;
   padding: 6px 8px;
-  border-radius: 6px;
-  background: var(--el-fill-color-lighter);
+  border-radius: var(--cd-r-sm);
+  background: var(--cd-s2);
   font-size: 11.5px;
   line-height: 1.7;
-  color: var(--el-text-color-regular);
+  color: var(--cd-ink-2);
   word-break: break-all;
 }
 
@@ -389,8 +386,8 @@ function percent(value: number | undefined): string {
   display: inline-block;
   width: 12px;
   height: 12px;
-  border-radius: 3px;
-  border: 1px solid var(--el-border-color);
+  border-radius: 4px;
+  border: 1px solid var(--cd-line);
   vertical-align: -1px;
   margin-right: 4px;
 }
@@ -405,8 +402,8 @@ function percent(value: number | undefined): string {
 .detail__style {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
+  border: 1px solid var(--cd-line-soft);
+  border-radius: var(--cd-r-md);
   padding: 8px 10px;
 }
 
@@ -449,8 +446,8 @@ function percent(value: number | undefined): string {
 .detail__style-sample {
   margin-top: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
-  background-color: var(--el-fill-color-light);
+  border-radius: var(--cd-r-sm);
+  background-color: var(--cd-s2);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;

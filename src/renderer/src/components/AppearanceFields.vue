@@ -90,6 +90,7 @@ const openBorder = computed(() => props.dense)
         :model-value="appearance.fontFamily"
         class="font-select"
         popper-class="cd-font-select"
+        size="small"
         filterable
         allow-create
         default-first-option
@@ -238,6 +239,8 @@ const openBorder = computed(() => props.dense)
       :model-value="appearance.title"
       :sample="samples.title"
       :compact="!fullText"
+      :background="appearance.background"
+      :font-family="appearance.fontFamily"
       @update:model-value="(v: TextStyle) => updateStyle('title', v)"
     />
     <TextStyleEditor
@@ -245,6 +248,8 @@ const openBorder = computed(() => props.dense)
       :model-value="appearance.count"
       :sample="samples.count"
       :compact="!fullText"
+      :background="appearance.background"
+      :font-family="appearance.fontFamily"
       @update:model-value="(v: TextStyle) => updateStyle('count', v)"
     />
     <TextStyleEditor
@@ -252,6 +257,8 @@ const openBorder = computed(() => props.dense)
       :model-value="appearance.hint"
       :sample="samples.hint"
       :compact="!fullText"
+      :background="appearance.background"
+      :font-family="appearance.fontFamily"
       @update:model-value="(v: TextStyle) => updateStyle('hint', v)"
     />
     <TextStyleEditor
@@ -259,6 +266,8 @@ const openBorder = computed(() => props.dense)
       :model-value="appearance.status"
       :sample="samples.status"
       :compact="!fullText"
+      :background="appearance.background"
+      :font-family="appearance.fontFamily"
       @update:model-value="(v: TextStyle) => updateStyle('status', v)"
     />
   </SettingSection>

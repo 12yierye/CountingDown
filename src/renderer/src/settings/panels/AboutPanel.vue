@@ -2,7 +2,14 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessageBox } from 'element-plus'
-import type { AppConfig, AppLanguage, HostInfo, ScreenInfo, UpdateState } from '@shared/types'
+import type {
+  AppConfig,
+  AppLanguage,
+  AppTheme,
+  HostInfo,
+  ScreenInfo,
+  UpdateState
+} from '@shared/types'
 import { formatBytes, presetIdOf, UPDATE_FEED_PRESETS } from '@shared/update'
 import FieldRow from '@/components/FieldRow.vue'
 import HelpDisclosure from '@/components/HelpDisclosure.vue'
@@ -15,6 +22,35 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+/* ------------------------------ 界面主题 ------------------------------ */
+
+/** 合法的主题值；历史配置里的 'dark' 不在其中，由 themeValue 归一化 */
+const THEME_VALUES: AppTheme[] = ['graphite', 'oled', 'warm', 'light', 'system']
+
+/**
+ * 下拉里显示的值。
+ *
+ * 旧版本只存过 'light' | 'dark'，'dark' 直接喂给 el-select 会匹配不到任何选项、
+ * 显示成空白。这里把它折成 graphite —— 它当年就是这套深色，不该让用户看到空值。
+ */
+const themeValue = computed<AppTheme>(() => {
+  const raw = props.config.runtime.theme as string
+  if (raw === 'dark') return 'graphite'
+  return THEME_VALUES.includes(raw as AppTheme) ? (raw as AppTheme) : 'graphite'
+})
+
+/**
+ * 主题清单。名字里带色温与明度，而不是「主题 1/2/3」——
+ * 用户在列表里挑的时候得能预判选完长什么样。
+ */
+const themeOptions = computed<Array<{ value: AppTheme; label: string }>>(() => [
+  { value: 'graphite', label: t('about.themeGraphite') },
+  { value: 'oled', label: t('about.themeOled') },
+  { value: 'warm', label: t('about.themeWarm') },
+  { value: 'light', label: t('about.themeLight') },
+  { value: 'system', label: t('about.themeSystem') }
+])
 const host = ref<HostInfo | null>(null)
 
 /**
@@ -316,14 +352,23 @@ async function quitApp(): Promise<void> {
       </el-radio-group>
     </FieldRow>
 
-    <FieldRow :label="t('about.theme')">
-      <el-radio-group
-        :model-value="config.runtime.theme"
-        @update:model-value="(v: string | number | boolean | undefined) => emit('patch', { runtime: { theme: v } })"
+    <FieldRow :label="t('about.theme')" :hint="t('about.themeHint')">
+      <el-select
+        :model-value="themeValue"
+        size="small"
+        style="width: 200px"
+        @update:model-value="
+          (v: string | number | boolean | undefined) =>
+            emit('patch', { runtime: { theme: v as AppTheme } })
+        "
       >
-        <el-radio-button value="dark">{{ t('about.dark') }}</el-radio-button>
-        <el-radio-button value="light">{{ t('about.light') }}</el-radio-button>
-      </el-radio-group>
+        <el-option
+          v-for="opt in themeOptions"
+          :key="opt.value"
+          :label="opt.label"
+          :value="opt.value"
+        />
+      </el-select>
     </FieldRow>
 
     <FieldRow :label="t('about.screens')">
@@ -496,7 +541,7 @@ async function quitApp(): Promise<void> {
   margin: 0;
   font-size: 11.5px;
   line-height: 1.7;
-  color: var(--el-color-warning-dark-2);
+  color: var(--cd-warning);
 }
 
 .screens {

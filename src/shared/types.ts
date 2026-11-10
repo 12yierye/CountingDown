@@ -23,6 +23,17 @@ export type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' |
 /** 界面语言 */
 export type AppLanguage = 'zh-CN' | 'en-US'
 
+/**
+ * 设置界面的配色主题。
+ *
+ * graphite / oled / warm 都是深色，差别在色温与背景黑度；light 是唯一的浅色。
+ * system 不落成具体色板，运行时按系统明暗解析成 graphite 或 light。
+ *
+ * 旧版本只存过 'light' | 'dark'，'dark' 由 resolveTheme 归一化成 graphite，
+ * 不需要迁移脚本，也不用担心老配置读出来是个不认识的字符串。
+ */
+export type AppTheme = 'graphite' | 'oled' | 'warm' | 'light' | 'system'
+
 export interface TargetConfig {
   /** annual = 每年重复（使用 month/day）；once = 一次性（使用 date） */
   mode: DateMode
@@ -276,7 +287,7 @@ export interface RuntimeConfig {
   startAtLogin: boolean
   language: AppLanguage
   /** 主题模式：影响托盘与设置界面的明暗 */
-  theme: 'light' | 'dark'
+  theme: AppTheme
   /** 系统通知总开关（相当于「是否允许本应用发通知」）；具体哪一项当天提醒由每个倒数日决定 */
   notifications: boolean
   window: WindowConfig

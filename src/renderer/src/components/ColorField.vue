@@ -128,9 +128,9 @@ function showInfo(): void {
   grid-template-columns: auto auto;
   gap: 2px 10px;
   padding: 6px 9px;
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color-light);
-  background: var(--el-bg-color-overlay);
+  border-radius: var(--cd-r-md);
+  border: 1px solid var(--cd-line);
+  background: var(--cd-s2);
   box-shadow: var(--el-box-shadow-light);
   pointer-events: none;
   white-space: nowrap;

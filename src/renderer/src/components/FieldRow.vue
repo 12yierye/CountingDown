@@ -53,7 +53,7 @@ function fill(template: string, vars?: Record<string, string | number>): string 
 }
 
 .field-row + .field-row {
-  border-top: 1px solid var(--el-border-color-extra-light);
+  border-top: 1px solid var(--cd-line-soft);
 }
 
 .field-row--stacked {
@@ -90,7 +90,7 @@ function fill(template: string, vars?: Record<string, string | number>): string 
 /* 「?」用图标而不是小圆点，深色主题下也能看清 */
 .field-row__hint {
   flex: none;
-  color: var(--el-text-color-secondary);
+  color: var(--cd-ink-3);
   display: inline-flex;
   align-items: center;
   cursor: help;
@@ -100,7 +100,7 @@ function fill(template: string, vars?: Record<string, string | number>): string 
 
 .field-row__hint:hover,
 .field-row__hint:focus-visible {
-  color: var(--el-color-primary);
+  color: var(--cd-ink-1);
 }
 
 .field-row__control {

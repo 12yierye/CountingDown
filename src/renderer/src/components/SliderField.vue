@@ -134,26 +134,34 @@ function onChange(value: number | number[]): void {
   --el-slider-button-size: 14px;
 }
 
-/* 抓手本身也给一圈淡色晕影：压在轨道端点时轮廓依然清楚，不会被当成被裁掉 */
+/* 轨道与把手同色（去色后都是近白/近黑）会糊成一团，所以把手做成
+   「底色填充 + 强调色描边」的圆环，外面再罩一层同色的稀薄辉光。 */
 .slider-field__slider :deep(.el-slider__button) {
   border-width: 2px;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-color-primary) 18%, transparent);
+  background: var(--cd-s1);
+  border-color: var(--cd-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cd-accent) 16%, transparent);
 }
 
 .slider-field__slider :deep(.el-slider__button:hover),
 .slider-field__slider :deep(.el-slider__button.dragging) {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--el-color-primary) 26%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--cd-accent) 26%, transparent);
 }
 
+/* 数值块与所有 size="small" 控件同高同圆角 */
 .slider-field__value,
 .slider-field__input {
   flex: none;
   width: 58px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px solid var(--el-border-color-light);
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
+  height: var(--cd-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--cd-sp-2);
+  border-radius: var(--cd-r-sm);
+  border: 1px solid var(--cd-line);
+  background: var(--cd-s2);
+  color: var(--cd-ink-2);
   font-family: inherit;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
@@ -163,8 +171,8 @@ function onChange(value: number | number[]): void {
 }
 
 .slider-field__value:hover {
-  border-color: var(--el-color-primary-light-5);
-  color: var(--el-color-primary);
+  border-color: var(--cd-line-strong);
+  color: var(--cd-ink-1);
 }
 
 .slider-field__input {
@@ -173,8 +181,8 @@ function onChange(value: number | number[]): void {
 }
 
 .slider-field__input:focus {
-  border-color: var(--el-color-primary);
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
+  border-color: var(--cd-line-focus);
+  background: var(--cd-s1);
+  color: var(--cd-ink-1);
 }
 </style>

@@ -349,26 +349,28 @@ function seedSample(): void {
   align-items: center;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  background: var(--el-fill-color-blank);
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-md);
+  background: var(--cd-s1);
   transition:
     border-color 0.15s ease,
     background 0.15s ease;
 }
 
+/* 亮度阶梯：hover 一级灰，选中再亮一档 + 边框提到 ink-4。
+   不引入任何色相，深浅两个主题靠变量自动反相。 */
 .cd-row:hover {
-  border-color: var(--el-color-primary-light-5);
-  background: var(--el-fill-color-light);
+  border-color: var(--cd-line-strong);
+  background: var(--cd-s3);
 }
 
 .cd-row.is-active {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: var(--cd-ink-4);
+  background: var(--cd-s4);
 }
 
 .cd-row.is-disabled {
-  background: var(--el-fill-color-lighter);
+  background: var(--cd-s2);
 }
 
 .cd-row.is-disabled .cd-row__name {

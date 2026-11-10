@@ -151,6 +151,7 @@ function setAllowDrag(value: boolean): void {
     <FieldRow :label="t('layout.anchor')" :hint="t('layout.anchorHint')">
       <el-select
         :model-value="win.cornerPreset"
+        size="small"
         style="max-width: 260px"
         @update:model-value="setAnchor"
       >

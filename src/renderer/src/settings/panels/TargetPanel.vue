@@ -68,7 +68,7 @@ function patchUnits(patch: Partial<UnitLabelConfig>): void {
     persist-key="target.text"
   >
     <FieldRow :label="t('target.hintText')" :hint="t('target.hintHint')">
-      <el-input
+      <el-input size="small"
         :model-value="config.text.hint"
         :placeholder="t('target.hintPlaceholder')"
         maxlength="60"
@@ -89,7 +89,7 @@ function patchUnits(patch: Partial<UnitLabelConfig>): void {
     <div class="text-sep" aria-hidden="true"></div>
 
     <FieldRow :label="t('target.futureText')" :hint="t('target.futureHint')">
-      <el-input
+      <el-input size="small"
         :model-value="config.text.futureText"
         maxlength="40"
         @update:model-value="(v: string) => patchText({ futureText: v })"
@@ -104,7 +104,7 @@ function patchUnits(patch: Partial<UnitLabelConfig>): void {
     </FieldRow>
 
     <FieldRow :label="t('target.todayText')" :hint="t('target.todayTextHint')">
-      <el-input
+      <el-input size="small"
         :model-value="config.text.todayText"
         maxlength="40"
         @update:model-value="(v: string) => patchText({ todayText: v })"
@@ -119,7 +119,7 @@ function patchUnits(patch: Partial<UnitLabelConfig>): void {
     </FieldRow>
 
     <FieldRow :label="t('target.pastText')" :hint="t('target.pastTextHint')">
-      <el-input
+      <el-input size="small"
         :model-value="config.text.pastText"
         maxlength="40"
         @update:model-value="(v: string) => patchText({ pastText: v })"
@@ -139,11 +139,11 @@ function patchUnits(patch: Partial<UnitLabelConfig>): void {
     和文案、单位字一样属于「卡片上写什么」，跟窗口/位置没有关系。
   -->
   <SettingSection
-    :title="`${t('behavior.displayTitle')} / ${t('behavior.unitsTitle')}`"
+    :title="t('behavior.numbersGroup')"
     :help="t('behavior.unitsHint')"
     persist-key="target.precision"
   >
-    <FieldRow>
+    <FieldRow :label="t('behavior.displayTitle')">
       <el-radio-group
         :model-value="config.behavior.displayMode"
         @update:model-value="(v: string | number | boolean | undefined) => patchBehavior({ displayMode: v })"
@@ -168,7 +168,7 @@ function patchUnits(patch: Partial<UnitLabelConfig>): void {
       单位字跟着精度放：精度决定「有哪几段」，单位字决定「每段后面跟什么字」，
       两者是一件事的两半。精度切走的分段在这里只淡一档，照样能改。
     -->
-    <FieldRow stacked>
+    <FieldRow :label="t('behavior.unitsTitle')">
       <UnitLabelField
         :day="units.day"
         :hour="units.hour"

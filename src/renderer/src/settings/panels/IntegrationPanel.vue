@@ -271,24 +271,28 @@ function setNotifyEnabled(value: boolean): void {
 
 .hotkey__display {
   min-width: 220px;
-  min-height: 34px;
+  min-height: var(--cd-h);
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px dashed var(--el-border-color);
-  background: var(--el-fill-color-lighter);
+  padding: 3px 10px;
+  border-radius: var(--cd-r-sm);
+  border: 1px dashed var(--cd-line);
+  background: var(--cd-s2);
   font-size: 13px;
-  color: var(--el-text-color-regular);
+  color: var(--cd-ink-2);
   cursor: pointer;
   outline: none;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .hotkey__display.is-recording {
-  border-color: var(--el-color-primary);
+  border-color: var(--cd-accent);
   border-style: solid;
-  color: var(--el-color-primary);
+  color: var(--cd-ink-1);
+  background: var(--cd-s3);
 }
 
 .hotkey__keys {
@@ -297,12 +301,12 @@ function setNotifyEnabled(value: boolean): void {
 }
 
 .hotkey__keys kbd {
-  padding: 2px 7px;
-  border-radius: 5px;
-  border: 1px solid var(--el-border-color);
-  background: var(--el-bg-color);
+  padding: 1px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--cd-line);
+  background: var(--cd-s1);
   font-family: 'Cascadia Mono', Consolas, monospace;
   font-size: 12px;
-  box-shadow: 0 1px 0 var(--el-border-color);
+  box-shadow: 0 1px 0 var(--cd-line-strong);
 }
 </style>

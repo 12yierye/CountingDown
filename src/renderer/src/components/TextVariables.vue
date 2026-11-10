@@ -109,10 +109,10 @@ function titleOf(name: string): string {
 
 .text-vars__chip {
   padding: 1px 6px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 5px;
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-regular);
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-sm);
+  background: var(--cd-s2);
+  color: var(--cd-ink-2);
   font-family: 'Cascadia Mono', Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.6;
@@ -120,7 +120,7 @@ function titleOf(name: string): string {
 }
 
 .text-vars__chip:hover {
-  border-color: var(--el-color-primary-light-5);
-  color: var(--el-color-primary);
+  border-color: var(--cd-line-strong);
+  color: var(--cd-ink-1);
 }
 </style>

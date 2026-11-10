@@ -2,6 +2,7 @@ import type {
   AppConfig,
   AppearanceConfig,
   AppearanceOverride,
+  AppTheme,
   BehaviorConfig,
   CountdownItem,
   DisplayMode,
@@ -264,7 +265,7 @@ export function createDefaultConfig(): AppConfig {
       toggleHotkey: 'ScrollLock',
       startAtLogin: false,
       language: 'zh-CN',
-      theme: 'dark',
+      theme: 'graphite',
       notifications: true,
       window: {
         corner: 'top-right',
@@ -469,6 +470,11 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     runtime: {
       ...config.runtime,
       notifications: config.runtime?.notifications !== false,
+      // 'dark' 是旧版的唯一深色主题，归一成 graphite；
+      // 任何读不懂的值也退回 graphite，避免落到一个没有色板的空主题上。
+      // 注意这里**不能**用 resolveTheme：它会把 'system' 解析成具体色板，
+      // 用户选的「跟随系统」会在下一次保存时被永久固化成 light。
+      theme: normalizeThemeValue(config.runtime?.theme),
       window,
       trayMenu: normalizeTrayMenu(config.runtime?.trayMenu),
       update: {
@@ -704,6 +710,49 @@ export function parseTargetDate(target: TargetConfig): Date {
 
 /** 当前偏移量语义版本；旧配置读入时会据此换算方向 */
 export const LAYOUT_VERSION = 2
+
+/* -------------------------------- 界面主题 -------------------------------- */
+
+/** 可落到 <html data-theme> 上的具体色板 */
+export type ThemeName = 'graphite' | 'oled' | 'warm' | 'light'
+
+/** 归一化主题值：只做合法性校验，不解析 system */
+export function normalizeThemeValue(value: unknown): AppTheme {
+  if (value === 'dark') return 'graphite'
+  const known: AppTheme[] = ['graphite', 'oled', 'warm', 'light', 'system']
+  return known.includes(value as AppTheme) ? (value as AppTheme) : 'graphite'
+}
+
+export interface ResolvedTheme {
+  /** 与 settings.css 里的 `html[data-theme="…"]` 一一对应 */
+  name: ThemeName
+  /** 是否需要挂上 Element Plus 的 .dark 类 */
+  dark: boolean
+}
+
+/**
+ * 把配置里的 theme 解析成「具体色板 + 是否深色」。
+ *
+ * `system` 不落成固定色板：调用方传入系统的明暗状态，这里决定用 graphite 还是 light。
+ * 旧配置里的 `dark` 归一到 graphite —— 它当年就是这套深色，升级后观感不该跳变。
+ */
+export function resolveTheme(
+  theme: AppTheme | 'dark' | undefined | null,
+  systemDark = false
+): ResolvedTheme {
+  switch (theme) {
+    case 'light':
+      return { name: 'light', dark: false }
+    case 'oled':
+      return { name: 'oled', dark: true }
+    case 'warm':
+      return { name: 'warm', dark: true }
+    case 'system':
+      return systemDark ? { name: 'graphite', dark: true } : { name: 'light', dark: false }
+    default:
+      return { name: 'graphite', dark: true }
+  }
+}
 
 export function clampInt(value: number, min: number, max: number): number {
   const n = Math.round(Number(value))

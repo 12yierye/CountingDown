@@ -494,7 +494,7 @@ function toggleUnitsOverride(value: boolean): void {
     <div class="editor-form">
       <SettingSection :title="t('editor.basic')" persist-key="editor.basic">
         <FieldRow :label="t('editor.name')" :hint="t('editor.nameHint')">
-          <el-input
+          <el-input size="small"
             v-model="draft.name"
             :placeholder="t('editor.namePlaceholder')"
             maxlength="30"
@@ -525,10 +525,10 @@ function toggleUnitsOverride(value: boolean): void {
         </FieldRow>
         <FieldRow v-if="draft.mode === 'annual'" :label="t('target.monthDay')">
           <div class="inline-group">
-            <el-select v-model="draft.month" style="width: 108px">
+            <el-select v-model="draft.month" size="small" style="width: 108px">
               <el-option v-for="m in 12" :key="m" :label="`${m} ${t('target.month')}`" :value="m" />
             </el-select>
-            <el-select v-model="draft.day" style="width: 108px">
+            <el-select v-model="draft.day" size="small" style="width: 108px">
               <el-option v-for="d in maxDay" :key="d" :label="`${d} ${t('target.day')}`" :value="d" />
             </el-select>
           </div>
@@ -568,7 +568,7 @@ function toggleUnitsOverride(value: boolean): void {
             @update:model-value="(v: string | number | boolean) => toggleUnitsOverride(Boolean(v))"
           />
         </FieldRow>
-        <FieldRow v-if="draft.unitsCustom" stacked>
+        <FieldRow v-if="draft.unitsCustom" :label="t('behavior.unitsTitle')">
           <UnitLabelField
             :day="draft.units.day"
             :hour="draft.units.hour"
@@ -623,7 +623,7 @@ function toggleUnitsOverride(value: boolean): void {
 
         <template v-if="draft.useText">
           <FieldRow :label="t('target.hintLabel')" :hint="t('target.hintHint')">
-            <el-input v-model="draft.text.hint" :placeholder="followPlaceholder('hint')" maxlength="60" />
+            <el-input size="small" v-model="draft.text.hint" :placeholder="followPlaceholder('hint')" maxlength="60" />
             <template #note>
               <TextVariables v-model="draft.text.hint" field="hint" />
             </template>
@@ -633,7 +633,7 @@ function toggleUnitsOverride(value: boolean): void {
           <div class="text-sep" aria-hidden="true"></div>
 
           <FieldRow :label="t('target.futureText')" :hint="t('target.futureHint')">
-            <el-input
+            <el-input size="small"
               v-model="draft.text.futureText"
               :placeholder="followPlaceholder('futureText')"
               maxlength="40"
@@ -643,7 +643,7 @@ function toggleUnitsOverride(value: boolean): void {
             </template>
           </FieldRow>
           <FieldRow :label="t('target.todayText')" :hint="t('target.todayTextHint')">
-            <el-input
+            <el-input size="small"
               v-model="draft.text.todayText"
               :placeholder="followPlaceholder('todayText')"
               maxlength="40"
@@ -658,7 +658,7 @@ function toggleUnitsOverride(value: boolean): void {
             :label="t('target.pastText')"
             :hint="t('target.pastTextHint')"
           >
-            <el-input
+            <el-input size="small"
               v-model="draft.text.pastText"
               :placeholder="followPlaceholder('pastText')"
               maxlength="40"
@@ -746,7 +746,7 @@ function toggleUnitsOverride(value: boolean): void {
  */
 .editor-sticky.is-stuck {
   border-top-color: transparent;
-  border-radius: 0 0 var(--cd-radius, 12px) var(--cd-radius, 12px);
+  border-radius: 0 0 var(--cd-r-lg) var(--cd-r-lg);
 }
 
 /*

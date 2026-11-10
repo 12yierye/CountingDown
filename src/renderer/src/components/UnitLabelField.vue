@@ -122,10 +122,10 @@ function onInput(key: UnitKey, event: Event): void {
 .units__input {
   width: 52px;
   padding: 2px 6px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  background: var(--el-fill-color-blank);
-  color: var(--el-color-primary);
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-sm);
+  background: var(--cd-s0);
+  color: var(--cd-ink-1);
   font-family: inherit;
   font-size: 13px;
   line-height: 1.6;
@@ -138,8 +138,8 @@ function onInput(key: UnitKey, event: Event): void {
 
 .units__input:hover:not(:disabled),
 .units__input:focus:not(:disabled) {
-  border-color: var(--el-color-primary);
-  background: var(--el-fill-color-light);
+  border-color: var(--cd-line-strong);
+  background: var(--cd-s1);
 }
 
 /* 细分段的输入框可编辑，因此这里只给真正的整体禁用（disabled prop）留灰字 */

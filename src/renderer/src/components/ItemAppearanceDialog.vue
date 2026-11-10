@@ -42,6 +42,20 @@ type OverrideKey = 'fontFamily' | 'background' | StyleKey
 
 const backgroundFields = computed(() => props.appearance.background ?? {})
 
+/**
+ * 样张用的「卡片长相」。
+ *
+ * 单项覆盖可能只改了字号、没设背景和字体，这时样张必须退回全局外观 ——
+ * 否则样张会变成一个没有底色的灰块，用户看到的颜色对比是假的。
+ */
+const sampleLook = computed(() => ({
+  background: {
+    color: props.appearance.background?.color ?? props.config.appearance.background.color,
+    alpha: props.appearance.background?.alpha ?? props.config.appearance.background.alpha
+  },
+  fontFamily: props.appearance.fontFamily ?? props.config.appearance.fontFamily
+}))
+
 function patch(next: AppearanceOverride): void {
   emit('update:appearance', next)
 }
@@ -97,6 +111,7 @@ const fullText = ref(false)
     :model-value="visible"
     class="item-appearance-dialog"
     width="min(920px, 94vw)"
+    top="6vh"
     append-to-body
     :title="t('editor.appearanceDialogTitle', { name: item.name || t('editor.unnamed') })"
     @update:model-value="(value: boolean) => emit('update:visible', value)"
@@ -124,6 +139,7 @@ const fullText = ref(false)
               :model-value="appearance.fontFamily"
               class="font-select"
               popper-class="cd-font-select"
+              size="small"
               filterable
               allow-create
               default-first-option
@@ -254,6 +270,8 @@ const fullText = ref(false)
                 :show-title="false"
                 :sample="entry.sample"
                 :compact="!fullText"
+                :background="sampleLook.background"
+                :font-family="sampleLook.fontFamily"
                 :model-value="appearance[entry.key] as TextStyle"
                 @update:model-value="(v: TextStyle) => patchStyle(entry.key, v)"
               />
@@ -283,7 +301,19 @@ const fullText = ref(false)
 .iad__fields {
   display: flex;
   flex-direction: column;
-  max-height: min(70vh, 620px);
+  /*
+   * 弹窗整体必须落在视口内，否则 .el-overlay-dialog（overflow: auto）会长出滚动条 ——
+   * 那根条在弹窗外侧，看起来像「设置页在滚」。
+   *
+   * 顶距 6vh（模板 top）+ 底部留白 6vh → 可用高度约 88vh；
+   * 再扣掉标题栏 / 底部按钮 / 上下内边距这些固定开销。
+   * 这个开销是实测值：视口 635px 时弹窗 467px、内容区 339px，差 128px；
+   * 留到 160px 作为余量。原来写的是 min(70vh, 620px) —— 70vh 是「内容高度」
+   * 而不是「可用高度」，加上固定开销后，窗口矮于 850px 就必然溢出。
+   *
+   * clamp 的上下限：极矮窗口保住 120px 不至于压成一条，大屏仍以 620px 封顶。
+   */
+  max-height: clamp(120px, calc(88vh - 160px), 620px);
   overflow: auto;
   padding-right: 4px;
 }
@@ -320,8 +350,8 @@ const fullText = ref(false)
 .iad-style {
   min-width: 0;
   padding: 8px 10px;
-  border: 1px solid var(--el-border-color-extra-light);
-  border-radius: 10px;
+  border: 1px solid var(--cd-line-soft);
+  border-radius: var(--cd-r-md);
 }
 
 /* 名称在左、覆盖开关在右：开关不能挤在标题前面，否则四张卡看上去像一排复选框 */

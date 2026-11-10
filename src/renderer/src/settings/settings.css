@@ -1,109 +1,656 @@
+/* ==========================================================================
+   设计令牌
+   --------------------------------------------------------------------------
+   全站唯一的圆角 / 高度 / 间距 / 灰阶定义。控件样式一律引用这里的变量，
+   不要再写裸数字 —— 之前 9 种圆角、4 种高度并存，就是"看起来像模板"的根源。
+
+   圆角只有三档：控件 8 / 容器 12 / 面板 16，外加胶囊 999。
+   控件高度只有一个值：28px，size="small" 的 Element 组件全部对齐它。
+   ========================================================================== */
+
 :root {
-  --cd-radius: 12px;
+  --cd-r-sm: 8px;
+  --cd-r-md: 12px;
+  --cd-r-lg: 16px;
+  --cd-r-full: 999px;
+
+  --cd-h: 28px;
+  --cd-h-xs: 24px;
+
+  --cd-sp-1: 4px;
+  --cd-sp-2: 8px;
+  --cd-sp-3: 12px;
+  --cd-sp-4: 16px;
+  --cd-sp-5: 20px;
+
+  --cd-radius: var(--cd-r-lg);
+
+  /* 把所有 size="small" 的 Element 控件拉到同一个高度 */
+  --el-component-size-small: var(--cd-h);
+  --el-border-radius-base: var(--cd-r-sm);
+  --el-border-radius-small: 5px;
 }
 
-/* ---- 可读性修正 ----
-   Element Plus 的默认灰阶（#909399 / #a8abb2）以及彩色按钮上的白字、
-   tag / alert / checkbox 标签里硬编码的颜色，对比度都低于 WCAG AA，
-   在两种主题下统一替换为更可读的值。 */
-html:not(.dark) {
-  --el-text-color-primary: #1f2329;
-  --el-text-color-regular: #4a5160;
-  --el-text-color-secondary: #5b6474;
-  --el-text-color-placeholder: #7d8698;
+/* ==========================================================================
+   色板
+   --------------------------------------------------------------------------
+   四套主题共用同一组变量名，只有取值不同：
+     graphite  石墨深灰（默认）—— 最中性的一套
+     oled      纯黑背景，面板靠描边浮出来
+     warm      暖灰，带一点米褐，夜里看比冷灰柔和
+     light     冷白，明度整体压低，不刺眼
 
-  /* 彩色底上的文字统一用深色，保证 ≥ 4.5:1 */
-  --el-color-primary: #1f6fd0;
-  --el-color-primary-light-3: #6ba7e8;
-  --el-color-primary-light-5: #a3c9f2;
-  --el-color-primary-light-7: #cfe2f9;
-  --el-color-primary-light-8: #e2edfc;
-  --el-color-primary-light-9: #eef5fe;
-  --el-color-primary-dark-2: #17569f;
-  --el-color-success: #23662f;
-  --el-color-success-light-9: #eef7f0;
-  --el-color-danger: #8e2424;
-  --el-color-danger-light-9: #fdeeee;
-  --el-color-error: #8e2424;
-  --el-color-warning: #7a4a06;
-  --el-color-warning-light-9: #fdf3e3;
-  --el-color-info: #4a5160;
-  --el-color-info-light-9: #f1f2f5;
+   默认值直接写在 :root 上，而不是 html[data-theme="graphite"]：
+   data-theme 由 JS 写入，晚一帧生效，写在选择器里会让首帧闪一下白底。
+   ========================================================================== */
+
+:root,
+html[data-theme='graphite'] {
+  /* 表面：0 页面 → 1 面板 → 2 分区内 → 3 悬停 → 4 激活 */
+  --cd-s0: #0d0f12;
+  --cd-s1: #13161a;
+  --cd-s2: #181c21;
+  --cd-s3: #20252b;
+  --cd-s4: #2a3038;
+
+  --cd-ink-1: #d8dce2;
+  --cd-ink-2: #9aa2ae;
+  --cd-ink-3: #6b7380;
+  --cd-ink-4: #454c57;
+
+  --cd-line-soft: #1d2126;
+  --cd-line: #262b32;
+  --cd-line-strong: #343b45;
+  --cd-line-focus: #c9cfd7;
+
+  /* 强调：浅银灰，不用纯白 —— 纯白在深底上过曝，长时间看会累 */
+  --cd-accent: #c9cfd7;
+  --cd-accent-hover: #d9dee4;
+  --cd-accent-active: #b2b9c3;
+  --cd-on-accent: #12151a;
+
+  --cd-danger: #d97e7e;
+  --cd-danger-soft: #291c1c;
+  --cd-success: #86b596;
+  --cd-success-soft: #18241c;
+  --cd-warning: #cda862;
+  --cd-warning-soft: #262017;
 }
 
+/* ---- 纯黑：OLED 省电档，背景是真 #000 ---- */
+html[data-theme='oled'] {
+  --cd-s0: #000000;
+  --cd-s1: #0a0b0d;
+  --cd-s2: #0f1113;
+  --cd-s3: #17191c;
+  --cd-s4: #212428;
+
+  --cd-ink-1: #d8dce2;
+  --cd-ink-2: #9aa2ae;
+  --cd-ink-3: #6b7380;
+  --cd-ink-4: #454c57;
+
+  /* 纯黑下卡片和背景几乎同色，描边要更亮才浮得起来 */
+  --cd-line-soft: #16181b;
+  --cd-line: #1f2226;
+  --cd-line-strong: #2c3137;
+  --cd-line-focus: #c9cfd7;
+
+  --cd-accent: #c9cfd7;
+  --cd-accent-hover: #d9dee4;
+  --cd-accent-active: #b2b9c3;
+  --cd-on-accent: #0a0b0d;
+
+  --cd-danger: #d97e7e;
+  --cd-danger-soft: #241717;
+  --cd-success: #86b596;
+  --cd-success-soft: #131d16;
+  --cd-warning: #cda862;
+  --cd-warning-soft: #1f1a12;
+}
+
+/* ---- 暖灰：色温偏米褐，蓝色成分压到最低 ---- */
+html[data-theme='warm'] {
+  --cd-s0: #100e0c;
+  --cd-s1: #171412;
+  --cd-s2: #1c1916;
+  --cd-s3: #241f1c;
+  --cd-s4: #2f2925;
+
+  --cd-ink-1: #ded7cf;
+  --cd-ink-2: #a9a096;
+  --cd-ink-3: #7b7269;
+  --cd-ink-4: #524b45;
+
+  --cd-line-soft: #221e1a;
+  --cd-line: #2c2722;
+  --cd-line-strong: #3c342d;
+  --cd-line-focus: #d6cab9;
+
+  --cd-accent: #d6cab9;
+  --cd-accent-hover: #e4dace;
+  --cd-accent-active: #c0b29f;
+  --cd-on-accent: #16120e;
+
+  --cd-danger: #d08a80;
+  --cd-danger-soft: #2a1d1a;
+  --cd-success: #8fb596;
+  --cd-success-soft: #1c241b;
+  --cd-warning: #d3a961;
+  --cd-warning-soft: #282015;
+}
+
+/* ---- 浅色：底色不用纯白，强调色不用纯黑 ---- */
+html[data-theme='light'] {
+  --cd-s0: #eef0f3;
+  --cd-s1: #fafbfc;
+  --cd-s2: #f4f6f8;
+  --cd-s3: #ebedf1;
+  --cd-s4: #dfe3e9;
+
+  --cd-ink-1: #2b3138;
+  --cd-ink-2: #545c68;
+  --cd-ink-3: #818a97;
+  --cd-ink-4: #bcc2cb;
+
+  --cd-line-soft: #e7e9ed;
+  --cd-line: #dce0e5;
+  --cd-line-strong: #c6ccd4;
+  --cd-line-focus: #3d4551;
+
+  --cd-accent: #3d4551;
+  --cd-accent-hover: #4b5462;
+  --cd-accent-active: #303845;
+  --cd-on-accent: #f6f7f9;
+
+  --cd-danger: #9c3f3f;
+  --cd-danger-soft: #f6eaea;
+  --cd-success: #3a6446;
+  --cd-success-soft: #e9efeb;
+  --cd-warning: #73551c;
+  --cd-warning-soft: #f4efe3;
+}
+
+/* ==========================================================================
+   基础色 → Element Plus 变量
+   --------------------------------------------------------------------------
+   分档一律用 color-mix 从基础色派生：
+     深色主题往背景色混 = 越来越暗；浅色主题往背景色混 = 越来越浅。
+   两个方向自动对称，四套主题不必各写 20 个手算十六进制值。
+
+   必须带上 `html.dark`：Element 的暗色变量表是 `html.dark{…}`（0,1,1），
+   只写 `:root`（0,1,0）会被它整份盖回去，深色下主色会退回默认的 #409eff。
+   ========================================================================== */
+
+:root,
 html.dark {
-  --el-text-color-secondary: #a9b4c6;
-  --el-text-color-placeholder: #808b9d;
+  --el-color-primary: var(--cd-accent);
+  --el-color-primary-light-3: color-mix(in srgb, var(--cd-accent) 70%, var(--cd-s0));
+  --el-color-primary-light-5: color-mix(in srgb, var(--cd-accent) 50%, var(--cd-s0));
+  --el-color-primary-light-7: color-mix(in srgb, var(--cd-accent) 30%, var(--cd-s0));
+  --el-color-primary-light-8: color-mix(in srgb, var(--cd-accent) 20%, var(--cd-s0));
+  --el-color-primary-light-9: color-mix(in srgb, var(--cd-accent) 10%, var(--cd-s0));
+  --el-color-primary-dark-2: color-mix(in srgb, var(--cd-accent) 80%, var(--cd-ink-1));
 
-  --el-color-primary: #6fb0ff;
-  --el-color-primary-light-3: #4a86d6;
-  --el-color-primary-light-5: #35619b;
-  --el-color-primary-light-7: #234067;
-  --el-color-primary-light-8: #1d3453;
-  --el-color-primary-light-9: #182a43;
-  --el-color-primary-dark-2: #8cc2ff;
-  --el-color-success: #7ed996;
-  --el-color-success-light-9: #17281c;
-  --el-color-danger: #ff9b9b;
-  --el-color-danger-light-9: #2c1a1a;
-  --el-color-error: #ff9b9b;
-  --el-color-warning: #ffc266;
-  --el-color-warning-light-9: #2b2114;
-  --el-color-info: #a9b4c6;
-  --el-color-info-light-9: #22252c;
+  --el-color-success: var(--cd-success);
+  --el-color-success-light-3: color-mix(in srgb, var(--cd-success) 70%, var(--cd-s0));
+  --el-color-success-light-5: color-mix(in srgb, var(--cd-success) 50%, var(--cd-s0));
+  --el-color-success-light-7: color-mix(in srgb, var(--cd-success) 30%, var(--cd-s0));
+  --el-color-success-light-8: color-mix(in srgb, var(--cd-success) 20%, var(--cd-s0));
+  --el-color-success-light-9: var(--cd-success-soft);
+  --el-color-success-dark-2: color-mix(in srgb, var(--cd-success) 80%, var(--cd-ink-1));
+
+  --el-color-danger: var(--cd-danger);
+  --el-color-danger-light-3: color-mix(in srgb, var(--cd-danger) 70%, var(--cd-s0));
+  --el-color-danger-light-5: color-mix(in srgb, var(--cd-danger) 50%, var(--cd-s0));
+  --el-color-danger-light-7: color-mix(in srgb, var(--cd-danger) 30%, var(--cd-s0));
+  --el-color-danger-light-8: color-mix(in srgb, var(--cd-danger) 20%, var(--cd-s0));
+  --el-color-danger-light-9: var(--cd-danger-soft);
+  --el-color-danger-dark-2: color-mix(in srgb, var(--cd-danger) 80%, var(--cd-ink-1));
+
+  --el-color-error: var(--cd-danger);
+  --el-color-error-light-3: color-mix(in srgb, var(--cd-danger) 70%, var(--cd-s0));
+  --el-color-error-light-5: color-mix(in srgb, var(--cd-danger) 50%, var(--cd-s0));
+  --el-color-error-light-7: color-mix(in srgb, var(--cd-danger) 30%, var(--cd-s0));
+  --el-color-error-light-8: color-mix(in srgb, var(--cd-danger) 20%, var(--cd-s0));
+  --el-color-error-light-9: var(--cd-danger-soft);
+
+  --el-color-warning: var(--cd-warning);
+  --el-color-warning-light-3: color-mix(in srgb, var(--cd-warning) 70%, var(--cd-s0));
+  --el-color-warning-light-5: color-mix(in srgb, var(--cd-warning) 50%, var(--cd-s0));
+  --el-color-warning-light-7: color-mix(in srgb, var(--cd-warning) 30%, var(--cd-s0));
+  --el-color-warning-light-8: color-mix(in srgb, var(--cd-warning) 20%, var(--cd-s0));
+  --el-color-warning-light-9: var(--cd-warning-soft);
+  --el-color-warning-dark-2: color-mix(in srgb, var(--cd-warning) 80%, var(--cd-ink-1));
+
+  --el-color-info: var(--cd-ink-2);
+  --el-color-info-light-3: color-mix(in srgb, var(--cd-ink-2) 70%, var(--cd-s0));
+  --el-color-info-light-5: color-mix(in srgb, var(--cd-ink-2) 50%, var(--cd-s0));
+  --el-color-info-light-7: color-mix(in srgb, var(--cd-ink-2) 30%, var(--cd-s0));
+  --el-color-info-light-8: color-mix(in srgb, var(--cd-ink-2) 20%, var(--cd-s0));
+  --el-color-info-light-9: var(--cd-s3);
+  --el-color-info-dark-2: color-mix(in srgb, var(--cd-ink-2) 80%, var(--cd-ink-1));
+
+  --el-bg-color: var(--cd-s1);
+  --el-bg-color-page: var(--cd-s0);
+  --el-bg-color-overlay: var(--cd-s2);
+  --el-fill-color-blank: var(--cd-s1);
+  --el-fill-color-light: var(--cd-s3);
+  --el-fill-color-lighter: var(--cd-s2);
+  --el-fill-color-dark: var(--cd-s4);
+  --el-fill-color-darker: var(--cd-s4);
+
+  --el-text-color-primary: var(--cd-ink-1);
+  --el-text-color-regular: var(--cd-ink-2);
+  --el-text-color-secondary: var(--cd-ink-3);
+  --el-text-color-placeholder: var(--cd-ink-3);
+  --el-text-color-disabled: var(--cd-ink-4);
+
+  /* 禁用态：默认值会让禁用输入框比正常态更亮（fill-color-light），
+     在深色下看起来反而像"可用的高亮框"。统一压到分区底色。 */
+  --el-disabled-bg-color: var(--cd-s2);
+  --el-disabled-border-color: var(--cd-line-soft);
+  --el-disabled-text-color: var(--cd-ink-4);
+
+  --el-border-color: var(--cd-line);
+  --el-border-color-light: var(--cd-line);
+  --el-border-color-lighter: var(--cd-line-soft);
+  --el-border-color-extra-light: var(--cd-line-soft);
+  --el-border-color-darker: var(--cd-line-strong);
 }
 
-/* 深色主题下彩色底仍用深色文字，白色在浅蓝/浅绿上不够。
-   注意：只能改「实心」按钮——plain / text / link 按钮的底色是深色的浅色调
-   （primary-light-9 之类），再压深色文字就成了黑字压黑底（历史 bug：预设主题的
-   「套用」、系统集成里的「退出程序」几乎看不见）。 */
-.el-radio-button__inner,
-.el-button--primary:not(.is-plain):not(.is-text):not(.is-link),
-.el-button--success:not(.is-plain):not(.is-text):not(.is-link),
-.el-button--warning:not(.is-plain):not(.is-text):not(.is-link),
-.el-button--danger:not(.is-plain):not(.is-text):not(.is-link) {
-  color: var(--el-color-white, #ffffff);
+/* ==========================================================================
+   控件皮肤 —— Element Plus 变量级覆盖，不碰任何 transition
+   ========================================================================== */
+
+/* ---------------- 按钮：三层 ----------------
+   主（反相实心）/ 次（1px 描边）/ 幽灵（无边框）。
+   蓝色实心 + 蓝描边 + 灰描边 + 纯文字四种同屏，是之前最吵的一处。
+
+   结构是「基线 + 覆盖」，不是给基线挂一长串 :not 排除：
+   Element 的类型类和尺寸类共用 el-button-- 前缀（el-button--small 也是），
+   属性选择器没法把两者分开，只能靠特异性 —— 基线写 .el-button，
+   实心变体自己抬特异性压过去。 */
+
+/* 按钮不读 --el-component-size-small，它有自己的 --el-button-size（24px）
+   和 calc(半径 - 1px) 的圆角。不显式拉平，按钮会比同排的输入框矮 4px、圆 1px。 */
+.el-button--small {
+  --el-button-size: var(--cd-h);
+  height: var(--cd-h);
+  padding: 0 var(--cd-sp-3);
+  border-radius: var(--cd-r-sm);
+  font-size: 12.5px;
 }
 
-html.dark .el-radio-button__inner,
-html.dark .el-button--primary:not(.is-plain):not(.is-text):not(.is-link),
-html.dark .el-button--success:not(.is-plain):not(.is-text):not(.is-link),
-html.dark .el-button--warning:not(.is-plain):not(.is-text):not(.is-link),
-html.dark .el-button--danger:not(.is-plain):not(.is-text):not(.is-link) {
-  color: #14161b;
+/* 基线 = 次按钮：透明底 + 1px 描边。无 type 的按钮全部落在这里。
+   描边用 line-strong 而不是 line —— line 在白卡上几乎消失，按钮看起来不像能点。 */
+.el-button {
+  --el-button-bg-color: transparent;
+  --el-button-text-color: var(--cd-ink-2);
+  --el-button-border-color: var(--cd-line-strong);
+  --el-button-hover-bg-color: var(--cd-s3);
+  --el-button-hover-text-color: var(--cd-ink-1);
+  --el-button-hover-border-color: var(--cd-line-strong);
+  --el-button-active-bg-color: var(--cd-s4);
+  --el-button-active-text-color: var(--cd-ink-1);
+  --el-button-active-border-color: var(--cd-line-strong);
+  --el-button-disabled-bg-color: transparent;
+  --el-button-disabled-text-color: var(--cd-ink-4);
+  --el-button-disabled-border-color: var(--cd-line-soft);
+  --el-button-outline-color: var(--cd-line-focus);
 }
 
-/* 未选中的分段按钮文字（默认 #a8abb2 太浅） */
-html:not(.dark) .el-radio-button:not(.is-active) .el-radio-button__inner {
-  color: #4a5160;
+/* `html.dark .el-button`（0,2,1）会把禁用文字改成 #ffffff80，
+   同样需要同特异性抵消，否则禁用按钮的文字不落在灰阶体系里。 */
+html.dark .el-button {
+  --el-button-disabled-text-color: var(--cd-ink-4);
 }
 
-html.dark .el-radio-button:not(.is-active) .el-radio-button__inner {
-  color: #a9b4c6;
+/* 幽灵 / 文字：无边框，靠 hover 底色标记命中 */
+.el-button.is-text,
+.el-button.is-link {
+  --el-button-bg-color: transparent;
+  --el-button-text-color: var(--cd-ink-2);
+  --el-button-hover-text-color: var(--cd-ink-1);
+  --el-button-hover-bg-color: var(--cd-s3);
+  --el-button-active-bg-color: var(--cd-s4);
+  --el-button-outline-color: var(--cd-line-focus);
 }
 
-/* alert / checkbox / tag 里的硬编码灰 */
-.el-alert__title {
-  color: var(--el-text-color-regular);
+/* 有色 plain：降为"次"层，但保留语义色作为文字色 */
+.el-button.is-plain.el-button--primary,
+.el-button.is-plain.el-button--success,
+.el-button.is-plain.el-button--warning {
+  --el-button-bg-color: transparent;
+  --el-button-text-color: var(--cd-ink-2);
+  --el-button-border-color: var(--cd-line-strong);
+  --el-button-hover-bg-color: var(--cd-s3);
+  --el-button-hover-text-color: var(--cd-ink-1);
+  --el-button-hover-border-color: var(--cd-line-strong);
+  --el-button-active-bg-color: var(--cd-s4);
+  --el-button-active-border-color: var(--cd-line-strong);
+}
+
+.el-button.is-plain.el-button--danger {
+  --el-button-bg-color: transparent;
+  --el-button-text-color: var(--cd-danger);
+  --el-button-border-color: color-mix(in srgb, var(--cd-danger) 45%, transparent);
+  --el-button-hover-bg-color: var(--cd-danger-soft);
+  --el-button-hover-text-color: var(--cd-danger);
+  --el-button-hover-border-color: var(--cd-danger);
+  --el-button-active-bg-color: var(--cd-danger-soft);
+  --el-button-active-border-color: var(--cd-danger);
+}
+
+/* 主：反相实心，每屏最多一个。
+   :not 链把特异性抬到 0,4,0，压过基线（0,1,0）；plain / text / link 变体不被波及。 */
+.el-button--primary:not(.is-plain):not(.is-text):not(.is-link) {
+  --el-button-bg-color: var(--cd-accent);
+  --el-button-text-color: var(--cd-on-accent);
+  --el-button-border-color: var(--cd-accent);
+  --el-button-hover-bg-color: var(--cd-accent-hover);
+  --el-button-hover-text-color: var(--cd-on-accent);
+  --el-button-hover-border-color: var(--cd-accent-hover);
+  --el-button-active-bg-color: var(--cd-accent-active);
+  --el-button-active-text-color: var(--cd-on-accent);
+  --el-button-active-border-color: var(--cd-accent-active);
+  --el-button-disabled-bg-color: var(--cd-s4);
+  --el-button-disabled-text-color: var(--cd-ink-4);
+  --el-button-disabled-border-color: var(--cd-s4);
+  --el-button-outline-color: var(--cd-line-focus);
+}
+
+/* 危险语义在 text 变体上同样保留 */
+.el-button.is-text.el-button--danger,
+.el-button.is-link.el-button--danger {
+  --el-button-text-color: var(--cd-danger);
+  --el-button-hover-text-color: var(--cd-danger);
+  --el-button-hover-bg-color: var(--cd-danger-soft);
+}
+
+/* ---------------- 输入 / 下拉 ----------------
+   28px 高配 8px 圆角，光标有地方站。Element 的 small 默认只有 24px 高、
+   左右 11px，看起来更像「表格单元格」而不是「输入框」。 */
+
+.el-input,
+.el-textarea {
+  --el-input-bg-color: var(--cd-s0);
+  --el-input-text-color: var(--cd-ink-1);
+  --el-input-border-color: var(--cd-line);
+  --el-input-hover-border-color: var(--cd-line-strong);
+  --el-input-focus-border-color: var(--cd-line-focus);
+  --el-input-placeholder-color: var(--cd-ink-3);
+  --el-input-border-radius: var(--cd-r-sm);
+  --el-input-icon-color: var(--cd-ink-3);
+}
+
+/* 底色 / 描边 / hover / focus 的 box-shadow 全部由上面那组变量驱动，
+   Element 的 .el-input__wrapper 已经是 `background-color: var(--el-input-bg-color)`
+   + `box-shadow: 0 0 0 1px var(--el-input-border-color) inset` 的写法，
+   这里再手写一遍只会多两条同色规则、还容易被后来的改动带偏。 */
+
+.el-input--small .el-input__wrapper {
+  padding-left: var(--cd-sp-3);
+  padding-right: var(--cd-sp-3);
+}
+
+/* 聚焦时把底色调到面板色 —— Element 只改边框不改底，这是本项目额外加的层次。 */
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  background-color: var(--cd-s1);
+}
+
+/* 控件里的文字：28px 高配 12.5px 字偏小，读起来像脚注。
+   13.5px 与正文（13.5）同档，输入框才像"能写字的地方"而不是"表格格子"。 */
+.el-input--small .el-input__inner,
+.el-select--small .el-select__placeholder,
+.el-select--small .el-select__selected-item {
+  font-size: 13.5px;
+}
+
+.el-select__wrapper {
+  background-color: var(--cd-s0);
+  box-shadow: 0 0 0 1px var(--cd-line) inset;
+  border-radius: var(--cd-r-sm);
+}
+
+.el-select--small .el-select__wrapper {
+  padding-left: var(--cd-sp-3);
+  padding-right: var(--cd-sp-2);
+}
+
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--cd-line-strong) inset;
+}
+
+.el-select__wrapper.is-focused {
+  background-color: var(--cd-s1);
+  box-shadow: 0 0 0 1px var(--cd-line-focus) inset;
+}
+
+/* 不覆盖 --el-input-number-controls-height：Element 按尺寸给了 11/15/19，
+   统一改成 12 会把默认尺寸的上下按钮压变形。28px 高的小号正好吃 11px。 */
+.el-input-number .el-input__wrapper {
+  padding-left: 10px;
+  padding-right: 8px;
+}
+
+/* ---------------- 下拉浮层 ----------------
+   默认面板是一条贴边的灰长条，选项之间没有任何呼吸空间。
+   这里改成圆角浮层 + 每条选项自己带圆角内缩，像菜单而不是表格。 */
+
+/* Element 2.9 的 select 弹层没有专属类名（网上流传的 .el-select__popper 并不存在），
+   只能按结构定位：直接子元素是 .el-select-dropdown 的 light popper 就是它。
+   外层剥成透明后，圆角、边框、阴影全部交给里面的 dropdown，避免两层边框套在一起。 */
+.el-popper.is-light:has(> .el-select-dropdown) {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.el-select-dropdown {
+  padding: var(--cd-sp-1);
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-md);
+  background: var(--cd-s2);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.22);
+}
+
+.el-select-dropdown__list {
+  padding: 0;
+}
+
+.el-select-dropdown__item {
+  height: 36px;
+  line-height: 36px;
+  padding: 0 32px 0 var(--cd-sp-3);
+  border-radius: var(--cd-r-sm);
+  font-size: 13.5px;
+  color: var(--cd-ink-2);
+}
+
+.el-select-dropdown__item.is-hovering,
+.el-select-dropdown__item:hover {
+  background-color: var(--cd-s3);
+  color: var(--cd-ink-1);
+}
+
+.el-select-dropdown__item.is-selected {
+  color: var(--cd-ink-1);
+  font-weight: 600;
+}
+
+/* ---------------- 开关 ----------------
+   近白底 + 白圆点会糊成一片，开启态的圆点必须反相。 */
+.el-switch {
+  --el-switch-on-color: var(--cd-accent);
+  --el-switch-off-color: var(--cd-line-strong);
+  --el-switch-border-color: transparent;
+}
+
+.el-switch.is-checked .el-switch__action {
+  background-color: var(--cd-on-accent);
+}
+
+/* ---------------- 复选框 ---------------- */
+
+.el-checkbox {
+  --el-checkbox-bg-color: var(--cd-s0);
+  --el-checkbox-checked-bg-color: var(--cd-accent);
+  --el-checkbox-checked-input-border-color: var(--cd-accent);
+  --el-checkbox-checked-icon-color: var(--cd-on-accent);
+  --el-checkbox-checked-text-color: var(--cd-ink-1);
+  --el-checkbox-input-border: 1px solid var(--cd-line-strong);
+  --el-checkbox-input-border-color-hover: var(--cd-accent);
+}
+
+/* 14px 的小方块配 5px 圆角会接近正圆，这里刻意比 --cd-r-sm 小一号 */
+.el-checkbox__inner {
+  border-radius: 4px;
+  background-color: transparent;
 }
 
 .el-checkbox__label,
 .el-radio__label {
-  color: var(--el-text-color-regular);
+  color: var(--cd-ink-2);
 }
 
 .el-checkbox.is-checked .el-checkbox__label,
 .el-radio.is-checked .el-radio__label {
-  color: var(--el-text-color-primary);
+  color: var(--cd-ink-1);
+}
+
+/* ---------------- 单选 ---------------- */
+
+.el-radio {
+  --el-radio-input-bg-color: transparent;
+  --el-radio-input-border: 1px solid var(--cd-line-strong);
+  --el-radio-input-border-color-hover: var(--cd-accent);
+  --el-radio-text-color: var(--cd-ink-2);
+}
+
+.el-radio__inner {
+  background-color: transparent;
+}
+
+/* Element 的选中态是「primary 底 + 白圆点」，去色后近白底上的白点会消失，
+   所以圆点必须反相成深色。 */
+.el-radio__input.is-checked .el-radio__inner {
+  background: var(--cd-accent);
+  border-color: var(--cd-accent);
+}
+
+.el-radio__input.is-checked .el-radio__inner::after {
+  background-color: var(--cd-on-accent);
+}
+
+.el-radio__input.is-checked + .el-radio__label {
+  color: var(--cd-ink-1);
+}
+
+/* ---------------- 下拉菜单（el-dropdown，不是 el-select） ---------------- */
+
+.el-dropdown-menu {
+  padding: var(--cd-sp-1);
+}
+
+.el-dropdown-menu__item:not(.is-disabled):hover,
+.el-dropdown-menu__item:not(.is-disabled):focus {
+  background-color: var(--cd-s3);
+  color: var(--cd-ink-1);
+  border-radius: var(--cd-r-sm);
+}
+
+/* ---------------- 滑块 ----------------
+   轨道与把手同色会让把手"消失"，这里把手做成"底色填充 + 强调色描边"的圆环。 */
+.el-slider {
+  --el-slider-main-bg-color: var(--cd-accent);
+  --el-slider-runway-bg-color: var(--cd-s4);
+  --el-slider-stop-bg-color: var(--cd-s1);
+}
+
+.el-slider__button {
+  background-color: var(--cd-s1);
+  border-color: var(--cd-accent);
+}
+
+/* ---------------- 标签 ---------------- */
+
+.el-tag {
+  --el-tag-border-radius: var(--cd-r-sm);
+  --el-tag-font-size: 11.5px;
+}
+
+.el-tag.el-tag--primary {
+  --el-tag-text-color: var(--cd-ink-2);
+  --el-tag-bg-color: var(--cd-s2);
+  --el-tag-border-color: var(--cd-line-strong);
+}
+
+/* ---------------- 卡片 / 弹层 ---------------- */
+
+.el-card {
+  --el-card-border-radius: var(--cd-r-lg);
+  --el-card-border-color: var(--cd-line);
+  --el-card-bg-color: var(--cd-s1);
+  --el-card-padding: 16px;
+}
+
+/* Element 的暗色表里有一条 `html.dark .el-card`（特异性 0,2,1），把卡片底色
+   强制指到 --el-bg-color-overlay，还顺手把 --el-fill-color-blank 也改写成卡片色。
+   它比上面那条 .el-card（0,1,0）高一档，光在 .el-card 上设变量永远盖不住 ——
+   之前之所以要额外写一条 background-color 才生效，根因就在这里。
+   用同特异性重设，靠加载顺序赢，同时也把被改写的 fill-color-blank 拨回全局值。 */
+html.dark .el-card {
+  --el-card-bg-color: var(--cd-s1);
+  --el-fill-color-blank: var(--cd-s1);
+}
+
+.el-dialog {
+  --el-dialog-border-radius: var(--cd-r-lg);
+  --el-dialog-bg-color: var(--cd-s1);
+  --el-dialog-padding-primary: 18px;
+}
+
+.el-message-box {
+  --el-messagebox-border-radius: var(--cd-r-lg);
+  --el-messagebox-title-color: var(--cd-ink-1);
+  --el-messagebox-content-color: var(--cd-ink-2);
+}
+
+/* 直接改属性，不在 popper 上重设 --el-bg-color-overlay：
+   那个变量是全局的，挂在 popper 上会连带影响它内部所有用它的子元素（dropdown / 日期面板），
+   等于用「改主题变量」的方式做局部样式，后面谁再读这个变量都会被误导。 */
+.el-popper.is-light {
+  background: var(--cd-s2);
+  border-color: var(--cd-line);
+}
+
+.el-message {
+  --el-message-bg-color: var(--cd-s2);
+  --el-message-border-color: var(--cd-line);
+  --el-message-text-color: var(--cd-ink-1);
+}
+
+.el-alert {
+  --el-alert-title-font-size: 13px;
+  --el-alert-description-font-size: 12px;
+  --el-alert-border-radius-base: var(--cd-r-md);
+}
+
+.el-alert__title {
+  color: var(--cd-ink-1);
+}
+
+/* 日期选择器：选中日期的文字是写死的白色，近白底上会消失 */
+.el-date-table td.current:not(.disabled) .el-date-table-cell__text {
+  color: var(--cd-on-accent);
+  background-color: var(--cd-accent);
 }
 
 .el-input__count-inner {
-  color: var(--el-text-color-secondary);
-}
-
-/* 打勾的复选框：方块本身太浅，加深描边 */
-html:not(.dark) .el-checkbox__inner {
-  border-color: #8b93a3;
+  color: var(--cd-ink-3);
 }
 
 /* 字体族下拉：长字体栈至少给出省略号，而不是硬生生被切断。
@@ -120,9 +667,9 @@ html:not(.dark) .el-checkbox__inner {
    下拉是 teleport 到 body 的，所以用 popper-class 上的 .cd-font-select 限定作用域。 */
 .cd-font-select .el-select-dropdown__item {
   height: auto;
-  min-height: 34px;
-  line-height: 1.4;
-  padding: 7px 20px;
+  min-height: 38px;
+  line-height: 1.5;
+  padding: 8px 32px 8px var(--cd-sp-3);
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -149,28 +696,39 @@ html:not(.dark) .el-checkbox__inner {
   height: 22px;
 }
 
-/* ---- 标签式切换（el-radio-button）统一样式 ----
+/* ---- 标签式切换（el-radio-button）----
    Element Plus 默认靠负 margin + box-shadow 把相邻标签的边框拼在一起：第一段的
    左边框只由 box-shadow 提供，父容器一旦有 overflow:hidden 就会被裁掉（看起来
    「边框被吞了」），换行时还会出现边框重叠。这里改成每个标签都是独立的圆角小按钮，
-   四边都是真实 1px 边框，换行也不叠边。 */
+   四边都是真实 1px 边框，换行也不叠边。
+
+   选中态走 Element 自己的三个变量，不去硬拼它的四层选择器特异性。 */
+.el-radio-button {
+  --el-radio-button-checked-bg-color: var(--cd-accent);
+  --el-radio-button-checked-text-color: var(--cd-on-accent);
+  --el-radio-button-checked-border-color: var(--cd-accent);
+  --el-radio-button-disabled-checked-fill: var(--cd-s4);
+}
+
 .el-radio-group {
   flex-wrap: wrap;
-  row-gap: 8px;
+  row-gap: var(--cd-sp-2);
   column-gap: 0;
 }
 
 .el-radio-button__inner {
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  margin-left: 6px;
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-sm);
+  margin-left: var(--cd-sp-2);
   box-shadow: none;
-  /* 统一标签尺寸：比 Element Plus 默认更紧凑一点，各页面观感一致 */
-  height: 26px;
+  background: transparent;
+  color: var(--cd-ink-2);
+  /* 与所有 size="small" 控件同高 */
+  height: var(--cd-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0 12px;
+  padding: 0 var(--cd-sp-3);
   font-size: 12.5px;
   line-height: 1;
   transition:
@@ -181,7 +739,7 @@ html:not(.dark) .el-checkbox__inner {
 
 /* 需要比标签更紧凑的场景（尺寸小的控件旁） */
 .el-radio-group.is-compact .el-radio-button__inner {
-  height: 24px;
+  height: var(--cd-h-xs);
   padding: 0 9px;
   font-size: 12px;
 }
@@ -190,21 +748,21 @@ html:not(.dark) .el-checkbox__inner {
   margin-left: 0;
 }
 
-/* Element Plus 默认给首/中/尾标签各设了不同圆角（首尾是单边圆角），
-   这里统一成完整圆角。选择器要压过它的 `.el-radio-button:first-child .el-radio-button__inner`。 */
-.el-radio-group .el-radio-button:first-child .el-radio-button__inner,
-.el-radio-group .el-radio-button:last-child .el-radio-button__inner,
+/* Element 给首/尾标签设了单边圆角（`.el-radio-button:first-child .el-radio-button__inner`，
+   特异性 0,2,0）。用 0,3,0 的一条统一压掉，不必逐个 first/last 重复三遍。 */
 .el-radio-group .el-radio-button .el-radio-button__inner {
-  border-radius: 6px;
+  border-radius: var(--cd-r-sm);
 }
 
+/* 未选中：hover 只提边框与文字，不抢选中态的位置 */
 .el-radio-button:not(.is-active) .el-radio-button__inner:hover {
-  border-color: var(--el-color-primary-light-5);
-  color: var(--el-color-primary);
+  border-color: var(--cd-line-strong);
+  color: var(--cd-ink-1);
+  background: var(--cd-s3);
 }
 
 .el-radio-button.is-active .el-radio-button__inner {
-  border-color: var(--el-color-primary);
+  border-color: var(--cd-accent);
   box-shadow: none;
 }
 
@@ -347,11 +905,11 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
-  border-radius: 9px;
+  padding: 9px var(--cd-sp-3);
+  border-radius: var(--cd-r-md);
   border: none;
   background: transparent;
-  color: var(--el-text-color-regular);
+  color: var(--cd-ink-2);
   font-size: 13.5px;
   cursor: pointer;
   text-align: left;
@@ -361,14 +919,16 @@ body {
     color 0.15s ease;
 }
 
+/* 亮度阶梯：未选中透明 → hover 一级灰 → active 再亮一档 + 文字提到最亮。
+   没有色相参与，所以深浅两个主题用的是同一段逻辑，靠变量反相。 */
 .settings-nav__item:hover {
-  background: var(--el-fill-color-light);
-  color: var(--el-text-color-primary);
+  background: var(--cd-s3);
+  color: var(--cd-ink-1);
 }
 
 .settings-nav__item.is-active {
-  background: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
+  background: var(--cd-s4);
+  color: var(--cd-ink-1);
   font-weight: 600;
 }
 
@@ -378,31 +938,12 @@ body {
   align-items: stretch;
   gap: 8px;
   padding-top: 10px;
-  border-top: 1px solid var(--el-border-color-extra-light);
+  border-top: 1px solid var(--cd-line-soft);
 }
 
 /* 左下角的「关于」与导航子项同一套观感，但它是 footer 的固定成员 */
 .settings-side__about {
   width: 100%;
-}
-
-/* 深色主题下文字按钮（图标）对比度偏低，单独提到可读亮度 */
-html.dark .el-button.is-text:not(.is-disabled) {
-  color: #c6cedd;
-}
-
-html.dark .el-button.is-text:not(.is-disabled):hover {
-  color: var(--el-color-primary);
-}
-
-html.dark .el-button.is-text.is-disabled {
-  color: #6b7482;
-}
-
-/* 图标按钮在深色主题下用更亮的默认色 */
-html.dark .el-button.is-circle:not(.is-disabled),
-html.dark .el-button.is-text:not(.is-disabled) .el-icon {
-  color: inherit;
 }
 
 .settings-main {
@@ -596,19 +1137,20 @@ html.dark .el-button.is-text:not(.is-disabled) .el-icon {
   font-family: 'Cascadia Mono', Consolas, monospace;
 }
 
+/* 滚动条：比描边深一档，灰阶体系内，不引入新颜色 */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--el-border-color);
-  border-radius: 6px;
+  background: var(--cd-line-strong);
+  border-radius: var(--cd-r-sm);
   border: 2px solid transparent;
   background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--el-border-color-darker);
+  background: var(--cd-ink-4);
   background-clip: content-box;
 }

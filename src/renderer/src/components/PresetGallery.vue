@@ -15,6 +15,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { AppConfig, AppearanceConfig, CountdownItem, CustomPreset } from '@shared/types'
 import { THEME_PRESETS, mergeAppearance } from '@shared/defaults'
 import CountdownPreview from '@/components/CountdownPreview.vue'
+import { previewMetrics } from '@/utils/style'
 import PresetDetailDialog from '@/components/PresetDetailDialog.vue'
 import PresetTuneDialog from '@/components/PresetTuneDialog.vue'
 
@@ -99,14 +100,41 @@ const previewConfigs = computed(() => {
   return map
 })
 
+/**
+ * 网格尺寸跟着显示精度走。
+ *
+ * 列宽原来是写死的 230px：精度只有「天」时卡片很窄，缩略图就被困在列中间一小块，
+ * 两侧全是空白；精度到秒时卡片宽，230 又刚好。改成由预览尺寸反推列宽之后，
+ * 列宽和缩略图宽度同源，空白自然消失（一屏列数会随之浮动）。
+ *
+ * 高度同理：精度低时卡片更窄更方，给更高的画布才能让缩略图不被压成一条。
+ */
+const gridStyle = computed(() => {
+  const m = previewMetrics(props.config.behavior.displayMode)
+  return {
+    // 列宽直接取预览框宽度：再 +20 会把「天+时」那档挤回 3 列，反而更空
+    '--cd-preset-col': `${m.width}px`,
+    '--cd-preset-canvas-h': `${m.height}px`
+  }
+})
+
 function previewConfigOf(entry: PresetEntry): AppConfig {
   return previewConfigs.value.get(entry.key) ?? { ...props.config, appearance: entry.appearance }
 }
 
-/** 缩略图缩放：以「大数字不超过 44px」为准，同时不超过 0.52，避免超大字号撑破画布 */
+/**
+ * 缩略图缩放。
+ *
+ * 两层约束：
+ *   1. 上限看显示精度 —— 精度只有「天」时卡片很窄，按秒级的 0.52 缩会变成画布
+ *      正中一小块；精度到秒时卡片本身就宽，再放大就超出画布。
+ *   2. 大数字的目标显示尺寸也随精度放宽，否则窄卡片永远被 44px 这个基准按住放大不了。
+ */
 function thumbScale(appearance: AppearanceConfig): number {
   const size = Math.max(20, appearance.count.fontSize)
-  return Math.min(0.52, 44 / size)
+  const cap = previewMetrics(props.config.behavior.displayMode).maxScale
+  const target = Math.round(44 * (cap / 0.52))
+  return Math.min(cap, target / size)
 }
 
 /* ------------------------------- 当前使用中 ------------------------------- */
@@ -395,7 +423,7 @@ function viewDetail(entry: PresetEntry): void {
     <div v-if="!customEntries.length" class="preset-empty">
       {{ t('preset.empty') }}
     </div>
-    <div v-else class="preset-grid">
+    <div v-else class="preset-grid" :style="gridStyle">
       <div
         v-for="entry in customEntries"
         :key="entry.key"
@@ -467,7 +495,7 @@ function viewDetail(entry: PresetEntry): void {
       </div>
     </template>
 
-    <div class="preset-grid">
+    <div class="preset-grid" :style="gridStyle">
       <div
         v-for="entry in builtinEntries"
         :key="entry.key"
@@ -546,7 +574,7 @@ function viewDetail(entry: PresetEntry): void {
         </el-form-item>
 
         <el-form-item v-if="saveMode === 'item'" :label="t('preset.saveModeItemPick')">
-          <el-select v-model="saveItemId" style="width: 100%">
+          <el-select v-model="saveItemId" size="small" style="width: 100%">
             <el-option
               v-for="item in saveItems"
               :key="item.id"
@@ -608,36 +636,39 @@ function viewDetail(entry: PresetEntry): void {
   color: var(--el-text-color-secondary);
 }
 
+/* 列宽不再写死：由 gridStyle 按显示精度注入的 --cd-preset-col 决定，
+   与缩略图的自然宽度同源，避免卡片缩在列中间 */
 .preset-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--cd-preset-col, 220px), 1fr));
   gap: 14px;
 }
 
 .preset-item {
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-md);
   overflow: hidden;
-  background: var(--el-bg-color);
+  background: var(--cd-s1);
   transition: border-color 0.15s ease;
 }
 
 .preset-item:hover {
-  border-color: var(--el-border-color);
+  border-color: var(--cd-line-strong);
 }
 
-/* 当前正在使用的那一套：边框用主色，扫一眼就能找到 */
+/* 当前正在使用的那一套：亮度阶梯的激活档，不靠色相标记 */
 .preset-item.is-active {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 1px var(--el-color-primary-light-7) inset;
+  border-color: var(--cd-ink-4);
+  box-shadow: 0 0 0 1px var(--cd-ink-4) inset;
 }
 
 .preset-canvas {
-  height: 118px;
+  /* 高度同样按精度给：精度低时卡片更矮更方，画布太高会上下各留一大块 */
+  height: var(--cd-preset-canvas-h, 124px);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--el-fill-color-light);
+  background: var(--cd-s2);
   overflow: hidden;
 }
 
@@ -646,7 +677,7 @@ function viewDetail(entry: PresetEntry): void {
   flex-direction: column;
   gap: 6px;
   padding: 8px 10px 9px;
-  border-top: 1px solid var(--el-border-color-extra-light);
+  border-top: 1px solid var(--cd-line-soft);
 }
 
 .preset-footer__head {
@@ -701,8 +732,8 @@ function viewDetail(entry: PresetEntry): void {
 /* 三选一做成可点击的整块卡片：说明文字跟着选项走，比「三个单选 + 一段会变的灰字」好读 */
 .source-item {
   width: 100%;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 10px;
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-md);
   padding: 9px 12px 10px;
   transition:
     border-color 0.15s ease,
@@ -710,8 +741,8 @@ function viewDetail(entry: PresetEntry): void {
 }
 
 .source-item.is-active {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: var(--cd-ink-4);
+  background: var(--cd-s4);
 }
 
 .source-item.is-disabled {

@@ -1,4 +1,4 @@
-import type { AppConfig, AppearanceConfig, TextStyle } from '@shared/types'
+import type { AppConfig, AppearanceConfig, DisplayMode, TextStyle } from '@shared/types'
 
 export function hexToRgba(hex: string, alpha: number): string {
   const value = (hex || '#000000').trim()
@@ -61,6 +61,21 @@ function clampAlpha(value: number): number {
   return Math.min(1, Math.max(0, Number(value.toFixed(3))))
 }
 
+/**
+ * 「结果预览」的底色：把卡片背景色（含它的透明度）铺成一层纯色。
+ *
+ * 预设详情、各段文字样张都用它。文字颜色和透明度只有摆在真实底色上才是它实际的
+ * 样子 —— 把「深色卡片 + 白字」的样张放在面板灰底上，会让人误以为字太亮；
+ * 反过来「浅色卡片 + 深字」放在深色面板上又像根本看不清。
+ *
+ * 只传 color/alpha 两个字段就能用，方便拿 BackgroundOverride 这种局部对象直接喂进来。
+ */
+export function sampleBackground(bg: { color?: string; alpha?: number } | undefined | null): Record<string, string> {
+  if (!bg?.color) return {}
+  const alpha = typeof bg.alpha === 'number' ? bg.alpha : 1
+  return { backgroundColor: hexToRgba(bg.color, alpha) }
+}
+
 export function cardStyle(cfg: AppConfig, appearance?: AppearanceConfig): Record<string, string> {
   return cardStyleFor(appearance ?? cfg.appearance)
 }
@@ -112,3 +127,32 @@ export const FONT_STACKS: string[] = [
   '"HarmonyOS Sans SC", "Microsoft YaHei UI", sans-serif',
   'system-ui, sans-serif'
 ]
+
+/**
+ * 预览框尺寸与缩略图缩放，按「显示精度」分档。
+ *
+ * 精度越高，卡片上并排的分段越多（天 → 天时分 → 天时分秒），同一个缩放下面片
+ * 会越来越宽；精度只有「天」时卡片很窄，如果还套用给秒级准备的宽度，两侧就会
+ * 剩下一大片空白 —— 看起来像「卡片缩在框里」。
+ *
+ * 所以：精度低 → 框更窄更高、允许放大；精度高 → 框更宽更矮、缩放收紧。
+ */
+export interface PreviewMetrics {
+  /** 预览框宽度 px */
+  width: number
+  /** 预览框高度 px */
+  height: number
+  /** 缩略图允许的最大缩放 */
+  maxScale: number
+}
+
+export const PREVIEW_BY_MODE: Record<DisplayMode, PreviewMetrics> = {
+  days: { width: 180, height: 172, maxScale: 0.72 },
+  'days-hours': { width: 200, height: 152, maxScale: 0.64 },
+  'days-hours-minutes': { width: 214, height: 136, maxScale: 0.58 },
+  precise: { width: 220, height: 124, maxScale: 0.52 }
+}
+
+export function previewMetrics(mode: DisplayMode | undefined): PreviewMetrics {
+  return PREVIEW_BY_MODE[mode ?? 'precise'] ?? PREVIEW_BY_MODE.precise
+}
