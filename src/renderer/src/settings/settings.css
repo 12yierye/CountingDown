@@ -1085,24 +1085,46 @@ body {
  *    现在的写法完全不碰 display。
  *
  * 2. **不要靠「外框限高 + 内部百分比」来分高度**。.el-dialog 是 box-sizing: border-box，
- *    `max-height: 88vh` 限的是含 16px 内边距与标题栏的**外框**；内部那层写
+ *    `max-height: 88vh` 限的是含内边距与标题栏的**外框**；内部那层写
  *    `max-height: 100%` 也不管用（其包含块的 height 是 auto，百分比无从解析），实测它照样
  *    长成内容的自然高度 1743px，footer 被推到弹窗外 1248px —— 用户看到的
  *    「右下角取消/保存按钮超出容器」。给外框补 `height: fit-content` 也不解决。
  *
  * 现在的做法：只给正文一个明确的高度上限（视口高度减去标题栏 / footer / 内边距那点固定开销），
  * 让它自己滚。外框自然被正文撑到合适高度，也就不需要任何 display hack。
+ *
+ * 纵向位置由模板上的 align-center 负责（overlay 变 flex、.el-dialog 用 margin: auto 居中），
+ * 所以这里不再写 top / margin-bottom —— 顶对齐时弹窗越长、上下留白差得越多。
  */
 .el-dialog.tune-dialog {
   max-height: 88vh;
-  margin-bottom: 6vh;
 }
 
 .el-dialog.tune-dialog .el-dialog__body {
-  /* --cd-tune-chrome ≈ 标题栏 + footer + 上下内边距（实测 40 + 48 + 2×16 ≈ 120，留 8px 余量） */
-  --cd-tune-chrome: 112px;
+  /*
+   * 固定开销 = 上下内边距 ×2 + 标题栏 42 + footer 50（实测值），再加 2px 余量。
+   *
+   * 这个数必须把内边距算进去，而且不能写死：以前是 112（按 16px 内边距估的，本来就少了 8px），
+   * 主题把 --el-dialog-padding-primary 提到 18 之后缺口变成 16px —— 外框被 max-height 截断，
+   * 截掉的正是底部那圈内边距，footer 的按钮直接贴到弹窗底边（实测只剩 2px）。
+   */
+  --cd-tune-chrome: calc(94px + 2 * var(--el-dialog-padding-primary));
   /* max() 兜住极矮窗口，避免算出负数把正文压成 0 高 */
   max-height: max(160px, calc(88vh - var(--cd-tune-chrome)));
+  overflow-y: auto;
+}
+
+/*
+ * 预设「查看参数」弹窗（PresetDetailDialog）同样处理：内容比视口高时只滚正文，
+ * 标题与底部「关闭」按钮始终在原地。
+ */
+.el-dialog.preset-detail-dialog {
+  max-height: 88vh;
+}
+
+.el-dialog.preset-detail-dialog .el-dialog__body {
+  --cd-detail-chrome: calc(94px + 2 * var(--el-dialog-padding-primary));
+  max-height: max(160px, calc(88vh - var(--cd-detail-chrome)));
   overflow-y: auto;
 }
 

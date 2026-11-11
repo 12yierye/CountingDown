@@ -111,7 +111,7 @@ const fullText = ref(false)
     :model-value="visible"
     class="item-appearance-dialog"
     width="min(920px, 94vw)"
-    top="6vh"
+    align-center
     append-to-body
     :title="t('editor.appearanceDialogTitle', { name: item.name || t('editor.unnamed') })"
     @update:model-value="(value: boolean) => emit('update:visible', value)"
@@ -305,11 +305,17 @@ const fullText = ref(false)
    * 弹窗整体必须落在视口内，否则 .el-overlay-dialog（overflow: auto）会长出滚动条 ——
    * 那根条在弹窗外侧，看起来像「设置页在滚」。
    *
-   * 顶距 6vh（模板 top）+ 底部留白 6vh → 可用高度约 88vh；
-   * 再扣掉标题栏 / 底部按钮 / 上下内边距这些固定开销。
-   * 这个开销是实测值：视口 635px 时弹窗 467px、内容区 339px，差 128px；
+   * 高度分配：上下各留 6vh → 可用高度约 88vh，再扣掉标题栏 / 底部按钮 / 上下内边距
+   * 这些固定开销。开销是实测值：视口 635px 时弹窗 467px、内容区 339px，差 128px；
    * 留到 160px 作为余量。原来写的是 min(70vh, 620px) —— 70vh 是「内容高度」
    * 而不是「可用高度」，加上固定开销后，窗口矮于 850px 就必然溢出。
+   *
+   * 纵向位置由模板上的 align-center 负责（.el-overlay-dialog 变 flex、.el-dialog 用
+   * margin: auto 居中）。以前写 top="6vh" 是顶对齐：弹窗越长，上下留白差得越多 ——
+   * 视口 961px、正文顶到 620px 上限时实测上 58 / 下 155，肉眼就是「偏上、没居中」。
+   * 也不要用 align-items: center 自己居中：内容高过视口时（极矮窗口，clamp 把正文
+   * 兜到 120px）它会连顶部一起裁掉、上方滚不到；margin: auto 在负剩余空间下退化成 0，
+   * 弹窗贴顶且正常滚动。
    *
    * clamp 的上下限：极矮窗口保住 120px 不至于压成一条，大屏仍以 620px 封顶。
    */

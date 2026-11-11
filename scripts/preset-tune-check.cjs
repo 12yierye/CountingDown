@@ -176,7 +176,7 @@ const TUNE_STATE =
   ' colors:document.querySelectorAll(".tune-dialog .el-color-picker").length,' +
   ' styles:document.querySelectorAll(".tune-dialog .text-style-editor").length,' +
   ' widthInput:document.querySelectorAll(".tune-dialog .el-input-number").length,' +
-  ' groups:document.querySelectorAll(".tune-dialog .override-group").length,' +
+  ' groups:document.querySelectorAll(".tune-dialog .cd-section").length,' +
   ' cards:document.querySelectorAll(".tune-dialog .panel-card").length,' +
   ' previewCard:document.querySelectorAll(".tune-dialog .preview .cd-card").length,' +
   ' nameInput:!!document.querySelector(".tune-dialog input.el-input__inner[maxlength=\\"20\\"]")})'
@@ -337,42 +337,35 @@ app.whenReady().then(async () => {
   check('tune-dialog-width-input-1', state.widthInput === 1, JSON.stringify(state.widthInput))
   check('tune-dialog-colors-7', state.colors === 7, JSON.stringify(state.colors))
   check('tune-dialog-text-styles-4', state.styles === 4, JSON.stringify(state.styles))
-  check('tune-dialog-live-preview', state.previewCard === 1, JSON.stringify(state.previewCard))
+  check('tune-dialog-no-preview', state.previewCard === 0, JSON.stringify(state.previewCard))
   check('tune-dialog-name-input', state.nameInput === true, JSON.stringify(state.nameInput))
 
-  // ------------------------------- 1.5) 版面：预览不能压到表单，底部按钮要在视口里
+  // ------------------------------- 1.5) 版面：正文不横向溢出，底部按钮不能贴到弹窗底边
   const layout = await jsonIn(
     s,
-    `(function(){var left=document.querySelector(".tune-dialog__left");` +
-      `var right=document.querySelector(".tune-dialog__preview");` +
+    `(function(){var inner=document.querySelector(".tune-dialog__inner");` +
       `var footer=document.querySelector(".tune-dialog .el-dialog__footer");` +
       // 注意：class 绑定落在 .el-dialog **自身**（class="el-dialog tune-dialog"），
       // 所以不能写 ".tune-dialog .el-dialog" 这种后代选择器，那样永远选不中。
       `var box=footer?footer.parentElement:null;` +
-      `if(!left||!right||!footer||!box)return {found:false,hasLeft:!!left,hasRight:!!right,hasFooter:!!footer};` +
-      `var l=left.getBoundingClientRect(),r=right.getBoundingClientRect();` +
+      `if(!inner||!footer||!box)return {found:false,hasInner:!!inner,hasFooter:!!footer};` +
       `var f=footer.getBoundingClientRect(),b=box.getBoundingClientRect();` +
       `var btns=[].slice.call(footer.querySelectorAll("button")).map(function(x){var z=x.getBoundingClientRect();return z.bottom;});` +
       `return {found:true,` +
-      ` gap:Math.round(r.left-l.right),` +
-      ` leftOverflow:Math.round(left.scrollWidth-left.clientWidth),` +
+      ` innerOverflow:Math.round(inner.scrollWidth-inner.clientWidth),` +
       ` dialogTop:Math.round(b.top),dialogBottom:Math.round(b.bottom),` +
       ` footerTop:Math.round(f.top),footerBottom:Math.round(f.bottom),` +
       ` footerOverElDialog:Math.round(f.bottom-b.bottom),` +
       ` buttonOverElDialog:btns.length?Math.round(Math.max.apply(null,btns)-b.bottom):null,` +
+      ` footerGap:Math.round(b.bottom-f.bottom),` +
       ` viewportH:Math.round(window.innerHeight)};})()`
   )
   write('layout = ' + JSON.stringify(layout))
   check('tune-layout-measured', layout.found === true, JSON.stringify(layout))
   check(
-    'tune-preview-does-not-overlap-form',
-    layout.found === true && layout.gap > 0,
-    JSON.stringify({ gap: layout.gap })
-  )
-  check(
     'tune-form-has-no-horizontal-overflow',
-    layout.found === true && layout.leftOverflow === 0,
-    JSON.stringify({ leftOverflow: layout.leftOverflow })
+    layout.found === true && layout.innerOverflow === 0,
+    JSON.stringify({ innerOverflow: layout.innerOverflow })
   )
   check(
     'tune-footer-inside-viewport',
@@ -405,6 +398,17 @@ app.whenReady().then(async () => {
     'tune-buttons-inside-dialog-box',
     layout.found === true && layout.buttonOverElDialog <= 1,
     JSON.stringify({ buttonOverElDialog: layout.buttonOverElDialog })
+  )
+  /*
+   * 按钮「没溢出」还不够 —— 用户报的是按钮**贴着弹窗底边**。
+   * 根因是正文上限把内边距也吃掉了：正文算多 16px，外框被 max-height 截断，
+   * 截掉的正好是底部那圈 padding。所以这里直接量 footer 底边到弹窗底边的距离，
+   * 正常应等于 18px 内边距，低于 12px 就说明又被截了。
+   */
+  check(
+    'tune-footer-has-bottom-padding',
+    layout.found === true && layout.footerGap >= 12,
+    JSON.stringify({ footerGap: layout.footerGap })
   )
 
   // ------------------------------- 1) 改控件 -> 不写盘

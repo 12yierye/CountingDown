@@ -71,10 +71,26 @@ const fontHead = computed(() => fontStack.value[0] ?? '')
 const fontRest = computed(() => Math.max(0, fontStack.value.length - 1))
 const fontExpanded = ref(false)
 
-/** 换一个预设就收起展开的字体栈，别把上一个的状态带过来 */
+/**
+ * 精简 / 完整：默认精简。
+ *
+ * 口径与编辑器里的那颗开关一致 —— 只影响四段文字的**字重 / 字距 / 透明度**这三项
+ * 高级参数；字号与颜色照常显示，上面的背景参数也整块保留（它们决定「这东西长什么样」，
+ * 拆掉反而看不出预设之间的差别）。
+ */
+const full = ref(false)
+
+/**
+ * 每次打开都回到「精简」；换一个预设时收起展开的字体栈。
+ *
+ * 与外观页那颗「完整参数」一样，查看模式属于「这次怎么看」，不写配置、也不跨次记忆 ——
+ * 否则用户切过一次完整，之后再点「查看参数」就再也看不到默认的精简版了。
+ */
 watch(
-  () => props.name,
-  () => {
+  [() => props.modelValue, () => props.name],
+  ([open]) => {
+    if (!open) return
+    full.value = false
     fontExpanded.value = false
   }
 )
@@ -104,7 +120,13 @@ function percent(value: number | undefined): string {
 </script>
 
 <template>
-  <el-dialog v-model="visible" :title="t('preset.detailTitle')" width="720px" top="6vh">
+  <el-dialog
+    v-model="visible"
+    class="preset-detail-dialog"
+    :title="t('preset.detailTitle')"
+    width="720px"
+    align-center
+  >
     <div v-if="appearance" class="detail">
       <div class="detail__head">
         <div
@@ -125,7 +147,19 @@ function percent(value: number | undefined): string {
         </div>
       </div>
 
-      <el-divider content-position="left">{{ t('preset.detailAppearance') }}</el-divider>
+      <!--
+        「外观参数」分隔线右端挂查看模式开关：和 el-divider 自带的标题是同一套做法 ——
+        绝对定位压在线上、用弹窗底色把线遮断，读起来就是「文字 ──── 文字 ────」。
+        放标题栏里像个弹窗动作，放名称区右边又离它控制的那四张卡太远。
+      -->
+      <div class="detail__divider">
+        <el-divider content-position="left">{{ t('preset.detailAppearance') }}</el-divider>
+        <div class="detail__toggle-wrap">
+          <el-button class="detail__toggle" link size="small" @click="full = !full">
+            {{ full ? t('appearance.textCompact') : t('appearance.textFull') }}
+          </el-button>
+        </div>
+      </div>
       <div class="detail__grid">
         <div class="detail__row">
           <span class="detail__label">{{ t('preset.fieldFont') }}</span>
@@ -214,18 +248,21 @@ function percent(value: number | undefined): string {
                 {{ appearance[row.key].color }}
               </span>
             </div>
-            <div class="detail__kv">
-              <span class="detail__k">{{ t('preset.fieldWeight') }}</span>
-              <span class="detail__v">{{ appearance[row.key].weight }}</span>
-            </div>
-            <div class="detail__kv">
-              <span class="detail__k">{{ t('preset.fieldLetterSpacing') }}</span>
-              <span class="detail__v">{{ appearance[row.key].letterSpacing }} px</span>
-            </div>
-            <div class="detail__kv">
-              <span class="detail__k">{{ t('preset.fieldOpacity') }}</span>
-              <span class="detail__v">{{ percent(appearance[row.key].opacity) }}</span>
-            </div>
+            <!-- 字重 / 字距 / 透明度属于高级参数，精简模式下不显示（与编辑器同一口径） -->
+            <template v-if="full">
+              <div class="detail__kv">
+                <span class="detail__k">{{ t('preset.fieldWeight') }}</span>
+                <span class="detail__v">{{ appearance[row.key].weight }}</span>
+              </div>
+              <div class="detail__kv">
+                <span class="detail__k">{{ t('preset.fieldLetterSpacing') }}</span>
+                <span class="detail__v">{{ appearance[row.key].letterSpacing }} px</span>
+              </div>
+              <div class="detail__kv">
+                <span class="detail__k">{{ t('preset.fieldOpacity') }}</span>
+                <span class="detail__v">{{ percent(appearance[row.key].opacity) }}</span>
+              </div>
+            </template>
           </div>
 
           <!--
@@ -283,6 +320,27 @@ function percent(value: number | undefined): string {
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+}
+
+/* 分隔线 + 右端开关：开关压在线上，包一层带底色的容器把线遮断 */
+.detail__divider {
+  position: relative;
+}
+
+.detail__toggle-wrap {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: flex;
+  align-items: center;
+  /* 左侧留白 = 线与文字之间的断口 */
+  padding-left: 12px;
+  background: var(--el-dialog-bg-color);
+  transform: translateY(-50%);
+}
+
+.detail__toggle {
+  flex: none;
 }
 
 .detail__name-label {

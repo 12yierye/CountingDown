@@ -5,16 +5,18 @@
  * 这里面的改动全部落在一份**深拷贝草稿**上：取消即丢弃，点「保存预设」才由调用方把草稿
  * 存成预设。全局外观、桌面卡片、外观设置页的控件值都不受这里影响 —— 这正是它和
  * 「当前全局外观」那个保存来源的区别（后者是存预设 + 覆盖全局）。
+ *
+ * 弹窗里**不放实时预览**：与「外观」全局页保持一致（那边也只有表单，效果看桌面卡片）。
+ * 之前右侧那列 296px 的缩略图把表单压到 530px 宽，两列网格每格只剩 247px，滑条几乎拖不开。
  */
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { AppConfig, AppearanceConfig } from '@shared/types'
 import AppearanceFields from '@/components/AppearanceFields.vue'
-import CountdownPreview from '@/components/CountdownPreview.vue'
 
 const props = defineProps<{
   modelValue: boolean
-  /** 提供文案、行为、语言等预览上下文；外观部分会被草稿覆盖 */
+  /** 新建时以它的 appearance 作为草稿起点 */
   config: AppConfig
   /** 编辑已有预设时传入它当前的外观；为空表示新建（从全局外观起步） */
   initialAppearance?: AppearanceConfig | null
@@ -61,9 +63,6 @@ watch(
 /** 编辑态：标题、说明与按钮文案都跟着变 */
 const editing = computed(() => Boolean(props.initialAppearance))
 
-/** 预览：只换掉 appearance，其余（文案、显示模式、语言）沿用真实配置 */
-const previewConfig = computed<AppConfig>(() => ({ ...props.config, appearance: draft.value }))
-
 function submit(): void {
   const trimmed = name.value.trim()
   nameError.value = trimmed.length === 0
@@ -78,8 +77,8 @@ function submit(): void {
     v-model="visible"
     class="tune-dialog"
     :title="editing ? t('preset.tuneTitleEdit') : t('preset.tuneTitle')"
-    width="860px"
-    top="5vh"
+    width="760px"
+    align-center
     destroy-on-close
   >
     <!--
@@ -91,19 +90,8 @@ function submit(): void {
         {{ editing ? t('preset.tuneNoteEdit') : t('preset.tuneNameFirst') }}
       </p>
 
-      <div class="tune-dialog__body">
-        <div class="tune-dialog__left">
-          <!-- 这个弹窗的语义就是「手动调整所有参数」，因此强制展开高级项 -->
-          <AppearanceFields v-model:appearance="draft" dense advanced />
-        </div>
-        <aside class="tune-dialog__preview">
-          <div class="tune-dialog__preview-label">{{ t('preset.tunePreview') }}</div>
-          <CountdownPreview
-            :config="previewConfig"
-            :title="name.trim() || t('preset.namePlaceholder')"
-          />
-        </aside>
-      </div>
+      <!-- 这个弹窗的语义就是「手动调整所有参数」，因此强制展开高级项 -->
+      <AppearanceFields v-model:appearance="draft" dense advanced />
 
       <!--
         名称放在**调完参数之后**问：进来先改外观，改满意了再起名保存。
@@ -144,34 +132,6 @@ function submit(): void {
 .tune-dialog__note {
   margin: -6px 0 12px;
   font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--el-text-color-secondary);
-}
-
-.tune-dialog__body {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.tune-dialog__left {
-  flex: 1;
-  min-width: 0;
-  padding-right: 6px;
-}
-
-.tune-dialog__preview {
-  flex: none;
-  width: 296px;
-  padding: 10px 12px 12px;
-  border: 1px solid var(--cd-line);
-  border-radius: var(--cd-r-md);
-  background: linear-gradient(135deg, var(--cd-s2), var(--cd-s3));
-  overflow: hidden;
-}
-
-.tune-dialog__preview-label {
-  font-size: 12px;
   line-height: 1.6;
   color: var(--el-text-color-secondary);
 }
