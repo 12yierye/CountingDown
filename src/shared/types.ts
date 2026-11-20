@@ -290,6 +290,13 @@ export interface RuntimeConfig {
   theme: AppTheme
   /** 系统通知总开关（相当于「是否允许本应用发通知」）；具体哪一项当天提醒由每个倒数日决定 */
   notifications: boolean
+  /**
+   * 首次启动引导的完成时间（毫秒时间戳）；0 表示还没走过。
+   *
+   * 用它而不是「配置文件存不存在」来判定：老版本升级上来的用户磁盘上早就有配置，
+   * 不该在升级后被补一遍新手引导。initConfig 会把存量配置视为「早已走过」。
+   */
+  onboardedAt: number
   window: WindowConfig
   /** 托盘右键菜单显示哪些条目 */
   trayMenu: TrayMenuConfig

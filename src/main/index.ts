@@ -4,6 +4,8 @@ import {
   getConfig,
   initConfig,
   isDev,
+  markOnboarded,
+  needsOnboarding,
   onConfigChange,
   replaceConfig,
   resetConfig,
@@ -14,6 +16,8 @@ import {
   applyPreviewVisibility,
   beginWidgetDrag,
   broadcast,
+  closeOnboardingWindow,
+  createOnboardingWindow,
   createSettingsWindow,
   createWidgetWindow,
   endWidgetDrag,
@@ -201,6 +205,25 @@ function registerIpc(): void {
     return true
   })
 
+  /**
+   * 首次启动引导。
+   *
+   * finish 同时承担「完成」和「跳过」：两者对配置的影响只差要不要打开设置窗口，
+   * 而「引导已结束」这件事必须落盘 —— 否则每次启动都要重来一遍。
+   */
+  ipcMain.handle('onboarding:finish', (_event, payload: unknown) => {
+    const openSettings = Boolean((payload as { openSettings?: boolean } | undefined)?.openSettings)
+    markOnboarded()
+    closeOnboardingWindow()
+    if (openSettings) createSettingsWindow()
+    return true
+  })
+  /** 从「关于 → 重新查看引导」再打开一次 */
+  ipcMain.handle('onboarding:open', () => {
+    createOnboardingWindow()
+    return true
+  })
+
   /** 在线更新：状态由主进程唯一持有，界面只发指令、收推送 */
   ipcMain.handle('update:state', () => getUpdateState())
   ipcMain.handle('update:check', () => checkForUpdate(true))
@@ -302,6 +325,15 @@ function bootstrap(): void {
         }
       }, 700)
     }
+  }
+
+  /*
+   * 首次启动：先把桌面卡片挂出来，再叠上引导窗口。
+   * 卡片先亮起来是有意的 —— 引导里挑外观、定位置时，用户看到的就是背后那张真卡片。
+   * 开机自启的隐藏启动（--hidden）不弹引导，否则一登录就被人堵在门口。
+   */
+  if (!launchedHidden && needsOnboarding()) {
+    createOnboardingWindow()
   }
 }
 

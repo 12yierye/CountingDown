@@ -1,0 +1,121 @@
+/*
+ * 卡片本体样式：桌面组件、设置里的实时预览、首次引导的预览共用这一份。
+ *
+ * 从 widget.css 里抽出来，是因为引导窗口也要画同一张卡片。
+ * 抄一份的下场是两边的圆角/文字裁切规则慢慢长歪，预览和实物对不上。
+ * 舞台（.cd-stage / .cd-shrink）留在 widget.css：那是窗口自己的事。
+ */
+
+.cd-card {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  width: var(--cd-card-width, fit-content);
+  max-width: 100%;
+  /* 卡片背景至少覆盖内容：用户把「卡片宽度」设得比内容还窄时，宁可卡片变宽，
+     也不要让文字溢出到背景外面（显示到秒时最容易出现） */
+  min-width: fit-content;
+  animation: cd-fade-in 0.28s ease;
+}
+
+/* 卡片内部的文字不参与命中测试，命中区域只由卡片本身决定 */
+.cd-card > * {
+  pointer-events: none;
+}
+
+/* 开启「允许拖动」后，卡片本身就是拖动把手 */
+.cd-card.is-draggable {
+  cursor: grab;
+}
+
+.cd-card.is-draggable:active {
+  cursor: grabbing;
+}
+
+/* 点击穿透：卡片不接收任何鼠标事件，光标也不该再显示成可拖动的抓手 */
+.cd-stage[data-interactive='false'] .cd-card.is-draggable {
+  cursor: default;
+}
+
+.cd-card--empty {
+  min-width: 200px;
+  gap: 8px;
+}
+
+.cd-card--empty .cd-card__hint {
+  white-space: normal;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cd-card__title {
+  margin: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cd-card__count {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.cd-card__number {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  white-space: nowrap;
+}
+
+.cd-card__unit {
+  white-space: nowrap;
+}
+
+.cd-card__precise {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  white-space: nowrap;
+}
+
+.cd-card__precision-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.cd-card__precision-part > small {
+  font-size: 0.42em;
+  opacity: 0.72;
+  font-weight: 400;
+}
+
+.cd-card__hint {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cd-card__status {
+  white-space: nowrap;
+}
+
+@keyframes cd-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -267,6 +267,7 @@ export function createDefaultConfig(): AppConfig {
       language: 'zh-CN',
       theme: 'graphite',
       notifications: true,
+      onboardedAt: 0,
       window: {
         corner: 'top-right',
         cornerPreset: 'top-right',
@@ -470,6 +471,11 @@ export function normalizeConfig(config: AppConfig): AppConfig {
     runtime: {
       ...config.runtime,
       notifications: config.runtime?.notifications !== false,
+      // 缺省 / 脏值一律当成「还没走过引导」；存量配置会不会因此被补一次引导，
+      // 由 config-store.initConfig 统一决定（它更清楚磁盘上原本有没有配置文件）。
+      onboardedAt: Number.isFinite(Number(config.runtime?.onboardedAt))
+        ? Math.max(0, Number(config.runtime.onboardedAt))
+        : 0,
       // 'dark' 是旧版的唯一深色主题，归一成 graphite；
       // 任何读不懂的值也退回 graphite，避免落到一个没有色板的空主题上。
       // 注意这里**不能**用 resolveTheme：它会把 'system' 解析成具体色板，

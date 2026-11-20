@@ -2,6 +2,8 @@ import { createApp, watch } from 'vue'
 import { createAppI18n, readStoredLanguage, storeLanguage } from '@/i18n'
 import { config } from '@/composables/useConfig'
 import WidgetRoot from '@/widget/WidgetRoot.vue'
+// 卡片本体样式与引导页共用；舞台样式留在 widget.css
+import '@/components/card.css'
 import '@/widget/widget.css'
 
 const app = createApp(WidgetRoot)

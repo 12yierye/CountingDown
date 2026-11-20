@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -79,13 +80,35 @@ namespace CountingDown.Setup
 
         private double _progressShown;
         private double _progressTarget;
-        private double _statusFade = 1;
         private string _statusNew = "";
-        private string _statusOld = "";
+        private double _statusAlpha = 1;
         private string _detail = "";
         private string _error = "";
         private double _doneT;
         private object _progressLoop;
+
+        /*
+         * 状态文字。
+         *
+         * 以前这里是「新旧两行同时画、各自带一个 alpha」的交叉淡化 —— 这正是安装开始后
+         * 文字叠成一团的根因，而且有两层错误：
+         *   1. TextRenderer 走 GDI，GDI 的 SetTextColor 没有 alpha 通道，
+         *      半透明色喂进去画出来仍然是实心，两行字直接压在同一坐标上；
+         *   2. 就算 alpha 生效，交叉淡化本来就要求两行字同时可见 ——
+         *      对「解压 512 / 733」这种整行替换的文案来说，中段怎么看都是叠字。
+         *
+         * 现在同一时刻只画一行：换字时旧行立刻消失，新行从 0 淡入。
+         * 高频刷新（解压进度每 25 个文件报一次）直接瞬时切换，不做动画，
+         * 否则整行永远停在半透明的中段。
+         */
+        private string _statusLayerKey = "";
+        private Bitmap _statusLayer;
+        private long _statusAt;
+        /** 每次换字自增：上一条没跑完的淡入动画据此作废 */
+        private int _statusGen;
+        private Font _statusFont;
+        private readonly ImageAttributes _statusAttrs = new ImageAttributes();
+        private readonly ColorMatrix _statusMatrix = new ColorMatrix();
 
         /* 性能自检：把每一帧的时间间隔记下来，用数字说话而不是「感觉挺顺」 */
         internal readonly System.Collections.Generic.List<double> FrameDeltas =
@@ -464,10 +487,18 @@ namespace CountingDown.Setup
             _progressShown = 0.42;
             _progressTarget = 0.42;
             _statusNew = "解压 512 / 733";
-            _statusOld = "";
+            _statusAlpha = 1;
             _detail = "共 733 个文件，273.5 MB";
             ApplyPhase();
             _bar.Value = _progressShown;
+            Invalidate(true);
+        }
+
+        /// <summary>截图模式：把状态文字停在淡入的中段，用来盯住「文字重叠」有没有回来。</summary>
+        internal void ForceFade()
+        {
+            ForceInstalling();
+            _statusAlpha = 0.55;
             Invalidate(true);
         }
 
@@ -506,8 +537,8 @@ namespace CountingDown.Setup
             _progressShown = 0;
             _progressTarget = 0;
             _statusNew = "正在安装…";
-            _statusOld = "";
-            _statusFade = 1;
+            _statusAlpha = 1;
+            _statusAt = 0;
             _detail = "";
             ApplyPhase();
 
@@ -524,17 +555,7 @@ namespace CountingDown.Setup
             var options = _options;
             var report = new Progress<Tuple<string, double>>(p =>
             {
-                if (p.Item1 != _statusNew)
-                {
-                    _statusOld = _statusNew;
-                    _statusNew = p.Item1;
-                    _statusFade = 0;
-                    Anim.Run(200, Anim.OutCubic, t =>
-                    {
-                        _statusFade = t;
-                        Repaint();
-                    });
-                }
+                BeginStatusFade(p.Item1);
                 _progressTarget = p.Item2;
                 Invalidate();
             });
@@ -841,37 +862,148 @@ namespace CountingDown.Setup
 
         private void DrawInstalling(Graphics g)
         {
-            int fade = (int)Math.Round(255 * _statusFade);
-
-            if (_statusOld.Length > 0)
-            {
-                using (var font = new Font("Microsoft YaHei UI", 14f, FontStyle.Bold))
-                {
-                    TextRenderer.DrawText(g, _statusOld, font, new Point(I(36), I(100)),
-                        Color.FromArgb(Math.Max(0, 255 - fade), Palette.Text), TextFormatFlags.NoPadding);
-                }
-            }
-
-            if (_statusNew.Length > 0)
-            {
-                using (var font = new Font("Microsoft YaHei UI", 14f, FontStyle.Bold))
-                {
-                    TextRenderer.DrawText(g, _statusNew, font, new Point(I(36), I(100)),
-                        Color.FromArgb(Math.Min(255, fade), Palette.Text), TextFormatFlags.NoPadding);
-                }
-            }
+            DrawStatusLine(g);
 
             using (var font = new Font("Microsoft YaHei UI", 9f))
             {
-                TextRenderer.DrawText(g, _detail, font, new Point(I(36), I(190)), Palette.TextFaint,
-                    TextFormatFlags.NoPadding);
-
                 var percent = ((int)Math.Round(_progressShown * 100)) + "%";
                 var size = TextRenderer.MeasureText(g, percent, font, Size.Empty, TextFormatFlags.NoPadding);
+
+                // 细节行必须让出右侧百分比的位置：以前这里是不带边界的 DrawText，
+                // 文件名一长就直接压到百分比下面，看起来又是一处「文字重叠」。
+                int left = I(36);
+                int right = ClientSize.Width - I(36) - size.Width - I(16);
+                var rect = new Rectangle(left, I(190), Math.Max(I(40), right - left), I(20));
+                TextRenderer.DrawText(g, _detail, font, rect, Palette.TextFaint,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding |
+                    TextFormatFlags.EndEllipsis);
+
                 TextRenderer.DrawText(g, percent, font,
                     new Point(ClientSize.Width - I(36) - size.Width, I(190)), Palette.TextDim,
                     TextFormatFlags.NoPadding);
             }
+        }
+
+        /* ---------------- 状态文字 ---------------- */
+
+        private Font StatusFont
+        {
+            get
+            {
+                if (_statusFont == null)
+                    _statusFont = new Font("Microsoft YaHei UI", 14f, FontStyle.Bold);
+                return _statusFont;
+            }
+        }
+
+        /// <summary>
+        /// 换一条状态文字。
+        /// 旧文字立刻让位，新文字从 0 淡入 —— 全程只有一行字参与绘制，不存在叠印的可能。
+        /// 连续刷新（每 25 个文件报一次进度）走瞬时切换，避免整行停在半透明状态。
+        /// </summary>
+        private void BeginStatusFade(string next)
+        {
+            if (string.IsNullOrEmpty(next) || next == _statusNew) return;
+
+            long now = Environment.TickCount;
+            bool rapid = _statusAt != 0 && now - _statusAt < 200;
+            _statusAt = now;
+
+            _statusNew = next;
+            int gen = ++_statusGen;
+
+            if (rapid)
+            {
+                _statusAlpha = 1;
+                Repaint();
+                return;
+            }
+
+            _statusAlpha = 0;
+            Anim.Run(180, Anim.OutCubic, t =>
+            {
+                if (gen != _statusGen) return;
+                _statusAlpha = t;
+                Repaint();
+            });
+        }
+
+        private void DrawStatusLine(Graphics g)
+        {
+            if (_statusNew.Length == 0 || _statusAlpha <= 0.004) return;
+            EnsureStatusLayer(g);
+            if (_statusLayer == null) return;
+
+            int x = I(36);
+            int y = I(100);
+
+            _statusMatrix.Matrix33 = (float)Math.Max(0, Math.Min(1, _statusAlpha));
+            _statusAttrs.SetColorMatrix(_statusMatrix);
+            g.DrawImage(
+                _statusLayer,
+                new Rectangle(x, y, _statusLayer.Width, _statusLayer.Height),
+                0, 0, _statusLayer.Width, _statusLayer.Height,
+                GraphicsUnit.Pixel, _statusAttrs);
+        }
+
+        private void EnsureStatusLayer(Graphics target)
+        {
+            if (_statusLayerKey == _statusNew && _statusLayer != null) return;
+            DisposeLayer(ref _statusLayer);
+            _statusLayerKey = _statusNew;
+            _statusLayer = RenderTextLayer(target, _statusNew);
+        }
+
+        /// <summary>
+        /// 把一行文字烘成一张透明的文字图层。
+        ///
+        /// 这里用 GDI+ 的 DrawString 而不是 TextRenderer：GDI 绘制文字不会写 alpha 通道，
+        /// 拿它当「半透明图层」用会得到一块实心不透明的东西；GDI+ 才会输出逐像素覆盖率。
+        /// 分辨率必须跟目标 Graphics 一致，否则 14pt 在 96dpi 的位图里会缩水一圈，
+        /// 淡入前后字号对不上。
+        /// </summary>
+        private Bitmap RenderTextLayer(Graphics target, string text)
+        {
+            var font = StatusFont;
+            var measured = target.MeasureString(text, font, PointF.Empty, TypographicFormat);
+            int width = Math.Max(1, (int)Math.Ceiling(measured.Width) + I(6));
+            int height = Math.Max(1, (int)Math.Ceiling(measured.Height) + I(6));
+
+            var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+            try { bitmap.SetResolution(target.DpiX, target.DpiY); } catch { }
+
+            using (var layer = Graphics.FromImage(bitmap))
+            using (var brush = new SolidBrush(Palette.Text))
+            {
+                layer.Clear(Color.Transparent);
+                layer.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                layer.DrawString(text, font, brush, new PointF(0, 0), TypographicFormat);
+            }
+            return bitmap;
+        }
+
+        private static readonly StringFormat TypographicFormat = StringFormat.GenericTypographic;
+
+        private static void DisposeLayer(ref Bitmap layer)
+        {
+            if (layer == null) return;
+            layer.Dispose();
+            layer = null;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                DisposeLayer(ref _statusLayer);
+                _statusAttrs.Dispose();
+                if (_statusFont != null)
+                {
+                    _statusFont.Dispose();
+                    _statusFont = null;
+                }
+            }
+            base.Dispose(disposing);
         }
 
         /* ---------------- 完成 / 失败 ---------------- */

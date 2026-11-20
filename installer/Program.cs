@@ -101,6 +101,7 @@ namespace CountingDown.Setup
             else if (cli.Shot == "step2") window.ForceStep(1);
             else if (cli.Shot == "step3") window.ForceStep(2);
             else if (cli.Shot == "installing") window.ForceInstalling();
+            else if (cli.Shot == "fade") window.ForceFade();
             else if (cli.Shot == "done") window.ForceDone();
             Application.DoEvents();
             System.Threading.Thread.Sleep(400);

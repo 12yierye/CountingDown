@@ -306,6 +306,27 @@ html.dark .el-button {
   --el-button-disabled-text-color: var(--cd-ink-4);
 }
 
+/* --------------------------------------------------------------------------
+   圆角按钮的命中区域也是圆的
+   --------------------------------------------------------------------------
+   指针沿按钮边缘移动时，走到四角的圆弧外侧就掉回背景（cursor: auto），
+   看起来就是「hover 一会儿是手、一会儿是箭头」。补一层方形的透明伪元素
+   把四角填平：视觉仍然是圆角，命中区域回到矩形。
+   注意伪元素不能被 overflow 裁掉，所以这条规则不要配 overflow: hidden。
+   -------------------------------------------------------------------------- */
+.el-button,
+.settings-nav__item {
+  position: relative;
+}
+
+.el-button::after,
+.settings-nav__item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 0;
+}
+
 /* 幽灵 / 文字：无边框，靠 hover 底色标记命中 */
 .el-button.is-text,
 .el-button.is-link {

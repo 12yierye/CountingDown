@@ -82,6 +82,12 @@ const api = {
 
   closeSettings: (): Promise<boolean> => ipcRenderer.invoke('settings:close'),
 
+  /** 结束首次启动引导；openSettings 为 true 时顺带打开设置窗口 */
+  finishOnboarding: (options?: { openSettings?: boolean }): Promise<boolean> =>
+    ipcRenderer.invoke('onboarding:finish', options ?? {}),
+  /** 「关于」页里的「重新查看引导」 */
+  openOnboarding: (): Promise<boolean> => ipcRenderer.invoke('onboarding:open'),
+
   /** 编辑草稿：发给主进程做桌面实时预览，null 表示清空覆盖层（= 还原） */
   setPreviewItem: (item: CountdownItem | null): Promise<boolean> =>
     ipcRenderer.invoke('preview:set', item),

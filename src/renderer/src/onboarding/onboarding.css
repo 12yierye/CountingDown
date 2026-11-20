@@ -1,0 +1,632 @@
+/* ==========================================================================
+   首次启动引导
+   --------------------------------------------------------------------------
+   窗口是无边框的（frame: false），所以标题栏、拖动区域、关闭按钮全部在这里定义。
+   配色直接复用 settings.css 的令牌，四套主题跟着设置窗口一起变。
+   ========================================================================== */
+
+html,
+body,
+#app {
+  background: var(--cd-s0);
+  overflow: hidden;
+}
+
+/* 无边框窗口的圆角：Windows 11 会给普通窗口加圆角，frameless 得自己裁 */
+body {
+  border-radius: 0;
+}
+
+.ob-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  color: var(--cd-ink-1);
+  background: var(--cd-s0);
+  /* 极轻的一层顶光，让纯色背景不至于死板 */
+  background-image: radial-gradient(
+    120% 80% at 50% -20%,
+    color-mix(in srgb, var(--cd-accent) 9%, transparent),
+    transparent 60%
+  );
+}
+
+/* ---------------------------------- 标题栏 --------------------------------- */
+
+.ob-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 10px 0 16px;
+  flex: none;
+  /* 整条标题栏都能拖窗口 */
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.ob-head__logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  flex: none;
+}
+
+.ob-head__title {
+  font-size: 12.5px;
+  color: var(--cd-ink-2);
+  letter-spacing: 0.3px;
+}
+
+.ob-head__step {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--cd-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-head__close {
+  -webkit-app-region: no-drag;
+  width: 30px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--cd-r-sm);
+  background: transparent;
+  color: var(--cd-ink-3);
+  cursor: pointer;
+}
+
+.ob-head__close:hover {
+  background: var(--cd-s3);
+  color: var(--cd-ink-1);
+}
+
+/* ---------------------------------- 主体 ---------------------------------- */
+
+.ob-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* 左侧步骤轨道：告诉用户「还有几步」，也是当前进度的可视锚点 */
+.ob-rail {
+  width: 208px;
+  flex: none;
+  padding: 6px 14px 0;
+  border-right: 1px solid var(--cd-line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ob-rail__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--cd-r-md);
+  font-size: 13px;
+  color: var(--cd-ink-3);
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.ob-rail__dot {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--cd-line-strong);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--cd-ink-3);
+}
+
+.ob-rail__item.is-done {
+  color: var(--cd-ink-2);
+}
+
+.ob-rail__item.is-done .ob-rail__dot {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--cd-success) 22%, transparent);
+  color: var(--cd-success);
+}
+
+.ob-rail__item.is-active {
+  background: var(--cd-s3);
+  color: var(--cd-ink-1);
+  font-weight: 600;
+}
+
+.ob-rail__item.is-active .ob-rail__dot {
+  border-color: var(--cd-accent);
+  color: var(--cd-ink-1);
+}
+
+.ob-rail__foot {
+  margin-top: auto;
+  padding: 14px 6px 16px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--cd-ink-4);
+}
+
+/* 右侧内容：每一步自己排版，这里只负责留白与滚动 */
+.ob-panel {
+  flex: 1;
+  min-width: 0;
+  padding: 18px 32px 8px;
+  display: flex;
+  flex-direction: column;
+  /* 小屏（或「自定义外观」多出第 7 块预设）时内容会超过窗口高度：
+     允许滚动，而不是把底部那段说明裁掉 */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ob-step {
+  /* shrink 0：内容比可用高度还高时不要压缩子元素，交给 .ob-panel 滚动 */
+  flex: 1 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: ob-step-in 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes ob-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ob-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+  color: var(--cd-ink-1);
+}
+
+.ob-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--cd-ink-2);
+  max-width: 620px;
+}
+
+.ob-label {
+  font-size: 12px;
+  color: var(--cd-ink-3);
+  letter-spacing: 0.3px;
+}
+
+/* ---------------------------------- 底栏 ---------------------------------- */
+
+.ob-foot {
+  flex: none;
+  height: 68px;
+  padding: 0 20px 0 22px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--cd-line-soft);
+}
+
+.ob-foot__skip {
+  border: none;
+  background: transparent;
+  color: var(--cd-ink-3);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 6px 4px;
+  font-family: inherit;
+}
+
+.ob-foot__skip:hover {
+  color: var(--cd-ink-1);
+}
+
+.ob-foot__dots {
+  margin: 0 auto;
+  display: flex;
+  gap: 6px;
+}
+
+.ob-foot__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cd-s4);
+  transition: background 0.2s ease, width 0.2s ease;
+}
+
+.ob-foot__dot.is-active {
+  width: 18px;
+  border-radius: 999px;
+  background: var(--cd-accent);
+}
+
+/* ---------------------------------- 卡片 ---------------------------------- */
+
+.ob-card {
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-lg);
+  background: var(--cd-s1);
+  padding: 16px 18px;
+}
+
+.ob-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.8;
+  color: var(--cd-ink-3);
+}
+
+.ob-note {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--cd-r-md);
+  background: var(--cd-s2);
+  border: 1px solid var(--cd-line-soft);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--cd-ink-2);
+}
+
+/* --------------------------------- 欢迎页 --------------------------------- */
+
+.ob-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.ob-hero__logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  flex: none;
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--cd-accent) 60%, transparent);
+}
+
+.ob-hero__text {
+  min-width: 0;
+}
+
+.ob-points {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.ob-point {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--cd-ink-2);
+}
+
+.ob-point__dot {
+  width: 5px;
+  height: 5px;
+  margin-top: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--cd-accent);
+  opacity: 0.7;
+}
+
+.ob-langs {
+  display: flex;
+  gap: 8px;
+}
+
+.ob-lang {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--cd-r-md);
+  border: 1px solid var(--cd-line);
+  background: var(--cd-s2);
+  color: var(--cd-ink-2);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.ob-lang:hover {
+  border-color: var(--cd-line-strong);
+}
+
+.ob-lang.is-active {
+  border-color: var(--cd-accent);
+  color: var(--cd-ink-1);
+  background: var(--cd-s3);
+}
+
+.ob-lang__tag {
+  font-size: 10.5px;
+  color: var(--cd-ink-3);
+  letter-spacing: 0.4px;
+}
+
+/* -------------------------------- 倒数日页 -------------------------------- */
+
+.ob-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 18px;
+}
+
+.ob-split__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ob-split__side {
+  width: 300px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ob-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ob-form-row__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* -------------------------------- 外观页 ---------------------------------- */
+
+.ob-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ob-preset {
+  position: relative;
+  padding: 0;
+  border: 1px solid var(--cd-line);
+  border-radius: var(--cd-r-md);
+  background: var(--cd-s1);
+  cursor: pointer;
+  overflow: hidden;
+  font-family: inherit;
+  text-align: left;
+}
+
+.ob-preset:hover {
+  border-color: var(--cd-line-strong);
+}
+
+.ob-preset.is-active {
+  border-color: var(--cd-accent);
+  box-shadow: 0 0 0 1px var(--cd-accent) inset;
+}
+
+/* 「自定义」不是按钮：它只表示当前用的就是用户自己调的那套，点它什么也不会发生 */
+.ob-preset.is-static {
+  cursor: default;
+}
+
+.ob-preset__swatch {
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.ob-preset__num {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-preset__cap {
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+.ob-preset__name {
+  display: block;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--cd-ink-2);
+  text-align: center;
+  border-top: 1px solid var(--cd-line-soft);
+}
+
+.ob-preset.is-active .ob-preset__name {
+  color: var(--cd-ink-1);
+  font-weight: 600;
+}
+
+/* ------------------------------- 位置页 ---------------------------------- */
+
+.ob-corners {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ob-corner {
+  padding: 10px;
+  border-radius: var(--cd-r-md);
+  border: 1px solid var(--cd-line);
+  background: var(--cd-s1);
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.ob-corner:hover {
+  border-color: var(--cd-line-strong);
+}
+
+.ob-corner.is-active {
+  border-color: var(--cd-accent);
+  background: var(--cd-s2);
+}
+
+/* 迷你屏幕：四角各放一张小卡片，选中的那个高亮 */
+.ob-corner__screen {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 6px;
+  background: var(--cd-s2);
+  border: 1px solid var(--cd-line-soft);
+}
+
+.ob-corner__chip {
+  position: absolute;
+  width: 18px;
+  height: 11px;
+  border-radius: 3px;
+  background: var(--cd-s4);
+  transition: background 0.18s ease;
+}
+
+.ob-corner__screen[data-corner='top-left'] .ob-corner__chip,
+.ob-corner__screen[data-corner='top-right'] .ob-corner__chip {
+  top: 5px;
+}
+
+.ob-corner__screen[data-corner='bottom-left'] .ob-corner__chip,
+.ob-corner__screen[data-corner='bottom-right'] .ob-corner__chip {
+  bottom: 5px;
+}
+
+.ob-corner__screen[data-corner='top-left'] .ob-corner__chip,
+.ob-corner__screen[data-corner='bottom-left'] .ob-corner__chip {
+  left: 5px;
+}
+
+.ob-corner__screen[data-corner='top-right'] .ob-corner__chip,
+.ob-corner__screen[data-corner='bottom-right'] .ob-corner__chip {
+  right: 5px;
+}
+
+.ob-corner.is-active .ob-corner__chip {
+  background: var(--cd-accent);
+}
+
+.ob-corner__name {
+  font-size: 11.5px;
+  color: var(--cd-ink-2);
+}
+
+.ob-corner.is-active .ob-corner__name {
+  color: var(--cd-ink-1);
+  font-weight: 600;
+}
+
+.ob-switch-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ob-switch-row__text {
+  min-width: 0;
+}
+
+.ob-switch-row__title {
+  font-size: 13px;
+  color: var(--cd-ink-1);
+}
+
+.ob-switch-row__hint {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--cd-ink-3);
+}
+
+.ob-kbd {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 11.5px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--cd-line);
+  background: var(--cd-s2);
+  color: var(--cd-ink-2);
+}
+
+/* -------------------------------- 完成页 ---------------------------------- */
+
+.ob-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ob-summary__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--cd-ink-2);
+}
+
+.ob-summary__key {
+  width: 74px;
+  flex: none;
+  color: var(--cd-ink-3);
+}
+
+.ob-summary__value {
+  color: var(--cd-ink-1);
+}
+
+.ob-summary__check {
+  margin-left: auto;
+  color: var(--cd-success);
+  display: inline-flex;
+}
+
+.ob-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}

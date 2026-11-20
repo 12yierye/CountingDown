@@ -20,6 +20,7 @@
 | [编辑子页](docs/notes/editor.md) | 草稿覆盖层、实时预览、吸顶栏、打字不被回传覆盖 |
 | [外观与显示](docs/notes/appearance.md) | 对比度修正、外观覆盖、单位字、预设弹窗、滑块与颜色控件 |
 | [设置界面](docs/notes/settings.md) | 信息架构、导航分组与搜索、撤销重做、预览栏、1.2.0 的调整 |
+| [首次启动引导](docs/notes/onboarding.md) | 独立引导窗口、首次判定、演示视频的时间轴与镜头、预览卡片 |
 | [在线更新](docs/notes/updater.md) | 自实现的检查 / 下载 / 校验、多源与镜像、错误提示 |
 | [安装器](docs/notes/installer.md) | 自写 C# 安装器、三步向导、动画、打包流程、NSIS 的天花板 |
 | [验证](docs/notes/testing.md) | 可复跑脚本清单与已确认的行为 |
@@ -38,5 +39,7 @@
 | 检查更新 404 | Release 里没传 `latest.yml` → 更新 |
 | 「返回的是网页而不是清单」 | 镜像拿不到文件，回了自家首页 → 更新 |
 | 安装器截图拿到上一帧 | `capturePage` 有延迟，用 `--shot` 离屏出图 → 安装器 |
+| 安装一开始文字就叠成一团 | GDI 文本没有 alpha，两行字被实心画在同一坐标 → 安装器 |
+| 引导窗口截图只有侧边栏 | 窗口被遮挡，Chromium 停止合成；加 `CalculateNativeWinOcclusion` 关掉遮挡检测 → 引导 |
 | `pnpm install` 报 cafs 拒绝访问 | store 目录不可写，`.npmrc` 已指定 `.pnpm-store` → 构建 |
 | PowerShell 脚本报语法错 | 5.1 按 ANSI 读 `.ps1`，含中文必须存成 UTF-8 with BOM → 安装器 |

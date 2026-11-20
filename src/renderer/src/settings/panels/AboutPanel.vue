@@ -191,6 +191,11 @@ function setLanguage(language: AppLanguage): void {
   emit('patch', { runtime: { language } })
 }
 
+/** 重新走一遍首次启动引导：忘了某项设置在哪时，比翻文档快 */
+async function openGuide(): Promise<void> {
+  await window.cd.openOnboarding()
+}
+
 /**
  * 彻底退出。
  * 从「系统」搬到这里：那是配置类开关，这是「结束整个进程」——
@@ -383,20 +388,45 @@ async function quitApp(): Promise<void> {
     </FieldRow>
   </el-card>
 
+  <!--
+    首次设置引导：单独一张卡而不是塞进「关于」的字段表 ——
+    它是「忘了在哪改」时的入口，得让人一眼看到，不该埋在版本号和显示器中间。
+  -->
+  <el-card shadow="never" class="panel-card">
+    <template #header>
+      <div class="panel-card__header">
+        <span class="panel-card__title">{{ t('about.guideGroup') }}</span>
+      </div>
+    </template>
+
+    <div class="guide-row">
+      <p class="guide-row__text">{{ t('about.guideHint') }}</p>
+      <el-button size="small" plain @click="openGuide">{{ t('about.guideOpen') }}</el-button>
+    </div>
+  </el-card>
+
   <!-- 恢复默认设置：低频重操作，收在「关于」里，别在导航栏上天天晾着 -->
   <el-card shadow="never" class="panel-card">
     <template #header>
       <div class="panel-card__header">
-        <span class="panel-card__title">{{ t('about.resetGroup') }}</span>
+        <span class="panel-card__title">
+          {{ t('about.resetGroup') }}
+          <!-- 具体会重置哪些东西收进标题旁的问号：这是看后果时才需要的补充 -->
+          <el-tooltip placement="top" :show-after="150">
+            <template #content>
+              <span class="reset-tip">{{ t('about.resetHintDetails') }}</span>
+            </template>
+            <span class="panel-card__help" tabindex="0">
+              <el-icon :size="13"><QuestionFilled /></el-icon>
+            </span>
+          </el-tooltip>
+        </span>
       </div>
     </template>
 
     <div class="danger-row">
       <div class="danger-row__main">
         <p class="danger-row__text">{{ t('about.resetHint') }}</p>
-        <HelpDisclosure :summary="t('about.resetHintToggle')">
-          {{ t('about.resetHintDetails') }}
-        </HelpDisclosure>
       </div>
       <el-button size="small" type="danger" plain @click="emit('reset')">
         {{ t('common.resetAll') }}
@@ -548,14 +578,33 @@ async function quitApp(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.screens__item {
+}.screens__item {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 12.5px;
   color: var(--el-text-color-secondary);
+}
+
+/* 引导入口：一句话 + 右侧按钮，跟下面的危险操作行同一套版式但语气是中性的 */
+.guide-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.guide-row__text {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--el-text-color-secondary);
+}
+
+.guide-row .el-button {
+  flex: none;
 }
 
 /*
@@ -580,6 +629,13 @@ async function quitApp(): Promise<void> {
   font-size: 12.5px;
   line-height: 1.7;
   color: var(--el-text-color-secondary);
+}
+
+/* tooltip 不设上限会拉成一整行，这里按三行左右收 */
+.reset-tip {
+  display: inline-block;
+  max-width: 248px;
+  line-height: 1.7;
 }
 
 .danger-row .el-button {

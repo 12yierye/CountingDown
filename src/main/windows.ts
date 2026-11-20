@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { BrowserWindow, app, nativeTheme, screen, shell } from 'electron'
-import { getConfig, isDev, onConfigChange, updateConfig } from './config-store'
+import { getConfig, isDev, markOnboarded, onConfigChange, updateConfig } from './config-store'
 import { clearPreviewItem, getPreviewItem, widgetConfig } from './preview'
 import type { Corner, WindowConfig } from '../shared/types'
 
@@ -81,7 +81,7 @@ const WIDGET_ANCHOR_HEIGHT = 600
 
 const rendererDir = (): string => join(__dirname, '../renderer')
 
-function loadRenderer(win: BrowserWindow, page: 'widget' | 'settings'): void {
+function loadRenderer(win: BrowserWindow, page: 'widget' | 'settings' | 'onboarding'): void {
   if (isDev() && process.env.ELECTRON_RENDERER_URL) {
     void win.loadURL(`${process.env.ELECTRON_RENDERER_URL}/${page}.html`)
   } else {
@@ -737,6 +737,84 @@ export function createSettingsWindow(): BrowserWindow {
 
 export function getSettingsWindow(): BrowserWindow | null {
   return settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : null
+}
+
+/* ------------------------------------------------------------------ *
+ * 首次启动引导窗口
+ *
+ * 独立窗口而不是塞进设置页：首次启动时设置窗口本来就关着，引导要有自己的
+ * 节奏（步骤、跳过、完成）。它没有原生边框 —— 自绘的标题栏才和引导页
+ * 是同一套设计语言；拖动区域、关闭按钮都在渲染层里画。
+ * ------------------------------------------------------------------ */
+
+let onboardingWindow: BrowserWindow | null = null
+
+export function createOnboardingWindow(): BrowserWindow {
+  if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+    onboardingWindow.show()
+    onboardingWindow.focus()
+    return onboardingWindow
+  }
+
+  /*
+   * 尺寸跟着工作区走：1366×768 的笔记本在 125% 缩放下工作区只有 ~1090×614，
+   * 写死 680 高会被屏幕裁掉一截（引导页底部按钮点不到）。
+   */
+  const area = screen.getPrimaryDisplay().workAreaSize
+  const width = Math.min(1000, Math.max(880, area.width - 80))
+  const height = Math.min(680, Math.max(560, area.height - 80))
+
+  onboardingWindow = new BrowserWindow({
+    width,
+    height,
+    show: false,
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    fullscreenable: false,
+    center: true,
+    title: '倒数日 · 首次设置',
+    backgroundColor: '#0d0f12',
+    icon: appIconPath() ?? undefined,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      spellcheck: false
+    }
+  })
+  onboardingWindow.setMenu(null)
+  onboardingWindow.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url)
+    return { action: 'deny' }
+  })
+
+  // 无论是点「完成」「跳过」还是直接 Alt+F4，只要窗口没了就当作引导结束：
+  // 否则下次启动还会再弹一遍，变成打不死的牛皮癣。
+  onboardingWindow.on('closed', () => {
+    onboardingWindow = null
+    markOnboarded()
+  })
+
+  loadRenderer(onboardingWindow, 'onboarding')
+  onboardingWindow.once('ready-to-show', () => {
+    onboardingWindow?.show()
+    onboardingWindow?.focus()
+  })
+  return onboardingWindow
+}
+
+export function getOnboardingWindow(): BrowserWindow | null {
+  return onboardingWindow && !onboardingWindow.isDestroyed() ? onboardingWindow : null
+}
+
+/** 引导结束后把窗口收掉；调用方负责决定是否顺带打开设置 */
+export function closeOnboardingWindow(): void {
+  const win = getOnboardingWindow()
+  if (!win) return
+  win.close()
 }
 
 export function broadcast(channel: string, payload: unknown): void {

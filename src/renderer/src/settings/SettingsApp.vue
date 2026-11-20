@@ -412,11 +412,25 @@ async function showWidget(): Promise<void> {
 }
 
 async function restoreDefaults(): Promise<void> {
+  /*
+   * 两次确认。
+   *
+   * 这一步不可撤销：列表会被换成内置示例、自定义预设直接清空。
+   * 第一次说清后果，第二次只问「真的吗」—— 手滑连点两下就是重置一台机器，
+   * 这个操作配得上多挡一道。
+   */
   try {
-    await ElMessageBox.confirm(t('common.resetAll'), t('common.reset'), {
-      confirmButtonText: t('common.confirm'),
+    await ElMessageBox.confirm(t('about.resetConfirmStep1'), t('about.resetConfirmTitle'), {
+      confirmButtonText: t('about.resetConfirmNext'),
       cancelButtonText: t('common.cancel'),
       type: 'warning'
+    })
+    await ElMessageBox.confirm(t('about.resetConfirmStep2'), t('about.resetConfirmTitle'), {
+      confirmButtonText: t('about.resetConfirmFinal'),
+      cancelButtonText: t('common.cancel'),
+      type: 'error',
+      // 第二道不允许点遮罩关掉：必须明确选「确认」或「取消」
+      closeOnClickModal: false
     })
     await resetConfig()
     // 恢复默认之后旧的撤销快照已经没有意义（会把用户带回「重置前」的半成品）

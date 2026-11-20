@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { AppConfig, CountdownItem } from '@shared/types'
 import { useCountdownCard } from '@/composables/useCountdownCard'
 import CountdownCard from '@/components/CountdownCard.vue'
+import '@/components/card.css'
 import '@/widget/widget.css'
 
 const props = withDefaults(
